@@ -82,8 +82,8 @@ class LauncherStore(private val context: Context) {
     var font by mutableStateOf(enumFromPrefs(KEY_FONT, FontChoice.INTER))
         private set
 
-    /** Opt-in to routing the command bar / voice through an on-device model. */
-    var aiEnabled by mutableStateOf(prefs.getBoolean(KEY_AI, false))
+    /** Route "ask me" (voice) through the on-device model. On by default. */
+    var aiEnabled by mutableStateOf(prefs.getBoolean(KEY_AI, true))
         private set
 
     fun toggleAi() {

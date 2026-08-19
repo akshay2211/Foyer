@@ -12,7 +12,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -54,12 +58,22 @@ fun SettingsScreen(store: LauncherStore, onClose: () -> Unit) {
 
         SettingRow("theme", store.themeMode.label) { store.cycleTheme() }
 
-        val aiAvailable = remember { onDeviceAiAvailable(context) }
+        var aiStatus by remember { mutableStateOf<String?>(null) }
+        LaunchedEffect(store.aiEnabled) {
+            aiStatus = when {
+                !store.aiEnabled -> null
+                !aiSupported() -> "needs android 12+"
+                else -> {
+                    if (AiIntentEngine(context).prepare() == AiStatus.READY) "gemini-nano · ready"
+                    else "gemini-nano · not available on this device"
+                }
+            }
+        }
         SettingRow("on-device ai", if (store.aiEnabled) "on" else "off") { store.toggleAi() }
-        if (store.aiEnabled && !aiAvailable) {
+        aiStatus?.let {
             BasicText(
-                text = "no on-device model found — using heuristics",
-                style = TextStyle(color = palette.muted, fontSize = 12.sp, fontFamily = ff),
+                text = it,
+                style = TextStyle(color = palette.muted, fontSize = 12.sp, letterSpacing = 1.sp, fontFamily = ff),
             )
         }
 

@@ -8,6 +8,10 @@
     <!-- On-device voice command ("ask me"). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
+    <!-- AICore (Gemini Nano) requires API 31; keep the launcher installable on
+         24+ and gate the AI code at runtime to capable devices. -->
+    <uses-sdk tools:overrideLibrary="com.google.ai.edge.aicore" />
+
     <!-- A launcher needs to see every app that exposes a LAUNCHER activity. -->
     <queries>
         <intent>

@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -25,7 +26,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,40 +38,63 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
- * Conversational entry point. Uses Android's on-device speech recognition
- * (offline-preferred) and routes the transcript through [routeCommands] — the
- * same seam a local LLM would plug into for richer replies.
+ * Conversational entry point. Android on-device speech-to-text captures the
+ * request; Gemini Nano (via [AiIntentEngine]) decides the action; the launcher
+ * only executes the model's choice. Fully on-device.
  */
 @Composable
-fun VoiceScreen(onClose: () -> Unit) {
+fun VoiceScreen(aiEnabled: Boolean, onClose: () -> Unit) {
     val context = LocalContext.current
     val palette = LocalPalette.current
     val ff = LocalFontFamily.current
+    val scope = rememberCoroutineScope()
 
-    val available = remember { SpeechRecognizer.isRecognitionAvailable(context) }
+    val sttAvailable = remember { SpeechRecognizer.isRecognitionAvailable(context) }
+    val engine = remember { if (aiEnabled && aiSupported()) AiIntentEngine(context) else null }
+    val apps by produceState(initialValue = emptyList<AppEntry>()) {
+        value = withContext(Dispatchers.IO) { loadLaunchableApps(context) }
+    }
+
     var status by remember {
-        mutableStateOf(if (available) "listening…" else "voice unavailable on this device")
+        mutableStateOf(if (sttAvailable) "listening…" else "voice unavailable on this device")
     }
     var heard by remember { mutableStateOf<String?>(null) }
     var replyLabel by remember { mutableStateOf<String?>(null) }
     var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var modelReady by remember { mutableStateOf(false) }
 
-    val recognizer = remember { if (available) SpeechRecognizer.createSpeechRecognizer(context) else null }
+    val recognizer = remember { if (sttAvailable) SpeechRecognizer.createSpeechRecognizer(context) else null }
     DisposableEffect(Unit) { onDispose { recognizer?.destroy() } }
 
     fun resolve(text: String) {
         heard = text
-        val cmd = routeCommands(context, text).firstOrNull()
-        if (cmd != null) {
-            replyLabel = "→ ${cmd.title}"
-            pendingAction = { cmd.run(); onClose() }
-            status = "tap to run"
-        } else {
-            replyLabel = "search web for “$text”"
-            pendingAction = { webSearch(context, text); onClose() }
-            status = "tap to search"
+        replyLabel = null
+        pendingAction = null
+        status = "thinking…"
+        scope.launch {
+            Log.d(AI_TAG, "voice heard='$text' engine=${engine != null} apps=${apps.size}")
+            val intent = if (engine != null) {
+                if (!modelReady) modelReady = engine.prepare() == AiStatus.READY
+                Log.d(AI_TAG, "voice modelReady=$modelReady")
+                if (modelReady) engine.decide(text, apps) else AiIntent.Web(text)
+            } else {
+                AiIntent.Web(text)
+            }
+            val command = intent.toCommand(context)
+            Log.d(AI_TAG, "voice reply='${command.title}' kind=${command.kind}")
+            replyLabel = command.title
+            if (command.kind == CommandKind.ANSWER) {
+                pendingAction = { onClose() }
+                status = "tap to close"
+            } else {
+                pendingAction = { command.run(); onClose() }
+                status = "tap to run"
+            }
         }
     }
 
@@ -80,8 +106,11 @@ fun VoiceScreen(onClose: () -> Unit) {
             override fun onBeginningOfSpeech() {}
             override fun onRmsChanged(rms: Float) {}
             override fun onBufferReceived(buffer: ByteArray?) {}
-            override fun onEndOfSpeech() { status = "thinking…" }
-            override fun onError(error: Int) { status = "didn't catch that — tap to retry" }
+            override fun onEndOfSpeech() {}
+            override fun onError(error: Int) {
+                Log.w(AI_TAG, "stt onError code=$error")
+                status = "didn't catch that — tap to retry"
+            }
             override fun onEvent(eventType: Int, params: Bundle?) {}
             override fun onPartialResults(partial: Bundle?) {
                 partial?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
@@ -111,14 +140,15 @@ fun VoiceScreen(onClose: () -> Unit) {
         val action = pendingAction
         when {
             action != null -> action()
-            !available -> onClose()
+            !sttAvailable -> onClose()
             hasMic() -> startListening()
             else -> micPermission.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
 
     LaunchedEffect(Unit) {
-        if (available) {
+        if (engine != null) scope.launch { modelReady = engine.prepare() == AiStatus.READY }
+        if (sttAvailable) {
             if (hasMic()) startListening() else micPermission.launch(Manifest.permission.RECORD_AUDIO)
         }
     }

@@ -92,7 +92,7 @@ data class AppEntry(
     val activityName: String,
 )
 
-private fun loadApps(context: Context): List<AppEntry> {
+fun loadLaunchableApps(context: Context): List<AppEntry> {
     val pm = context.packageManager
     val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
     val self = context.packageName
@@ -118,7 +118,7 @@ fun LauncherScreen(store: LauncherStore) {
     val scope = rememberCoroutineScope()
 
     val apps by produceState(initialValue = emptyList<AppEntry>(), context) {
-        value = withContext(Dispatchers.IO) { loadApps(context) }
+        value = withContext(Dispatchers.IO) { loadLaunchableApps(context) }
     }
 
     // Page 0 = app drawer (to the left), page 1 = home (start here). Swiping
@@ -210,7 +210,7 @@ fun LauncherScreen(store: LauncherStore) {
         }
 
         if (showVoice) {
-            VoiceScreen(onClose = { showVoice = false })
+            VoiceScreen(aiEnabled = store.aiEnabled, onClose = { showVoice = false })
         }
     }
 }
@@ -426,8 +426,31 @@ private fun DrawerPage(
     // block + divider), so the A–Z rail can offset its scroll targets.
     val leadingCount = if (frequent.isNotEmpty()) frequent.size + 2 else 0
 
-    // On-device command routing (math, quick actions, settings). Offline.
-    val commands = if (searching) routeCommands(context, q, useAi = store.aiEnabled) else emptyList()
+    // The typed command bar also routes through the on-device model on submit.
+    val scope = rememberCoroutineScope()
+    val engine = remember(store.aiEnabled) {
+        if (store.aiEnabled && aiSupported()) AiIntentEngine(context) else null
+    }
+    var aiThinking by remember { mutableStateOf(false) }
+    var aiResult by remember { mutableStateOf<Command?>(null) }
+    var modelReady by remember { mutableStateOf(false) }
+
+    // Any edit to the query invalidates a previous AI answer.
+    LaunchedEffect(q) { aiThinking = false; aiResult = null }
+
+    fun askAi(text: String) {
+        val e = engine ?: run { webSearch(context, text); return }
+        scope.launch {
+            aiThinking = true
+            aiResult = null
+            if (!modelReady) modelReady = e.prepare() == AiStatus.READY
+            val intent = if (modelReady) e.decide(text, apps) else AiIntent.Web(text)
+            val command = intent.toCommand(context)
+            aiThinking = false
+            aiResult = command
+            if (command.kind == CommandKind.ACTION) command.run()
+        }
+    }
 
     // Back on the drawer clears the search first, then returns to home.
     BackHandler(enabled = backEnabled) {
@@ -484,11 +507,10 @@ private fun DrawerPage(
                         keyboardActions = KeyboardActions(
                             onGo = {
                                 val app = searchResults.firstOrNull()
-                                val cmd = commands.firstOrNull()
-                                when {
-                                    app != null -> { focusManager.clearFocus(); onLaunch(app) }
-                                    cmd != null -> { focusManager.clearFocus(); cmd.run() }
-                                    q.isNotEmpty() -> { focusManager.clearFocus(); webSearch(context, q) }
+                                if (app != null) {
+                                    focusManager.clearFocus(); onLaunch(app)
+                                } else if (q.isNotEmpty()) {
+                                    focusManager.clearFocus(); askAi(q)
                                 }
                             },
                         ),
@@ -539,8 +561,20 @@ private fun DrawerPage(
                 contentPadding = PaddingValues(start = 24.dp, end = 44.dp, top = 4.dp, bottom = 32.dp),
             ) {
                 if (searching) {
-                    items(commands, key = { "c/" + it.title }) { cmd ->
-                        CommandRow(cmd) { focusManager.clearFocus() }
+                    if (aiThinking) {
+                        item(key = "ai-thinking") {
+                            BasicText(
+                                text = "thinking…",
+                                modifier = Modifier.padding(vertical = 11.dp),
+                                style = TextStyle(color = palette.muted, fontSize = 18.sp, fontFamily = ff),
+                            )
+                        }
+                    } else {
+                        aiResult?.let { cmd ->
+                            item(key = "ai-result") {
+                                CommandRow(cmd) { focusManager.clearFocus() }
+                            }
+                        }
                     }
                     items(searchResults, key = { "s/" + it.key }) { app ->
                         AppRow(app, onLaunch, onLongPressApp)
@@ -551,12 +585,14 @@ private fun DrawerPage(
                     item(key = "play") {
                         FallbackRow("find “$q” in Play Store") { playSearch(context, q) }
                     }
-                    item(key = "ai-tag") {
-                        BasicText(
-                            text = "on-device · private",
-                            modifier = Modifier.padding(top = 16.dp),
-                            style = TextStyle(color = palette.muted, fontSize = 11.sp, letterSpacing = 1.sp, fontFamily = ff),
-                        )
+                    if (aiThinking || aiResult != null) {
+                        item(key = "ai-tag") {
+                            BasicText(
+                                text = "on-device · private",
+                                modifier = Modifier.padding(top = 16.dp),
+                                style = TextStyle(color = palette.muted, fontSize = 11.sp, letterSpacing = 1.sp, fontFamily = ff),
+                            )
+                        }
                     }
                 } else {
                     if (frequent.isNotEmpty()) {
