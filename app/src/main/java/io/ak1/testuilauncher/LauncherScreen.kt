@@ -384,6 +384,9 @@ private fun DrawerPage(
     // so the A–Z rail can offset its scroll targets.
     val leadingCount = if (frequent.isNotEmpty()) frequent.size + 1 else 0
 
+    // On-device command routing (math, quick actions, settings). Offline.
+    val commands = if (searching) routeCommands(context, q) else emptyList()
+
     // Back on the drawer clears the search first, then returns to home.
     BackHandler(enabled = backEnabled) {
         if (query.isNotEmpty()) query = "" else onNavigateHome()
@@ -438,13 +441,12 @@ private fun DrawerPage(
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
                         keyboardActions = KeyboardActions(
                             onGo = {
-                                val first = searchResults.firstOrNull()
-                                if (first != null) {
-                                    focusManager.clearFocus()
-                                    onLaunch(first)
-                                } else if (q.isNotEmpty()) {
-                                    focusManager.clearFocus()
-                                    webSearch(context, q)
+                                val app = searchResults.firstOrNull()
+                                val cmd = commands.firstOrNull()
+                                when {
+                                    app != null -> { focusManager.clearFocus(); onLaunch(app) }
+                                    cmd != null -> { focusManager.clearFocus(); cmd.run() }
+                                    q.isNotEmpty() -> { focusManager.clearFocus(); webSearch(context, q) }
                                 }
                             },
                         ),
@@ -495,16 +497,26 @@ private fun DrawerPage(
                 contentPadding = PaddingValues(start = 24.dp, end = 44.dp, top = 4.dp, bottom = 32.dp),
             ) {
                 if (searching) {
+                    if (commands.isNotEmpty()) {
+                        item(key = "ai-tag") {
+                            BasicText(
+                                text = "on-device · private",
+                                modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+                                style = TextStyle(color = palette.muted, fontSize = 11.sp, letterSpacing = 1.sp),
+                            )
+                        }
+                        items(commands, key = { "c/" + it.title }) { cmd ->
+                            CommandRow(cmd) { focusManager.clearFocus() }
+                        }
+                    }
                     items(searchResults, key = { "s/" + it.key }) { app ->
                         AppRow(app, onLaunch, onLongPressApp)
                     }
-                    if (searchResults.isEmpty()) {
-                        item(key = "web") {
-                            FallbackRow("search web for “$q”") { webSearch(context, q) }
-                        }
-                        item(key = "play") {
-                            FallbackRow("find “$q” in Play Store") { playSearch(context, q) }
-                        }
+                    item(key = "web") {
+                        FallbackRow("search web for “$q”") { focusManager.clearFocus(); webSearch(context, q) }
+                    }
+                    item(key = "play") {
+                        FallbackRow("find “$q” in Play Store") { playSearch(context, q) }
                     }
                 } else {
                     if (frequent.isNotEmpty()) {
@@ -573,6 +585,28 @@ private fun FallbackRow(text: String, onClick: () -> Unit) {
             .padding(vertical = 11.dp),
         style = TextStyle(color = palette.muted, fontSize = 18.sp),
     )
+}
+
+@Composable
+private fun CommandRow(command: Command, onBeforeRun: () -> Unit) {
+    val palette = LocalPalette.current
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clickable { onBeforeRun(); command.run() }
+            .padding(vertical = 10.dp),
+    ) {
+        BasicText(
+            text = command.title,
+            style = TextStyle(color = palette.text, fontSize = 22.sp),
+        )
+        command.subtitle?.let { sub ->
+            BasicText(
+                text = sub,
+                style = TextStyle(color = palette.muted, fontSize = 12.sp),
+            )
+        }
+    }
 }
 
 /**
