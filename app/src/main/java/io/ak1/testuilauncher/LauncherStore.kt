@@ -9,6 +9,7 @@ import android.provider.MediaStore
 import android.provider.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -33,6 +34,12 @@ private const val KEY_THEME = "theme_mode"
 private const val KEY_ACCENT = "accent"
 private const val KEY_FONT = "font"
 private const val KEY_AI = "ai_enabled"
+private const val KEY_BACKEND = "ai_backend"
+private const val KEY_MODEL_URL = "gemma_url"
+
+// A LiteRT-community Gemma .task (editable in settings if the exact name differs).
+private const val DEFAULT_GEMMA_URL =
+    "https://huggingface.co/litert-community/Gemma3-1B-IT/resolve/main/gemma3-1b-it-int4.task"
 
 /** Stable identity for an app across sessions. */
 val AppEntry.key: String get() = "$packageName/$activityName"
@@ -89,6 +96,49 @@ class LauncherStore(private val context: Context) {
     fun toggleAi() {
         aiEnabled = !aiEnabled
         prefs.edit { putBoolean(KEY_AI, aiEnabled) }
+    }
+
+    /** Which brain answers: Gemini Nano (AICore) or a downloaded Gemma. */
+    var activeBackend by mutableStateOf(enumFromPrefs(KEY_BACKEND, Backend.NANO))
+        private set
+    var gemmaModelUrl by mutableStateOf(prefs.getString(KEY_MODEL_URL, DEFAULT_GEMMA_URL) ?: DEFAULT_GEMMA_URL)
+        private set
+
+    var isDownloading by mutableStateOf(false)
+        private set
+    var downloadedBytes by mutableLongStateOf(0L)
+        private set
+    var totalBytes by mutableLongStateOf(0L)
+        private set
+    var downloadError by mutableStateOf<String?>(null)
+        private set
+
+    fun modelDownloaded(): Boolean = gemmaModelFile(context).exists()
+
+    fun setBackend(backend: Backend) {
+        activeBackend = backend
+        prefs.edit { putString(KEY_BACKEND, backend.name) }
+    }
+
+    fun setModelUrl(url: String) {
+        gemmaModelUrl = url.trim()
+        prefs.edit { putString(KEY_MODEL_URL, gemmaModelUrl) }
+    }
+
+    suspend fun downloadModel() {
+        if (isDownloading) return
+        isDownloading = true
+        downloadError = null
+        downloadedBytes = 0L
+        totalBytes = 0L
+        val result = ModelDownloader.download(gemmaModelUrl, gemmaModelFile(context), token = null) { d, t ->
+            downloadedBytes = d
+            totalBytes = t
+        }
+        isDownloading = false
+        result
+            .onSuccess { setBackend(Backend.GEMMA) }
+            .onFailure { downloadError = it.message ?: "download failed" }
     }
 
     private inline fun <reified T : Enum<T>> enumFromPrefs(key: String, default: T): T {
@@ -209,6 +259,8 @@ class LauncherStore(private val context: Context) {
 }
 
 enum class ShortcutSide { LEFT, RIGHT }
+
+enum class Backend { NANO, GEMMA }
 
 @Composable
 fun rememberLauncherStore(): LauncherStore {

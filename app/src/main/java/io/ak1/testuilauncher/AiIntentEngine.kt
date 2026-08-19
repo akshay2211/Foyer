@@ -3,6 +3,9 @@ package io.ak1.testuilauncher
 import android.content.Context
 import android.os.Build
 import android.util.Log
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import com.google.ai.edge.aicore.GenerativeModel
 import com.google.ai.edge.aicore.generationConfig
 
@@ -46,50 +49,95 @@ class AiIntentEngine(context: Context) {
             .onFailure { Log.w(AI_TAG, "generate FAILED: ${it.javaClass.simpleName}: ${it.message}", it) }
             .getOrNull()
 
-    /**
-     * Asks the model to decide what the user wants. The model picks an action
-     * and its parameters; we only parse + execute the result.
-     */
+    fun close() {}
+}
+
+/**
+ * Backend-agnostic decision: given any text generator (Nano or Gemma), ask the
+ * model to pick one action. The model decides; we only parse + execute.
+ */
+suspend fun decideIntent(
+    generate: suspend (String) -> String?,
+    query: String,
+    apps: List<AppEntry>,
+): AiIntent {
+    val prompt = """
+        Convert ONE phone command into ONE JSON action.
+        Output only a single JSON object. No list. No explanation. No code fences.
+
+        Allowed actions:
+        {"action":"open_app","app":"<app name>"}
+        {"action":"alarm","hour":<0-23>,"minute":<0-59>}
+        {"action":"call","number":"<digits>"}
+        {"action":"setting","key":"wifi|bluetooth|airplane|battery|display|sound|location|data"}
+        {"action":"message","app":"whatsapp|sms","to":"<contact or number>","text":"<the message you write>"}
+        {"action":"web","query":"<text>"}
+        {"action":"answer","text":"<short answer>"}
+
+        For "message", YOU compose the message text yourself.
+
+        User: open camera
+        {"action":"open_app","app":"camera"}
+        User: launch the slack app
+        {"action":"open_app","app":"slack"}
+        User: set an alarm for 7:30 am
+        {"action":"alarm","hour":7,"minute":30}
+        User: turn on wifi
+        {"action":"setting","key":"wifi"}
+        User: whatsapp mom that i'll be home late
+        {"action":"message","app":"whatsapp","to":"mom","text":"Hi mom, I'll be home late tonight."}
+        User: text John asking if he's free tomorrow
+        {"action":"message","app":"sms","to":"John","text":"Hey John, are you free tomorrow?"}
+        User: what is 24 times 7
+        {"action":"answer","text":"168"}
+        User: $query
+    """.trimIndent()
+
+    Log.d(AI_TAG, "decide: query='$query' apps=${apps.size}")
+    val reply = generate(prompt)
+    Log.d(AI_TAG, "decide: raw reply=${reply?.let { "\"$it\"" } ?: "null"}")
+    val intent = if (reply == null) AiIntent.Unknown else parseIntent(reply, apps)
+    Log.d(AI_TAG, "decide: parsed intent=$intent")
+    return intent
+}
+
+/**
+ * Picks the active brain (Gemini Nano or downloaded Gemma), prepares it lazily,
+ * and exposes a uniform [decide]. Falls back to a plain web search when no model
+ * is usable, so callers never break.
+ */
+class Assistant(
+    private val prepareFn: suspend () -> Boolean,
+    private val generateFn: suspend (String) -> String?,
+) {
+    private var ready = false
+
     suspend fun decide(query: String, apps: List<AppEntry>): AiIntent {
-        // Few-shot, single-object instruction. We deliberately do NOT dump the
-        // app list (it swamps the small model) — it names the app, we resolve it.
-        val prompt = """
-            Convert ONE phone command into ONE JSON action.
-            Output only a single JSON object. No list. No explanation. No code fences.
+        if (!ready) ready = prepareFn()
+        return if (ready) decideIntent(generateFn, query, apps) else AiIntent.Web(query)
+    }
+}
 
-            Allowed actions:
-            {"action":"open_app","app":"<app name>"}
-            {"action":"alarm","hour":<0-23>,"minute":<0-59>}
-            {"action":"call","number":"<digits>"}
-            {"action":"setting","key":"wifi|bluetooth|airplane|battery|display|sound|location|data"}
-            {"action":"message","app":"whatsapp|sms","to":"<contact or number>","text":"<the message you write>"}
-            {"action":"web","query":"<text>"}
-            {"action":"answer","text":"<short answer>"}
-
-            For "message", YOU compose the message text yourself.
-
-            User: open camera
-            {"action":"open_app","app":"camera"}
-            User: launch the slack app
-            {"action":"open_app","app":"slack"}
-            User: set an alarm for 7:30 am
-            {"action":"alarm","hour":7,"minute":30}
-            User: turn on wifi
-            {"action":"setting","key":"wifi"}
-            User: whatsapp mom that i'll be home late
-            {"action":"message","app":"whatsapp","to":"mom","text":"Hi mom, I'll be home late tonight."}
-            User: text John asking if he's free tomorrow
-            {"action":"message","app":"sms","to":"John","text":"Hey John, are you free tomorrow?"}
-            User: what is 24 times 7
-            {"action":"answer","text":"168"}
-            User: $query
-        """.trimIndent()
-
-        Log.d(AI_TAG, "decide: query='$query' apps=${apps.size}")
-        val reply = generate(prompt)
-        Log.d(AI_TAG, "decide: raw reply=${reply?.let { "\"$it\"" } ?: "null"}")
-        val intent = if (reply == null) AiIntent.Unknown else parseIntent(reply, apps)
-        Log.d(AI_TAG, "decide: parsed intent=$intent")
-        return intent
+/** Builds the [Assistant] for the active backend, or null if AI is off/unusable. */
+@Composable
+fun rememberAssistant(store: LauncherStore): Assistant? {
+    val context = LocalContext.current
+    val downloaded = store.modelDownloaded()
+    return remember(store.aiEnabled, store.activeBackend, downloaded) {
+        if (!store.aiEnabled) return@remember null
+        when (store.activeBackend) {
+            Backend.GEMMA -> if (downloaded) {
+                val engine = GemmaEngine(context, gemmaModelFile(context).path)
+                Assistant({ engine.prepare() }, engine::generate)
+            } else {
+                null
+            }
+            Backend.NANO -> if (aiSupported()) {
+                val engine = AiIntentEngine(context)
+                Assistant({ engine.prepare() == AiStatus.READY }, engine::generate)
+            } else {
+                null
+            }
+        }
     }
 }

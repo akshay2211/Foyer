@@ -211,7 +211,7 @@ fun LauncherScreen(store: LauncherStore) {
         }
 
         if (showVoice) {
-            VoiceScreen(aiEnabled = store.aiEnabled, onClose = { showVoice = false })
+            VoiceScreen(store = store, onClose = { showVoice = false })
         }
     }
 }
@@ -427,25 +427,20 @@ private fun DrawerPage(
     // block + divider), so the A–Z rail can offset its scroll targets.
     val leadingCount = if (frequent.isNotEmpty()) frequent.size + 2 else 0
 
-    // The typed command bar also routes through the on-device model on submit.
+    // The typed command bar also routes through the active on-device model.
     val scope = rememberCoroutineScope()
-    val engine = remember(store.aiEnabled) {
-        if (store.aiEnabled && aiSupported()) AiIntentEngine(context) else null
-    }
+    val assistant = rememberAssistant(store)
     var aiThinking by remember { mutableStateOf(false) }
     var aiResult by remember { mutableStateOf<Command?>(null) }
-    var modelReady by remember { mutableStateOf(false) }
 
     // Any edit to the query invalidates a previous AI answer.
     LaunchedEffect(q) { aiThinking = false; aiResult = null }
 
     fun askAi(text: String) {
-        val e = engine ?: run { webSearch(context, text); return }
         scope.launch {
             aiThinking = true
             aiResult = null
-            if (!modelReady) modelReady = e.prepare() == AiStatus.READY
-            val intent = if (modelReady) e.decide(text, apps) else AiIntent.Web(text)
+            val intent = assistant?.decide(text, apps) ?: AiIntent.Web(text)
             val command = intent.toCommand(context)
             aiThinking = false
             aiResult = command // shown as an outlined action button / answer

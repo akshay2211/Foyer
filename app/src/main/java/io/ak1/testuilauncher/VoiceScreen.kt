@@ -52,14 +52,14 @@ private val loneVerbs = setOf(
  * only executes the model's choice. Fully on-device.
  */
 @Composable
-fun VoiceScreen(aiEnabled: Boolean, onClose: () -> Unit) {
+fun VoiceScreen(store: LauncherStore, onClose: () -> Unit) {
     val context = LocalContext.current
     val palette = LocalPalette.current
     val ff = LocalFontFamily.current
     val scope = rememberCoroutineScope()
 
     val sttAvailable = remember { SpeechRecognizer.isRecognitionAvailable(context) }
-    val engine = remember { if (aiEnabled && aiSupported()) AiIntentEngine(context) else null }
+    val assistant = rememberAssistant(store)
     val apps by produceState(initialValue = emptyList<AppEntry>()) {
         value = withContext(Dispatchers.IO) { loadLaunchableApps(context) }
     }
@@ -70,7 +70,6 @@ fun VoiceScreen(aiEnabled: Boolean, onClose: () -> Unit) {
     var heard by remember { mutableStateOf<String?>(null) }
     var replyLabel by remember { mutableStateOf<String?>(null) }
     var actionCommand by remember { mutableStateOf<Command?>(null) }
-    var modelReady by remember { mutableStateOf(false) }
 
     val recognizer = remember { if (sttAvailable) SpeechRecognizer.createSpeechRecognizer(context) else null }
     DisposableEffect(Unit) { onDispose { recognizer?.destroy() } }
@@ -86,14 +85,8 @@ fun VoiceScreen(aiEnabled: Boolean, onClose: () -> Unit) {
         }
         status = "thinking…"
         scope.launch {
-            Log.d(AI_TAG, "voice heard='$text' engine=${engine != null} apps=${apps.size}")
-            val intent = if (engine != null) {
-                if (!modelReady) modelReady = engine.prepare() == AiStatus.READY
-                Log.d(AI_TAG, "voice modelReady=$modelReady")
-                if (modelReady) engine.decide(text, apps) else AiIntent.Web(text)
-            } else {
-                AiIntent.Web(text)
-            }
+            Log.d(AI_TAG, "voice heard='$text' apps=${apps.size}")
+            val intent = assistant?.decide(text, apps) ?: AiIntent.Web(text)
             val command = intent.toCommand(context)
             Log.d(AI_TAG, "voice reply='${command.title}' kind=${command.kind}")
             if (command.kind == CommandKind.ACTION) {
@@ -156,7 +149,6 @@ fun VoiceScreen(aiEnabled: Boolean, onClose: () -> Unit) {
     }
 
     LaunchedEffect(Unit) {
-        if (engine != null) scope.launch { modelReady = engine.prepare() == AiStatus.READY }
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS)
             != PackageManager.PERMISSION_GRANTED
         ) {
