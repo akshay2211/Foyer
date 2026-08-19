@@ -36,6 +36,7 @@ private const val KEY_FONT = "font"
 private const val KEY_AI = "ai_enabled"
 private const val KEY_BACKEND = "ai_backend"
 private const val KEY_MODEL_URL = "gemma_url"
+private const val KEY_HF_TOKEN = "hf_token"
 
 // A LiteRT-community Gemma .task (editable in settings if the exact name differs).
 private const val DEFAULT_GEMMA_URL =
@@ -103,6 +104,8 @@ class LauncherStore(private val context: Context) {
         private set
     var gemmaModelUrl by mutableStateOf(prefs.getString(KEY_MODEL_URL, DEFAULT_GEMMA_URL) ?: DEFAULT_GEMMA_URL)
         private set
+    var hfToken by mutableStateOf(prefs.getString(KEY_HF_TOKEN, "") ?: "")
+        private set
 
     var isDownloading by mutableStateOf(false)
         private set
@@ -125,13 +128,18 @@ class LauncherStore(private val context: Context) {
         prefs.edit { putString(KEY_MODEL_URL, gemmaModelUrl) }
     }
 
+    fun updateHfToken(token: String) {
+        hfToken = token.trim()
+        prefs.edit { putString(KEY_HF_TOKEN, hfToken) }
+    }
+
     suspend fun downloadModel() {
         if (isDownloading) return
         isDownloading = true
         downloadError = null
         downloadedBytes = 0L
         totalBytes = 0L
-        val result = ModelDownloader.download(gemmaModelUrl, gemmaModelFile(context), token = null) { d, t ->
+        val result = ModelDownloader.download(gemmaModelUrl, gemmaModelFile(context), token = hfToken.ifBlank { null }) { d, t ->
             downloadedBytes = d
             totalBytes = t
         }

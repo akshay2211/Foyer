@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -94,6 +95,7 @@ fun SettingsScreen(store: LauncherStore, onClose: () -> Unit) {
                         }
                         store.downloadError?.let { ModelNote("error: $it") }
                         ModelUrlField(store)
+                        ModelTokenField(store)
                     }
                 }
             }
@@ -215,6 +217,43 @@ private fun ModelUrlField(store: LauncherStore) {
             textStyle = TextStyle(color = palette.text, fontSize = 13.sp, fontFamily = ff),
             cursorBrush = SolidColor(palette.accent),
             modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        )
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(palette.muted.copy(alpha = 0.25f)),
+        )
+    }
+}
+
+@Composable
+private fun ModelTokenField(store: LauncherStore) {
+    val palette = LocalPalette.current
+    val ff = LocalFontFamily.current
+    var token by remember { mutableStateOf(store.hfToken) }
+    Column(Modifier.padding(top = 8.dp)) {
+        BasicText(
+            text = "hf token (only for gated models)",
+            style = TextStyle(color = palette.muted, fontSize = 11.sp, letterSpacing = 1.sp, fontFamily = ff),
+        )
+        BasicTextField(
+            value = token,
+            onValueChange = { token = it; store.updateHfToken(it) },
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            textStyle = TextStyle(color = palette.text, fontSize = 13.sp, fontFamily = ff),
+            cursorBrush = SolidColor(palette.accent),
+            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+            decorationBox = { inner ->
+                if (token.isEmpty()) {
+                    BasicText(
+                        text = "hf_…",
+                        style = TextStyle(color = palette.muted, fontSize = 13.sp, fontFamily = ff),
+                    )
+                }
+                inner()
+            },
         )
         Box(
             Modifier
