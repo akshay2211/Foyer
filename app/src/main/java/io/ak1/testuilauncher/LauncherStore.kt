@@ -29,6 +29,10 @@ private const val KEY_RIGHT = "shortcut_right"
 private const val KEY_CLOCK = "show_clock"
 private const val KEY_HIDDEN = "hidden"
 private const val KEY_USAGE = "usage"
+private const val KEY_THEME = "theme_mode"
+private const val KEY_ACCENT = "accent"
+private const val KEY_FONT = "font"
+private const val KEY_AI = "ai_enabled"
 
 /** Stable identity for an app across sessions. */
 val AppEntry.key: String get() = "$packageName/$activityName"
@@ -70,6 +74,55 @@ class LauncherStore(private val context: Context) {
 
     var showClock by mutableStateOf(prefs.getBoolean(KEY_CLOCK, true))
         private set
+
+    var themeMode by mutableStateOf(enumFromPrefs(KEY_THEME, ThemeMode.SYSTEM))
+        private set
+    var accent by mutableStateOf(enumFromPrefs(KEY_ACCENT, AccentChoice.MONO))
+        private set
+    var font by mutableStateOf(enumFromPrefs(KEY_FONT, FontChoice.INTER))
+        private set
+
+    /** Opt-in to routing the command bar / voice through an on-device model. */
+    var aiEnabled by mutableStateOf(prefs.getBoolean(KEY_AI, false))
+        private set
+
+    fun toggleAi() {
+        aiEnabled = !aiEnabled
+        prefs.edit { putBoolean(KEY_AI, aiEnabled) }
+    }
+
+    private inline fun <reified T : Enum<T>> enumFromPrefs(key: String, default: T): T {
+        val raw = prefs.getString(key, null) ?: return default
+        return runCatching { enumValueOf<T>(raw) }.getOrDefault(default)
+    }
+
+    fun cycleTheme() {
+        themeMode = themeMode.next()
+        prefs.edit { putString(KEY_THEME, themeMode.name) }
+    }
+
+    fun chooseAccent(choice: AccentChoice) {
+        accent = choice
+        prefs.edit { putString(KEY_ACCENT, choice.name) }
+    }
+
+    fun chooseFont(choice: FontChoice) {
+        font = choice
+        prefs.edit { putString(KEY_FONT, choice.name) }
+    }
+
+    fun resetAll() {
+        prefs.edit { clear() }
+        favorites.clear()
+        hidden.clear()
+        usage.clear()
+        showClock = true
+        themeMode = ThemeMode.SYSTEM
+        accent = AccentChoice.MONO
+        font = FontChoice.INTER
+        leftShortcut = resolveAsLauncher(context, Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA), "camera")
+        rightShortcut = resolveAsLauncher(context, Intent(Intent.ACTION_DIAL), "phone")
+    }
 
     var leftShortcut by mutableStateOf(
         decodeApp(prefs.getString(KEY_LEFT, null))

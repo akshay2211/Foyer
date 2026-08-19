@@ -101,9 +101,14 @@ class HeuristicCommandProvider : CommandProvider {
  * with a graceful fallback to heuristics on unsupported devices.
  */
 private val heuristics = HeuristicCommandProvider()
+private val ai = AiCommandProvider()
 
-fun routeCommands(context: Context, query: String): List<Command> =
-    heuristics.suggest(context, query)
+fun routeCommands(context: Context, query: String, useAi: Boolean = false): List<Command> {
+    val base = heuristics.suggest(context, query)
+    if (!useAi || !ai.available(context)) return base
+    // AI results first, then heuristics, de-duplicated by title.
+    return (ai.suggest(context, query) + base).distinctBy { it.title }
+}
 
 // ---- Heuristics -----------------------------------------------------------
 

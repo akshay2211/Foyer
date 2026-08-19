@@ -5,6 +5,9 @@
     <!-- Lets a swipe-down on the home screen pull the notification shade. -->
     <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
 
+    <!-- On-device voice command ("ask me"). -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
     <!-- A launcher needs to see every app that exposes a LAUNCHER activity. -->
     <queries>
         <intent>

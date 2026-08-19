@@ -48,6 +48,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -57,6 +58,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -111,9 +113,8 @@ private fun sectionOf(label: String): Char {
 }
 
 @Composable
-fun LauncherScreen(themeMode: ThemeMode, onCycleTheme: () -> Unit) {
+fun LauncherScreen(store: LauncherStore) {
     val context = LocalContext.current
-    val store = rememberLauncherStore()
     val scope = rememberCoroutineScope()
 
     val apps by produceState(initialValue = emptyList<AppEntry>(), context) {
@@ -128,12 +129,17 @@ fun LauncherScreen(themeMode: ThemeMode, onCycleTheme: () -> Unit) {
     var menuApp by remember { mutableStateOf<AppEntry?>(null) }
     var pickerTarget by remember { mutableStateOf<ShortcutSide?>(null) }
     var showHomeMenu by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
+    var showVoice by remember { mutableStateOf(false) }
 
-    val overlayOpen = menuApp != null || pickerTarget != null || showHomeMenu
+    val overlayOpen = menuApp != null || pickerTarget != null || showHomeMenu ||
+        showSettings || showVoice
     BackHandler(enabled = overlayOpen) {
         menuApp = null
         pickerTarget = null
         showHomeMenu = false
+        showSettings = false
+        showVoice = false
     }
 
     Box(
@@ -146,9 +152,10 @@ fun LauncherScreen(themeMode: ThemeMode, onCycleTheme: () -> Unit) {
                 0 -> DrawerPage(
                     apps = apps,
                     store = store,
-                    themeMode = themeMode,
-                    onCycleTheme = onCycleTheme,
+                    themeMode = store.themeMode,
+                    onCycleTheme = { store.cycleTheme() },
                     onLongPressApp = { menuApp = it },
+                    onOpenSettings = { showSettings = true },
                     active = onDrawer,
                     backEnabled = onDrawer && !overlayOpen,
                     onNavigateHome = { scope.launch { pagerState.animateScrollToPage(1) } },
@@ -159,6 +166,7 @@ fun LauncherScreen(themeMode: ThemeMode, onCycleTheme: () -> Unit) {
                     onLongPressFavorite = { menuApp = it },
                     onLongPressShortcut = { pickerTarget = it },
                     onLongPressBackground = { showHomeMenu = true },
+                    onOpenVoice = { showVoice = true },
                     onSwipeUp = { openBrowser(context) },
                     onSwipeDown = { expandNotifications(context) },
                 )
@@ -192,9 +200,17 @@ fun LauncherScreen(themeMode: ThemeMode, onCycleTheme: () -> Unit) {
             HomeMenu(
                 showClock = store.showClock,
                 onToggleClock = { store.toggleClock(); showHomeMenu = false },
-                onOpenSettings = { openSettings(context); showHomeMenu = false },
+                onOpenSettings = { showHomeMenu = false; showSettings = true },
                 onDismiss = { showHomeMenu = false },
             )
+        }
+
+        if (showSettings) {
+            SettingsScreen(store = store, onClose = { showSettings = false })
+        }
+
+        if (showVoice) {
+            VoiceScreen(onClose = { showVoice = false })
         }
     }
 }
@@ -208,11 +224,13 @@ private fun HomePage(
     onLongPressFavorite: (AppEntry) -> Unit,
     onLongPressShortcut: (ShortcutSide) -> Unit,
     onLongPressBackground: () -> Unit,
+    onOpenVoice: () -> Unit,
     onSwipeUp: () -> Unit,
     onSwipeDown: () -> Unit,
 ) {
     val context = LocalContext.current
     val palette = LocalPalette.current
+    val ff = LocalFontFamily.current
     val density = LocalDensity.current
     val swipeThresholdPx = with(density) { 110.dp.toPx() }
 
@@ -239,8 +257,8 @@ private fun HomePage(
         if (store.showClock) {
             ClockWidget(
                 modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 56.dp)
+                    .align(Alignment.TopStart)
+                    .padding(start = 28.dp, top = 56.dp)
                     .clickable { openClockApp(context) },
             )
         }
@@ -254,54 +272,74 @@ private fun HomePage(
         ) {
             if (store.favorites.isEmpty()) {
                 BasicText(
-                    text = "long-press an app to pin it here",
-                    style = TextStyle(color = palette.muted, fontSize = 15.sp),
+                    text = "long-press an app to pin it",
+                    style = TextStyle(color = palette.muted, fontSize = 15.sp, fontFamily = ff),
                 )
             } else {
                 store.favorites.forEach { app ->
                     BasicText(
-                        text = app.label,
+                        text = app.label.lowercase(),
                         modifier = Modifier
                             .combinedClickable(
                                 onClick = { store.recordLaunch(app); launchApp(context, app) },
                                 onLongClick = { onLongPressFavorite(app) },
                             )
                             .padding(vertical = 9.dp),
-                        style = TextStyle(color = palette.text, fontSize = 22.sp),
+                        style = TextStyle(color = palette.text, fontSize = 22.sp, fontFamily = ff),
                     )
                 }
             }
         }
 
-        ShortcutSlot(
-            app = store.leftShortcut,
-            onLongPress = { onLongPressShortcut(ShortcutSide.LEFT) },
+        // Voice / command entry, bottom-center.
+        BasicText(
+            text = "ask me",
             modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(start = 28.dp, bottom = 20.dp),
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 20.dp)
+                .clickable { onOpenVoice() }
+                .padding(8.dp),
+            style = TextStyle(
+                color = palette.text,
+                fontSize = 17.sp,
+                letterSpacing = 1.sp,
+                fontWeight = FontWeight.Medium,
+                fontFamily = ff,
+            ),
         )
-        ShortcutSlot(
+
+        // Bottom-corner shortcuts, rotated as vertical edge labels.
+        EdgeShortcut(
+            app = store.leftShortcut,
+            rotation = -90f,
+            onLongPress = { onLongPressShortcut(ShortcutSide.LEFT) },
+            modifier = Modifier.align(Alignment.BottomStart),
+        )
+        EdgeShortcut(
             app = store.rightShortcut,
+            rotation = 90f,
             onLongPress = { onLongPressShortcut(ShortcutSide.RIGHT) },
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 28.dp, bottom = 20.dp),
+            modifier = Modifier.align(Alignment.BottomEnd),
         )
     }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ShortcutSlot(
+private fun EdgeShortcut(
     app: AppEntry?,
+    rotation: Float,
     onLongPress: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val palette = LocalPalette.current
+    val ff = LocalFontFamily.current
     BasicText(
-        text = app?.label ?: "＋ set",
+        text = (app?.label ?: "set").lowercase(),
         modifier = modifier
+            .padding(vertical = 18.dp)
+            .rotate(rotation)
             .combinedClickable(
                 onClick = { app?.let { launchApp(context, it) } ?: onLongPress() },
                 onLongClick = onLongPress,
@@ -309,8 +347,9 @@ private fun ShortcutSlot(
             .padding(8.dp),
         style = TextStyle(
             color = if (app == null) palette.muted else palette.text,
-            fontSize = 16.sp,
+            fontSize = 15.sp,
             letterSpacing = 1.sp,
+            fontFamily = ff,
         ),
     )
 }
@@ -318,7 +357,8 @@ private fun ShortcutSlot(
 @Composable
 private fun ClockWidget(modifier: Modifier = Modifier) {
     val palette = LocalPalette.current
-    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    val ff = LocalFontFamily.current
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
             now = System.currentTimeMillis()
@@ -328,14 +368,14 @@ private fun ClockWidget(modifier: Modifier = Modifier) {
     val timeFmt = remember { SimpleDateFormat("h:mm", Locale.getDefault()) }
     val dateFmt = remember { SimpleDateFormat("EEEE, MMM d", Locale.getDefault()) }
     val date = Date(now)
-    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(modifier = modifier, horizontalAlignment = Alignment.Start) {
         BasicText(
             text = timeFmt.format(date),
-            style = TextStyle(color = palette.text, fontSize = 60.sp, fontWeight = FontWeight.Thin),
+            style = TextStyle(color = palette.text, fontSize = 60.sp, fontWeight = FontWeight.Thin, fontFamily = ff),
         )
         BasicText(
             text = dateFmt.format(date).lowercase(),
-            style = TextStyle(color = palette.muted, fontSize = 14.sp, letterSpacing = 1.sp),
+            style = TextStyle(color = palette.muted, fontSize = 14.sp, letterSpacing = 1.sp, fontFamily = ff),
         )
     }
 }
@@ -350,12 +390,14 @@ private fun DrawerPage(
     themeMode: ThemeMode,
     onCycleTheme: () -> Unit,
     onLongPressApp: (AppEntry) -> Unit,
+    onOpenSettings: () -> Unit,
     active: Boolean,
     backEnabled: Boolean,
     onNavigateHome: () -> Unit,
 ) {
     val context = LocalContext.current
     val palette = LocalPalette.current
+    val ff = LocalFontFamily.current
     val listState = rememberLazyListState()
     val focusManager = LocalFocusManager.current
     val focusRequester = remember { FocusRequester() }
@@ -380,12 +422,12 @@ private fun DrawerPage(
     } else {
         emptyList()
     }
-    // Leading rows before the alphabetical list (frequent block + its divider),
-    // so the A–Z rail can offset its scroll targets.
-    val leadingCount = if (frequent.isNotEmpty()) frequent.size + 1 else 0
+    // Leading rows before the alphabetical list ("frequently used" header +
+    // block + divider), so the A–Z rail can offset its scroll targets.
+    val leadingCount = if (frequent.isNotEmpty()) frequent.size + 2 else 0
 
     // On-device command routing (math, quick actions, settings). Offline.
-    val commands = if (searching) routeCommands(context, q) else emptyList()
+    val commands = if (searching) routeCommands(context, q, useAi = store.aiEnabled) else emptyList()
 
     // Back on the drawer clears the search first, then returns to home.
     BackHandler(enabled = backEnabled) {
@@ -403,7 +445,7 @@ private fun DrawerPage(
         }
     }
 
-    val actionStyle = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = 2.sp)
+    val actionStyle = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = 2.sp, fontFamily = ff)
 
     Column(
         Modifier
@@ -423,7 +465,7 @@ private fun DrawerPage(
             )
             BasicText(
                 text = "settings",
-                modifier = Modifier.clickable { openSettings(context) }.padding(6.dp),
+                modifier = Modifier.clickable { onOpenSettings() }.padding(6.dp),
                 style = actionStyle,
             )
         }
@@ -436,7 +478,7 @@ private fun DrawerPage(
                         value = query,
                         onValueChange = { query = it },
                         singleLine = true,
-                        textStyle = TextStyle(color = palette.text, fontSize = 18.sp),
+                        textStyle = TextStyle(color = palette.text, fontSize = 18.sp, fontFamily = ff),
                         cursorBrush = SolidColor(palette.accent),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
                         keyboardActions = KeyboardActions(
@@ -458,7 +500,7 @@ private fun DrawerPage(
                             if (query.isEmpty()) {
                                 BasicText(
                                     text = "search",
-                                    style = TextStyle(color = palette.muted, fontSize = 18.sp),
+                                    style = TextStyle(color = palette.muted, fontSize = 18.sp, fontFamily = ff),
                                 )
                             }
                             inner()
@@ -497,17 +539,8 @@ private fun DrawerPage(
                 contentPadding = PaddingValues(start = 24.dp, end = 44.dp, top = 4.dp, bottom = 32.dp),
             ) {
                 if (searching) {
-                    if (commands.isNotEmpty()) {
-                        item(key = "ai-tag") {
-                            BasicText(
-                                text = "on-device · private",
-                                modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
-                                style = TextStyle(color = palette.muted, fontSize = 11.sp, letterSpacing = 1.sp),
-                            )
-                        }
-                        items(commands, key = { "c/" + it.title }) { cmd ->
-                            CommandRow(cmd) { focusManager.clearFocus() }
-                        }
+                    items(commands, key = { "c/" + it.title }) { cmd ->
+                        CommandRow(cmd) { focusManager.clearFocus() }
                     }
                     items(searchResults, key = { "s/" + it.key }) { app ->
                         AppRow(app, onLaunch, onLongPressApp)
@@ -518,8 +551,16 @@ private fun DrawerPage(
                     item(key = "play") {
                         FallbackRow("find “$q” in Play Store") { playSearch(context, q) }
                     }
+                    item(key = "ai-tag") {
+                        BasicText(
+                            text = "on-device · private",
+                            modifier = Modifier.padding(top = 16.dp),
+                            style = TextStyle(color = palette.muted, fontSize = 11.sp, letterSpacing = 1.sp, fontFamily = ff),
+                        )
+                    }
                 } else {
                     if (frequent.isNotEmpty()) {
+                        item(key = "freq-header") { SectionHeader("frequently used") }
                         items(frequent, key = { "f/" + it.key }) { app ->
                             AppRow(app, onLaunch, onLongPressApp)
                         }
@@ -553,6 +594,17 @@ private fun DrawerPage(
     }
 }
 
+@Composable
+private fun SectionHeader(text: String) {
+    val palette = LocalPalette.current
+    val ff = LocalFontFamily.current
+    BasicText(
+        text = text,
+        modifier = Modifier.padding(top = 6.dp, bottom = 4.dp),
+        style = TextStyle(color = palette.muted, fontSize = 12.sp, letterSpacing = 2.sp, fontFamily = ff),
+    )
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun AppRow(
@@ -561,8 +613,9 @@ private fun AppRow(
     onLongPress: (AppEntry) -> Unit,
 ) {
     val palette = LocalPalette.current
+    val ff = LocalFontFamily.current
     BasicText(
-        text = app.label,
+        text = app.label.lowercase(),
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(
@@ -570,26 +623,28 @@ private fun AppRow(
                 onLongClick = { onLongPress(app) },
             )
             .padding(vertical = 11.dp),
-        style = TextStyle(color = palette.text, fontSize = 19.sp),
+        style = TextStyle(color = palette.text, fontSize = 19.sp, fontFamily = ff),
     )
 }
 
 @Composable
 private fun FallbackRow(text: String, onClick: () -> Unit) {
     val palette = LocalPalette.current
+    val ff = LocalFontFamily.current
     BasicText(
         text = text,
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
             .padding(vertical = 11.dp),
-        style = TextStyle(color = palette.muted, fontSize = 18.sp),
+        style = TextStyle(color = palette.muted, fontSize = 18.sp, fontFamily = ff),
     )
 }
 
 @Composable
 private fun CommandRow(command: Command, onBeforeRun: () -> Unit) {
     val palette = LocalPalette.current
+    val ff = LocalFontFamily.current
     Column(
         Modifier
             .fillMaxWidth()
@@ -598,12 +653,12 @@ private fun CommandRow(command: Command, onBeforeRun: () -> Unit) {
     ) {
         BasicText(
             text = command.title,
-            style = TextStyle(color = palette.text, fontSize = 22.sp),
+            style = TextStyle(color = palette.text, fontSize = 22.sp, fontFamily = ff),
         )
         command.subtitle?.let { sub ->
             BasicText(
                 text = sub,
-                style = TextStyle(color = palette.muted, fontSize = 12.sp),
+                style = TextStyle(color = palette.muted, fontSize = 12.sp, fontFamily = ff),
             )
         }
     }

@@ -21,17 +21,10 @@ class MainActivity : ComponentActivity() {
         onBackPressedDispatcher.addCallback(this) { /* no-op */ }
 
         setContent {
-            val context = LocalContext.current
-            var mode by remember { mutableStateOf(ThemePrefs.load(context)) }
+            val store = rememberLauncherStore()
 
-            LauncherTheme(mode) {
-                LauncherScreen(
-                    themeMode = mode,
-                    onCycleTheme = {
-                        mode = mode.next()
-                        ThemePrefs.save(context, mode)
-                    },
-                )
+            LauncherTheme(store.themeMode, store.accent, store.font) {
+                LauncherScreen(store)
             }
         }
     }
