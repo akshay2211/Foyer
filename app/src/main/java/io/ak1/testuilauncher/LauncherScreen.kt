@@ -2,16 +2,21 @@ package io.ak1.testuilauncher
 
 import android.content.Context
 import android.content.Intent
-import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -29,12 +34,16 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -47,13 +56,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -62,8 +75,12 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.math.roundToInt
 
 /** A launchable app: just what we need to show a name and start it. */
@@ -88,19 +105,6 @@ private fun loadApps(context: Context): List<AppEntry> {
         .sortedBy { it.label.lowercase() }
 }
 
-private fun launchApp(context: Context, app: AppEntry) {
-    val intent = Intent(Intent.ACTION_MAIN)
-        .addCategory(Intent.CATEGORY_LAUNCHER)
-        .setClassName(app.packageName, app.activityName)
-        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
-    runCatching { context.startActivity(intent) }
-}
-
-private fun openSettings(context: Context) {
-    val intent = Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    runCatching { context.startActivity(intent) }
-}
-
 private fun sectionOf(label: String): Char {
     val c = label.firstOrNull()?.uppercaseChar() ?: '#'
     return if (c in 'A'..'Z') c else '#'
@@ -109,145 +113,479 @@ private fun sectionOf(label: String): Char {
 @Composable
 fun LauncherScreen(themeMode: ThemeMode, onCycleTheme: () -> Unit) {
     val context = LocalContext.current
-    val palette = LocalPalette.current
+    val store = rememberLauncherStore()
+    val scope = rememberCoroutineScope()
 
     val apps by produceState(initialValue = emptyList<AppEntry>(), context) {
         value = withContext(Dispatchers.IO) { loadApps(context) }
     }
-    val listState = rememberLazyListState()
-    val focusManager = LocalFocusManager.current
 
-    var query by remember { mutableStateOf("") }
-    val filtered = remember(apps, query) {
-        val q = query.trim()
-        if (q.isEmpty()) apps else apps.filter { it.label.startsWith(q, ignoreCase = true) }
+    // Page 0 = app drawer (to the left), page 1 = home (start here). Swiping
+    // right from home reveals the drawer.
+    val pagerState = rememberPagerState(initialPage = 1) { 2 }
+    val onDrawer = pagerState.currentPage == 0
+
+    var menuApp by remember { mutableStateOf<AppEntry?>(null) }
+    var pickerTarget by remember { mutableStateOf<ShortcutSide?>(null) }
+    var showHomeMenu by remember { mutableStateOf(false) }
+
+    val overlayOpen = menuApp != null || pickerTarget != null || showHomeMenu
+    BackHandler(enabled = overlayOpen) {
+        menuApp = null
+        pickerTarget = null
+        showHomeMenu = false
     }
-
-    val actionStyle = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = 2.sp)
 
     Box(
         Modifier
             .fillMaxSize()
-            .background(palette.background)
+            .background(LocalPalette.current.background),
     ) {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.systemBars)
-        ) {
-            // Header: text-only actions. No icons anywhere.
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 14.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                BasicText(
-                    text = themeMode.label,
-                    modifier = Modifier
-                        .clickable { onCycleTheme() }
-                        .padding(6.dp),
-                    style = actionStyle,
+        HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+            when (page) {
+                0 -> DrawerPage(
+                    apps = apps,
+                    store = store,
+                    themeMode = themeMode,
+                    onCycleTheme = onCycleTheme,
+                    onLongPressApp = { menuApp = it },
+                    active = onDrawer,
+                    backEnabled = onDrawer && !overlayOpen,
+                    onNavigateHome = { scope.launch { pagerState.animateScrollToPage(1) } },
                 )
-                BasicText(
-                    text = "settings",
-                    modifier = Modifier
-                        .clickable { openSettings(context) }
-                        .padding(6.dp),
-                    style = actionStyle,
+
+                else -> HomePage(
+                    store = store,
+                    onLongPressFavorite = { menuApp = it },
+                    onLongPressShortcut = { pickerTarget = it },
+                    onLongPressBackground = { showHomeMenu = true },
+                    onSwipeUp = { openBrowser(context) },
+                    onSwipeDown = { expandNotifications(context) },
                 )
             }
+        }
 
-            // Minimal search field — text only, filters the list live and
-            // launches the top match when the keyboard's Go action is pressed.
-            Column(Modifier.padding(horizontal = 24.dp, vertical = 4.dp)) {
-                BasicTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    singleLine = true,
-                    textStyle = TextStyle(color = palette.text, fontSize = 18.sp),
-                    cursorBrush = SolidColor(palette.accent),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-                    keyboardActions = KeyboardActions(
-                        onGo = {
-                            filtered.firstOrNull()?.let {
-                                focusManager.clearFocus()
-                                launchApp(context, it)
-                            }
-                        },
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    decorationBox = { inner ->
-                        if (query.isEmpty()) {
-                            BasicText(
-                                text = "search",
-                                style = TextStyle(color = palette.muted, fontSize = 18.sp),
-                            )
-                        }
-                        inner()
+        menuApp?.let { app ->
+            AppActionMenu(
+                app = app,
+                isFavorite = store.isFavorite(app),
+                canAdd = store.favorites.size < MAX_FAVORITES,
+                isHidden = store.isHidden(app),
+                onAdd = { store.addFavorite(app); menuApp = null },
+                onRemove = { store.removeFavorite(app); menuApp = null },
+                onToggleHide = { store.toggleHidden(app); menuApp = null },
+                onAppInfo = { openAppInfo(context, app.packageName); menuApp = null },
+                onDismiss = { menuApp = null },
+            )
+        }
+
+        pickerTarget?.let { side ->
+            AppPicker(
+                apps = apps,
+                side = side,
+                onPick = { store.setShortcut(side, it); pickerTarget = null },
+                onDismiss = { pickerTarget = null },
+            )
+        }
+
+        if (showHomeMenu) {
+            HomeMenu(
+                showClock = store.showClock,
+                onToggleClock = { store.toggleClock(); showHomeMenu = false },
+                onOpenSettings = { openSettings(context); showHomeMenu = false },
+                onDismiss = { showHomeMenu = false },
+            )
+        }
+    }
+}
+
+// ---- Home page ------------------------------------------------------------
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun HomePage(
+    store: LauncherStore,
+    onLongPressFavorite: (AppEntry) -> Unit,
+    onLongPressShortcut: (ShortcutSide) -> Unit,
+    onLongPressBackground: () -> Unit,
+    onSwipeUp: () -> Unit,
+    onSwipeDown: () -> Unit,
+) {
+    val context = LocalContext.current
+    val palette = LocalPalette.current
+    val density = LocalDensity.current
+    val swipeThresholdPx = with(density) { 110.dp.toPx() }
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                var dy = 0f
+                detectVerticalDragGestures(
+                    onDragStart = { dy = 0f },
+                    onVerticalDrag = { change, delta -> dy += delta; change.consume() },
+                    onDragEnd = {
+                        if (dy < -swipeThresholdPx) onSwipeUp()
+                        else if (dy > swipeThresholdPx) onSwipeDown()
                     },
-                )
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(1.dp)
-                        .background(palette.muted.copy(alpha = 0.25f)),
+                    onDragCancel = { dy = 0f },
                 )
             }
+            .pointerInput(Unit) {
+                detectTapGestures(onLongPress = { onLongPressBackground() })
+            }
+            .windowInsetsPadding(WindowInsets.systemBars),
+    ) {
+        if (store.showClock) {
+            ClockWidget(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 56.dp)
+                    .clickable { openClockApp(context) },
+            )
+        }
 
-            Box(
-                Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-            ) {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(
-                        start = 24.dp,
-                        end = 44.dp,
-                        top = 4.dp,
-                        bottom = 32.dp,
-                    ),
-                ) {
-                    items(filtered, key = { it.packageName + "/" + it.activityName }) { app ->
-                        BasicText(
-                            text = app.label,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { launchApp(context, app) }
-                                .padding(vertical = 11.dp),
-                            style = TextStyle(color = palette.text, fontSize = 19.sp),
-                        )
-                    }
-                }
-
-                // The rail indexes the full list; hide it while searching.
-                if (query.isEmpty() && filtered.isNotEmpty()) {
-                    AlphabetScroller(
-                        apps = filtered,
-                        listState = listState,
+        // Favorites, vertically centered on the left.
+        Column(
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .padding(start = 28.dp, end = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            if (store.favorites.isEmpty()) {
+                BasicText(
+                    text = "long-press an app to pin it here",
+                    style = TextStyle(color = palette.muted, fontSize = 15.sp),
+                )
+            } else {
+                store.favorites.forEach { app ->
+                    BasicText(
+                        text = app.label,
                         modifier = Modifier
-                            .align(Alignment.CenterEnd)
-                            .fillMaxHeight(),
+                            .combinedClickable(
+                                onClick = { store.recordLaunch(app); launchApp(context, app) },
+                                onLongClick = { onLongPressFavorite(app) },
+                            )
+                            .padding(vertical = 9.dp),
+                        style = TextStyle(color = palette.text, fontSize = 22.sp),
                     )
                 }
+            }
+        }
+
+        ShortcutSlot(
+            app = store.leftShortcut,
+            onLongPress = { onLongPressShortcut(ShortcutSide.LEFT) },
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 28.dp, bottom = 20.dp),
+        )
+        ShortcutSlot(
+            app = store.rightShortcut,
+            onLongPress = { onLongPressShortcut(ShortcutSide.RIGHT) },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 28.dp, bottom = 20.dp),
+        )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ShortcutSlot(
+    app: AppEntry?,
+    onLongPress: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val palette = LocalPalette.current
+    BasicText(
+        text = app?.label ?: "＋ set",
+        modifier = modifier
+            .combinedClickable(
+                onClick = { app?.let { launchApp(context, it) } ?: onLongPress() },
+                onLongClick = onLongPress,
+            )
+            .padding(8.dp),
+        style = TextStyle(
+            color = if (app == null) palette.muted else palette.text,
+            fontSize = 16.sp,
+            letterSpacing = 1.sp,
+        ),
+    )
+}
+
+@Composable
+private fun ClockWidget(modifier: Modifier = Modifier) {
+    val palette = LocalPalette.current
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = System.currentTimeMillis()
+            delay(10_000)
+        }
+    }
+    val timeFmt = remember { SimpleDateFormat("h:mm", Locale.getDefault()) }
+    val dateFmt = remember { SimpleDateFormat("EEEE, MMM d", Locale.getDefault()) }
+    val date = Date(now)
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        BasicText(
+            text = timeFmt.format(date),
+            style = TextStyle(color = palette.text, fontSize = 60.sp, fontWeight = FontWeight.Thin),
+        )
+        BasicText(
+            text = dateFmt.format(date).lowercase(),
+            style = TextStyle(color = palette.muted, fontSize = 14.sp, letterSpacing = 1.sp),
+        )
+    }
+}
+
+// ---- App drawer page ------------------------------------------------------
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun DrawerPage(
+    apps: List<AppEntry>,
+    store: LauncherStore,
+    themeMode: ThemeMode,
+    onCycleTheme: () -> Unit,
+    onLongPressApp: (AppEntry) -> Unit,
+    active: Boolean,
+    backEnabled: Boolean,
+    onNavigateHome: () -> Unit,
+) {
+    val context = LocalContext.current
+    val palette = LocalPalette.current
+    val listState = rememberLazyListState()
+    val focusManager = LocalFocusManager.current
+    val focusRequester = remember { FocusRequester() }
+
+    var query by remember { mutableStateOf("") }
+    val q = query.trim()
+    val searching = q.isNotEmpty()
+
+    val onLaunch: (AppEntry) -> Unit = { app -> store.recordLaunch(app); launchApp(context, app) }
+
+    // Browse list excludes hidden apps; search reveals everything (incl. hidden).
+    val browse = apps.filterNot { store.isHidden(it) }
+    val searchResults = if (searching) {
+        apps.filter { it.label.startsWith(q, ignoreCase = true) }
+    } else {
+        emptyList()
+    }
+    val frequent = if (!searching) {
+        browse.filter { store.usageCount(it) > 0 }
+            .sortedByDescending { store.usageCount(it) }
+            .take(5)
+    } else {
+        emptyList()
+    }
+    // Leading rows before the alphabetical list (frequent block + its divider),
+    // so the A–Z rail can offset its scroll targets.
+    val leadingCount = if (frequent.isNotEmpty()) frequent.size + 1 else 0
+
+    // Back on the drawer clears the search first, then returns to home.
+    BackHandler(enabled = backEnabled) {
+        if (query.isNotEmpty()) query = "" else onNavigateHome()
+    }
+
+    // Auto-open the keyboard when the drawer becomes the visible page; hide it
+    // (and drop focus) when we leave.
+    LaunchedEffect(active) {
+        if (active) {
+            delay(80)
+            runCatching { focusRequester.requestFocus() }
+        } else {
+            focusManager.clearFocus()
+        }
+    }
+
+    val actionStyle = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = 2.sp)
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.systemBars),
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            BasicText(
+                text = themeMode.label,
+                modifier = Modifier.clickable { onCycleTheme() }.padding(6.dp),
+                style = actionStyle,
+            )
+            BasicText(
+                text = "settings",
+                modifier = Modifier.clickable { openSettings(context) }.padding(6.dp),
+                style = actionStyle,
+            )
+        }
+
+        // Minimal search field with a text-only clear (×) affordance.
+        Column(Modifier.padding(horizontal = 24.dp, vertical = 4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) {
+                    BasicTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        singleLine = true,
+                        textStyle = TextStyle(color = palette.text, fontSize = 18.sp),
+                        cursorBrush = SolidColor(palette.accent),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                        keyboardActions = KeyboardActions(
+                            onGo = {
+                                val first = searchResults.firstOrNull()
+                                if (first != null) {
+                                    focusManager.clearFocus()
+                                    onLaunch(first)
+                                } else if (q.isNotEmpty()) {
+                                    focusManager.clearFocus()
+                                    webSearch(context, q)
+                                }
+                            },
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(focusRequester)
+                            .padding(vertical = 8.dp),
+                        decorationBox = { inner ->
+                            if (query.isEmpty()) {
+                                BasicText(
+                                    text = "search",
+                                    style = TextStyle(color = palette.muted, fontSize = 18.sp),
+                                )
+                            }
+                            inner()
+                        },
+                    )
+                }
+                if (query.isNotEmpty()) {
+                    BasicText(
+                        text = "×",
+                        modifier = Modifier
+                            .clickable {
+                                query = ""
+                                focusManager.clearFocus()
+                            }
+                            .padding(start = 8.dp, end = 2.dp, top = 2.dp, bottom = 2.dp),
+                        style = TextStyle(color = palette.muted, fontSize = 26.sp),
+                    )
+                }
+            }
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(palette.muted.copy(alpha = 0.25f)),
+            )
+        }
+
+        Box(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+        ) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 24.dp, end = 44.dp, top = 4.dp, bottom = 32.dp),
+            ) {
+                if (searching) {
+                    items(searchResults, key = { "s/" + it.key }) { app ->
+                        AppRow(app, onLaunch, onLongPressApp)
+                    }
+                    if (searchResults.isEmpty()) {
+                        item(key = "web") {
+                            FallbackRow("search web for “$q”") { webSearch(context, q) }
+                        }
+                        item(key = "play") {
+                            FallbackRow("find “$q” in Play Store") { playSearch(context, q) }
+                        }
+                    }
+                } else {
+                    if (frequent.isNotEmpty()) {
+                        items(frequent, key = { "f/" + it.key }) { app ->
+                            AppRow(app, onLaunch, onLongPressApp)
+                        }
+                        item(key = "freq-divider") {
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp)
+                                    .height(1.dp)
+                                    .background(palette.muted.copy(alpha = 0.2f)),
+                            )
+                        }
+                    }
+                    items(browse, key = { "a/" + it.key }) { app ->
+                        AppRow(app, onLaunch, onLongPressApp)
+                    }
+                }
+            }
+
+            if (!searching && browse.isNotEmpty()) {
+                AlphabetScroller(
+                    apps = browse,
+                    listState = listState,
+                    leadingItemCount = leadingCount,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .fillMaxHeight(),
+                )
             }
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun AppRow(
+    app: AppEntry,
+    onLaunch: (AppEntry) -> Unit,
+    onLongPress: (AppEntry) -> Unit,
+) {
+    val palette = LocalPalette.current
+    BasicText(
+        text = app.label,
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = { onLaunch(app) },
+                onLongClick = { onLongPress(app) },
+            )
+            .padding(vertical = 11.dp),
+        style = TextStyle(color = palette.text, fontSize = 19.sp),
+    )
+}
+
+@Composable
+private fun FallbackRow(text: String, onClick: () -> Unit) {
+    val palette = LocalPalette.current
+    BasicText(
+        text = text,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(vertical = 11.dp),
+        style = TextStyle(color = palette.muted, fontSize = 18.sp),
+    )
+}
+
 /**
- * The "fancy" part: an A–Z rail on the right edge. Drag or tap to fast-scroll,
- * the active letter enlarges, and a large bubble follows the finger. The rail
- * also passively highlights whichever section is currently at the top.
+ * The A–Z rail on the right edge. Drag or tap to fast-scroll, the active letter
+ * enlarges, and a large bubble follows the finger. Also passively highlights
+ * whichever section is currently at the top. [leadingItemCount] accounts for any
+ * non-alphabetical rows (e.g. the "frequent" block) above the sorted list.
  */
 @Composable
 private fun AlphabetScroller(
     apps: List<AppEntry>,
     listState: LazyListState,
+    leadingItemCount: Int = 0,
     modifier: Modifier = Modifier,
 ) {
     val palette = LocalPalette.current
@@ -264,7 +602,6 @@ private fun AlphabetScroller(
         map
     }
 
-    // Nearest section with actual apps, searching outward from the pressed letter.
     fun targetIndex(letter: Char): Int? {
         indexForLetter[letter]?.let { return it }
         val li = letters.indexOf(letter)
@@ -278,9 +615,10 @@ private fun AlphabetScroller(
     var activeLetter by remember { mutableStateOf<Char?>(null) }
     var pointerY by remember { mutableFloatStateOf(0f) }
 
-    val currentSection by remember(apps) {
+    val currentSection by remember(apps, leadingItemCount) {
         derivedStateOf {
-            apps.getOrNull(listState.firstVisibleItemIndex)?.let { sectionOf(it.label) }
+            val idx = listState.firstVisibleItemIndex - leadingItemCount
+            apps.getOrNull(idx.coerceAtLeast(0))?.let { sectionOf(it.label) }
         }
     }
 
@@ -291,11 +629,10 @@ private fun AlphabetScroller(
         val letter = letters[li]
         activeLetter = letter
         pointerY = y.coerceIn(0f, railHeight.toFloat())
-        targetIndex(letter)?.let { ti -> scope.launch { listState.scrollToItem(ti) } }
+        targetIndex(letter)?.let { ti -> scope.launch { listState.scrollToItem(ti + leadingItemCount) } }
     }
 
     Box(modifier) {
-        // Letter bubble that follows the finger while dragging.
         val bubbleVisible = isDragging && activeLetter != null
         val bubbleAlpha by animateFloatAsState(
             targetValue = if (bubbleVisible) 1f else 0f,
@@ -309,10 +646,7 @@ private fun AlphabetScroller(
                 Modifier
                     .align(Alignment.TopEnd)
                     .offset {
-                        IntOffset(
-                            x = offsetX,
-                            y = (pointerY - bubblePx / 2f).roundToInt(),
-                        )
+                        IntOffset(x = offsetX, y = (pointerY - bubblePx / 2f).roundToInt())
                     }
                     .alpha(bubbleAlpha)
                     .size(bubbleSize)
@@ -330,7 +664,6 @@ private fun AlphabetScroller(
             }
         }
 
-        // The A–Z rail.
         Column(
             Modifier
                 .align(Alignment.CenterEnd)
@@ -339,16 +672,10 @@ private fun AlphabetScroller(
                 .onSizeChanged { railHeight = it.height }
                 .pointerInput(apps) {
                     detectVerticalDragGestures(
-                        onDragStart = { offset ->
-                            isDragging = true
-                            updateFromY(offset.y)
-                        },
+                        onDragStart = { offset -> isDragging = true; updateFromY(offset.y) },
                         onDragEnd = { isDragging = false },
                         onDragCancel = { isDragging = false },
-                        onVerticalDrag = { change, _ ->
-                            change.consume()
-                            updateFromY(change.position.y)
-                        },
+                        onVerticalDrag = { change, _ -> change.consume(); updateFromY(change.position.y) },
                     )
                 }
                 .pointerInput(apps) {
@@ -380,6 +707,153 @@ private fun AlphabetScroller(
                         textAlign = TextAlign.Center,
                     ),
                 )
+            }
+        }
+    }
+}
+
+// ---- Overlays -------------------------------------------------------------
+
+@Composable
+private fun Scrim(onDismiss: () -> Unit, content: @Composable BoxScope.() -> Unit) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color(0x99000000))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+            ) { onDismiss() },
+        content = content,
+    )
+}
+
+@Composable
+private fun BoxScope.MenuCard(content: @Composable ColumnScope.() -> Unit) {
+    val palette = LocalPalette.current
+    Column(
+        modifier = Modifier
+            .align(Alignment.Center)
+            .fillMaxWidth(0.82f)
+            .clip(RoundedCornerShape(22.dp))
+            .background(palette.background)
+            // Swallow taps so touching the card doesn't dismiss via the scrim.
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+            ) {}
+            .padding(horizontal = 22.dp, vertical = 18.dp),
+        content = content,
+    )
+}
+
+@Composable
+private fun MenuRow(text: String, onClick: () -> Unit) {
+    val palette = LocalPalette.current
+    BasicText(
+        text = text,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(vertical = 14.dp),
+        style = TextStyle(color = palette.text, fontSize = 18.sp),
+    )
+}
+
+@Composable
+private fun AppActionMenu(
+    app: AppEntry,
+    isFavorite: Boolean,
+    canAdd: Boolean,
+    isHidden: Boolean,
+    onAdd: () -> Unit,
+    onRemove: () -> Unit,
+    onToggleHide: () -> Unit,
+    onAppInfo: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val palette = LocalPalette.current
+    Scrim(onDismiss) {
+        MenuCard {
+            BasicText(
+                text = app.label,
+                modifier = Modifier.padding(bottom = 6.dp),
+                style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = 1.sp),
+            )
+            when {
+                isFavorite -> MenuRow("remove from home", onRemove)
+                canAdd -> MenuRow("add to home", onAdd)
+                else -> BasicText(
+                    text = "home is full (max $MAX_FAVORITES)",
+                    modifier = Modifier.padding(vertical = 14.dp),
+                    style = TextStyle(color = palette.muted, fontSize = 18.sp),
+                )
+            }
+            MenuRow(if (isHidden) "unhide app" else "hide app", onToggleHide)
+            MenuRow("app info", onAppInfo)
+        }
+    }
+}
+
+@Composable
+private fun HomeMenu(
+    showClock: Boolean,
+    onToggleClock: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val palette = LocalPalette.current
+    Scrim(onDismiss) {
+        MenuCard {
+            BasicText(
+                text = "home",
+                modifier = Modifier.padding(bottom = 6.dp),
+                style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = 1.sp),
+            )
+            MenuRow(if (showClock) "hide clock" else "show clock", onToggleClock)
+            MenuRow("settings", onOpenSettings)
+        }
+    }
+}
+
+@Composable
+private fun AppPicker(
+    apps: List<AppEntry>,
+    side: ShortcutSide,
+    onPick: (AppEntry) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val palette = LocalPalette.current
+    Scrim(onDismiss) {
+        Column(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .fillMaxWidth(0.86f)
+                .fillMaxHeight(0.72f)
+                .clip(RoundedCornerShape(22.dp))
+                .background(palette.background)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                ) {}
+                .padding(horizontal = 20.dp, vertical = 18.dp),
+        ) {
+            BasicText(
+                text = "choose ${side.name.lowercase()} shortcut",
+                modifier = Modifier.padding(bottom = 10.dp),
+                style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = 1.sp),
+            )
+            LazyColumn(Modifier.weight(1f)) {
+                items(apps, key = { it.packageName + "/" + it.activityName }) { app ->
+                    BasicText(
+                        text = app.label,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onPick(app) }
+                            .padding(vertical = 12.dp),
+                        style = TextStyle(color = palette.text, fontSize = 18.sp),
+                    )
+                }
             }
         }
     }
