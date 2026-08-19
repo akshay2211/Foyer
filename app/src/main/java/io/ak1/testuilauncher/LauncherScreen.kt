@@ -7,6 +7,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -447,8 +448,7 @@ private fun DrawerPage(
             val intent = if (modelReady) e.decide(text, apps) else AiIntent.Web(text)
             val command = intent.toCommand(context)
             aiThinking = false
-            aiResult = command
-            if (command.kind == CommandKind.ACTION) command.run()
+            aiResult = command // shown as an outlined action button / answer
         }
     }
 
@@ -572,7 +572,15 @@ private fun DrawerPage(
                     } else {
                         aiResult?.let { cmd ->
                             item(key = "ai-result") {
-                                CommandRow(cmd) { focusManager.clearFocus() }
+                                if (cmd.kind == CommandKind.ACTION) {
+                                    Box(Modifier.padding(vertical = 10.dp)) {
+                                        ActionButton(
+                                            label = if (cmd.confirm) "did you mean: ${cmd.title}?" else cmd.title,
+                                        ) { focusManager.clearFocus(); cmd.run() }
+                                    }
+                                } else {
+                                    CommandRow(cmd) { focusManager.clearFocus() }
+                                }
                             }
                         }
                     }
@@ -660,6 +668,22 @@ private fun AppRow(
             )
             .padding(vertical = 11.dp),
         style = TextStyle(color = palette.text, fontSize = 19.sp, fontFamily = ff),
+    )
+}
+
+/** Outlined, tappable action chip used for AI-proposed actions. */
+@Composable
+fun ActionButton(label: String, onClick: () -> Unit) {
+    val palette = LocalPalette.current
+    val ff = LocalFontFamily.current
+    BasicText(
+        text = label,
+        modifier = Modifier
+            .clip(RoundedCornerShape(24.dp))
+            .border(1.dp, palette.muted.copy(alpha = 0.6f), RoundedCornerShape(24.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 18.dp, vertical = 12.dp),
+        style = TextStyle(color = palette.text, fontSize = 17.sp, fontFamily = ff),
     )
 }
 

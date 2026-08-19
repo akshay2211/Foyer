@@ -47,6 +47,7 @@ dependencies {
     implementation(libs.androidx.foundation)
     implementation(libs.androidx.animation)
     implementation(libs.aicore)
+    implementation(libs.tasks.genai)
     implementation(libs.androidx.ui.tooling.preview)
     debugImplementation(libs.androidx.ui.tooling)
     testImplementation(libs.junit)

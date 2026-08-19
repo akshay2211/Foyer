@@ -42,6 +42,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+private val loneVerbs = setOf(
+    "open", "launch", "start", "run", "call", "set", "go", "play", "search", "dial",
+)
+
 /**
  * Conversational entry point. Android on-device speech-to-text captures the
  * request; Gemini Nano (via [AiIntentEngine]) decides the action; the launcher
@@ -65,7 +69,7 @@ fun VoiceScreen(aiEnabled: Boolean, onClose: () -> Unit) {
     }
     var heard by remember { mutableStateOf<String?>(null) }
     var replyLabel by remember { mutableStateOf<String?>(null) }
-    var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var actionCommand by remember { mutableStateOf<Command?>(null) }
     var modelReady by remember { mutableStateOf(false) }
 
     val recognizer = remember { if (sttAvailable) SpeechRecognizer.createSpeechRecognizer(context) else null }
@@ -74,7 +78,12 @@ fun VoiceScreen(aiEnabled: Boolean, onClose: () -> Unit) {
     fun resolve(text: String) {
         heard = text
         replyLabel = null
-        pendingAction = null
+        actionCommand = null
+        // A lone verb ("open", "call") has no target — don't let the model invent one.
+        if (text.trim().lowercase() in loneVerbs) {
+            status = "say the full command, e.g. “open whatsapp”"
+            return
+        }
         status = "thinking…"
         scope.launch {
             Log.d(AI_TAG, "voice heard='$text' engine=${engine != null} apps=${apps.size}")
@@ -87,20 +96,20 @@ fun VoiceScreen(aiEnabled: Boolean, onClose: () -> Unit) {
             }
             val command = intent.toCommand(context)
             Log.d(AI_TAG, "voice reply='${command.title}' kind=${command.kind}")
-            replyLabel = command.title
-            if (command.kind == CommandKind.ANSWER) {
-                pendingAction = { onClose() }
-                status = "tap to close"
+            if (command.kind == CommandKind.ACTION) {
+                // Offer it as an outlined button; tap runs it, tap-elsewhere re-asks.
+                actionCommand = command
+                status = if (command.confirm) "did you mean this?" else "tap to run · or ask again"
             } else {
-                pendingAction = { command.run(); onClose() }
-                status = "tap to run"
+                replyLabel = command.title
+                status = "tap anywhere to ask again"
             }
         }
     }
 
     fun startListening() {
         val r = recognizer ?: return
-        status = "listening…"; heard = null; replyLabel = null; pendingAction = null
+        status = "listening…"; heard = null; replyLabel = null; actionCommand = null
         r.setRecognitionListener(object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) {}
             override fun onBeginningOfSpeech() {}
@@ -132,14 +141,14 @@ fun VoiceScreen(aiEnabled: Boolean, onClose: () -> Unit) {
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) startListening() else status = "microphone permission needed"
     }
+    val contactsPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     fun hasMic() =
         ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
     fun onTap() {
-        val action = pendingAction
+        // Tapping empty space starts a new turn — keeps the conversation going.
         when {
-            action != null -> action()
             !sttAvailable -> onClose()
             hasMic() -> startListening()
             else -> micPermission.launch(Manifest.permission.RECORD_AUDIO)
@@ -148,6 +157,11 @@ fun VoiceScreen(aiEnabled: Boolean, onClose: () -> Unit) {
 
     LaunchedEffect(Unit) {
         if (engine != null) scope.launch { modelReady = engine.prepare() == AiStatus.READY }
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            contactsPermission.launch(Manifest.permission.READ_CONTACTS)
+        }
         if (sttAvailable) {
             if (hasMic()) startListening() else micPermission.launch(Manifest.permission.RECORD_AUDIO)
         }
@@ -190,6 +204,18 @@ fun VoiceScreen(aiEnabled: Boolean, onClose: () -> Unit) {
                     text = it,
                     style = TextStyle(color = palette.text, fontSize = 26.sp, fontFamily = ff),
                 )
+            }
+            actionCommand?.let { cmd ->
+                ActionButton(
+                    label = if (cmd.confirm) "did you mean:  ${cmd.title}?" else cmd.title,
+                ) { cmd.run(); onClose() }
+                cmd.subtitle?.let { sub ->
+                    BasicText(
+                        text = sub,
+                        modifier = Modifier.padding(top = 10.dp),
+                        style = TextStyle(color = palette.muted, fontSize = 15.sp, fontFamily = ff),
+                    )
+                }
             }
         }
 

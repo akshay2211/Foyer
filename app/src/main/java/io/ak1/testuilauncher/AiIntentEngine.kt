@@ -62,8 +62,11 @@ class AiIntentEngine(context: Context) {
             {"action":"alarm","hour":<0-23>,"minute":<0-59>}
             {"action":"call","number":"<digits>"}
             {"action":"setting","key":"wifi|bluetooth|airplane|battery|display|sound|location|data"}
+            {"action":"message","app":"whatsapp|sms","to":"<contact or number>","text":"<the message you write>"}
             {"action":"web","query":"<text>"}
             {"action":"answer","text":"<short answer>"}
+
+            For "message", YOU compose the message text yourself.
 
             User: open camera
             {"action":"open_app","app":"camera"}
@@ -73,6 +76,10 @@ class AiIntentEngine(context: Context) {
             {"action":"alarm","hour":7,"minute":30}
             User: turn on wifi
             {"action":"setting","key":"wifi"}
+            User: whatsapp mom that i'll be home late
+            {"action":"message","app":"whatsapp","to":"mom","text":"Hi mom, I'll be home late tonight."}
+            User: text John asking if he's free tomorrow
+            {"action":"message","app":"sms","to":"John","text":"Hey John, are you free tomorrow?"}
             User: what is 24 times 7
             {"action":"answer","text":"168"}
             User: $query
