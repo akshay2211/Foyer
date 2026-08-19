@@ -68,12 +68,7 @@ fun SettingsScreen(store: LauncherStore, onClose: () -> Unit) {
         SettingRow("on-device ai", if (store.aiEnabled) "on" else "off") { store.toggleAi() }
         if (store.aiEnabled) {
             SettingRow("brain", store.activeBackend.name.lowercase()) {
-                val next = if (store.activeBackend == Backend.NANO && store.modelDownloaded()) {
-                    Backend.GEMMA
-                } else {
-                    Backend.NANO
-                }
-                store.setBackend(next)
+                store.setBackend(if (store.activeBackend == Backend.NANO) Backend.GEMMA else Backend.NANO)
             }
             when (store.activeBackend) {
                 Backend.NANO -> {
