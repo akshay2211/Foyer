@@ -28,9 +28,9 @@ class AiIntentEngine(context: Context) {
     private val model: GenerativeModel by lazy {
         val config = generationConfig {
             this.context = appContext
-            temperature = 0.1f
-            topK = 8
-            maxOutputTokens = 40
+            temperature = 0.2f
+            topK = 16
+            maxOutputTokens = 128
         }
         GenerativeModel(generationConfig = config)
     }
@@ -106,16 +106,84 @@ suspend fun decideIntent(
  * and exposes a uniform [decide]. Falls back to a plain web search when no model
  * is usable, so callers never break.
  */
+/** One turn of the conversation: either the model spoke, or it wants to act. */
+sealed interface AgentTurn {
+    data class Say(val text: String) : AgentTurn
+    data class Do(val intent: AiIntent) : AgentTurn
+}
+
 class Assistant(
     private val prepareFn: suspend () -> Boolean,
     private val generateFn: suspend (String) -> String?,
 ) {
     private var ready = false
+    private val history = ArrayDeque<String>()
 
+    /** One-shot command classification (used by the typed bar). */
     suspend fun decide(query: String, apps: List<AppEntry>): AiIntent {
         if (!ready) ready = prepareFn()
         return if (ready) decideIntent(generateFn, query, apps) else AiIntent.Web(query)
     }
+
+    /** Multi-turn conversation: the model can chat, answer, or emit a tool call. */
+    suspend fun converse(userText: String, apps: List<AppEntry>): AgentTurn {
+        if (!ready) ready = prepareFn()
+        if (!ready) return AgentTurn.Do(AiIntent.Web(userText))
+
+        val convo = history.joinToString("\n")
+        val prompt = """
+            You are a concise on-device phone assistant. You can chat, answer questions, or perform actions.
+            To perform an action, reply with ONLY one JSON tool call from this exact list:
+            {"action":"open_app","app":"<name>"}
+            {"action":"alarm","hour":<0-23>,"minute":<0-59>}
+            {"action":"call","number":"<digits>"}
+            {"action":"setting","key":"wifi|bluetooth|airplane|battery|display|sound|location|data"}
+            {"action":"message","app":"whatsapp|sms","to":"<contact>","text":"<message you write>"}
+            {"action":"web","query":"<text>"}
+            For any question, fact, or chit-chat, reply in ONE short plain-text sentence. Never invent new JSON actions.
+
+            User: open camera
+            {"action":"open_app","app":"camera"}
+            User: send a message to Mitali that i'll be playing cricket today
+            {"action":"message","app":"whatsapp","to":"Mitali","text":"I'll be playing cricket today."}
+            User: open whatsapp and message John i'm on my way
+            {"action":"message","app":"whatsapp","to":"John","text":"I'm on my way."}
+            User: set an alarm for 7
+            {"action":"alarm","hour":7,"minute":0}
+            User: how tall is the eiffel tower
+            It's about 330 metres (1,083 ft).
+            User: turn on wifi
+            {"action":"setting","key":"wifi"}
+
+            $convo
+            User: $userText
+            Assistant:
+        """.trimIndent()
+
+        Log.d(AI_TAG, "converse: '$userText'")
+        val reply = generateFn(prompt)?.trim().orEmpty()
+        Log.d(AI_TAG, "converse reply='$reply'")
+
+        history.addLast("User: $userText")
+        val intent = parseIntent(reply, apps)
+        val turn = if (intent != AiIntent.Unknown) {
+            history.addLast("Assistant: (performed an action)")
+            AgentTurn.Do(intent)
+        } else {
+            // Don't echo raw JSON if the model invented an unknown action.
+            val text = when {
+                reply.isBlank() -> "sorry, i didn't catch that"
+                reply.trimStart().startsWith("{") -> "i can't do that one yet"
+                else -> reply
+            }
+            history.addLast("Assistant: $text")
+            AgentTurn.Say(text)
+        }
+        while (history.size > 8) history.removeFirst()
+        return turn
+    }
+
+    fun resetConversation() = history.clear()
 }
 
 /** Builds the [Assistant] for the active backend, or null if AI is off/unusable. */

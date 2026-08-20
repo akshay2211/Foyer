@@ -86,16 +86,29 @@ fun VoiceScreen(store: LauncherStore, onClose: () -> Unit) {
         status = "thinking…"
         scope.launch {
             Log.d(AI_TAG, "voice heard='$text' apps=${apps.size}")
-            val intent = assistant?.decide(text, apps) ?: AiIntent.Web(text)
-            val command = intent.toCommand(context)
-            Log.d(AI_TAG, "voice reply='${command.title}' kind=${command.kind}")
-            if (command.kind == CommandKind.ACTION) {
-                // Offer it as an outlined button; tap runs it, tap-elsewhere re-asks.
-                actionCommand = command
-                status = if (command.confirm) "did you mean this?" else "tap to run · or ask again"
-            } else {
-                replyLabel = command.title
-                status = "tap anywhere to ask again"
+            val turn = assistant?.converse(text, apps) ?: AgentTurn.Do(AiIntent.Web(text))
+            when (turn) {
+                is AgentTurn.Do -> {
+                    val command = turn.intent.toCommand(context)
+                    when {
+                        command.kind == CommandKind.ACTION && !command.confirm -> {
+                            command.run() // confident action → just do it
+                            onClose()
+                        }
+                        command.kind == CommandKind.ACTION -> {
+                            actionCommand = command // fuzzy → confirm with a button
+                            status = "did you mean this?"
+                        }
+                        else -> {
+                            replyLabel = command.title
+                            status = "tap anywhere to continue"
+                        }
+                    }
+                }
+                is AgentTurn.Say -> {
+                    replyLabel = turn.text // the model just talked
+                    status = "tap anywhere to reply"
+                }
             }
         }
     }

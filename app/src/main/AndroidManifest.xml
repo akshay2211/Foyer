@@ -14,6 +14,11 @@
     <!-- Download the on-device Gemma model. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Screen-time / anti-distraction (special "usage access" grant). -->
+    <uses-permission
+        android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
+
     <!-- AICore (Gemini Nano) requires API 31; keep the launcher installable on
          24+ and gate the AI code at runtime to capable devices. -->
     <uses-sdk tools:overrideLibrary="com.google.ai.edge.aicore" />

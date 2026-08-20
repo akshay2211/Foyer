@@ -157,14 +157,26 @@ private fun startNewTask(context: Context, intent: Intent) {
 private fun sendMessage(context: Context, app: String, to: String, text: String) {
     val digits = to.filter { it.isDigit() || it == '+' }
     val number = if (digits.count { it.isDigit() } >= 5) digits else resolveContactNumber(context, to)
+    val wantsWhatsApp = app.contains("whatsapp")
+    val whatsAppInstalled = context.packageManager.getLaunchIntentForPackage("com.whatsapp") != null
 
-    if (app.contains("whatsapp") && number != null) {
-        val e164 = number.filter { it.isDigit() }
-        val url = "https://wa.me/$e164?text=" + Uri.encode(text)
-        startNewTask(context, Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    if (wantsWhatsApp && whatsAppInstalled) {
+        val intent = if (number != null) {
+            // Open the exact chat with the message pre-filled.
+            val e164 = number.filter { it.isDigit() }
+            Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$e164?text=" + Uri.encode(text)))
+        } else {
+            // No number resolved — hand the draft to WhatsApp's own contact
+            // picker instead of dropping to the SMS app.
+            Intent(Intent.ACTION_SEND)
+                .setType("text/plain")
+                .setPackage("com.whatsapp")
+                .putExtra(Intent.EXTRA_TEXT, text)
+        }
+        startNewTask(context, intent)
         return
     }
-    // SMS (also the fallback when no WhatsApp number could be resolved).
+    // SMS (explicit sms request, or WhatsApp not installed).
     val smsUri = Uri.parse("smsto:" + (number ?: ""))
     startNewTask(context, Intent(Intent.ACTION_SENDTO, smsUri).putExtra("sms_body", text))
 }

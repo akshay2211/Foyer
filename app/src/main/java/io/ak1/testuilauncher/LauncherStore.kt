@@ -30,6 +30,22 @@ private const val KEY_RIGHT = "shortcut_right"
 private const val KEY_CLOCK = "show_clock"
 private const val KEY_HIDDEN = "hidden"
 private const val KEY_USAGE = "usage"
+private const val KEY_DISTRACTING = "distracting"
+
+/** Nudge before opening a distracting app once it's over this much today. */
+const val DISTRACTION_THRESHOLD_MS = 20 * 60 * 1000L
+
+// Common time-sinks, pre-marked as distracting (user can unmark any).
+private val DEFAULT_DISTRACTING = setOf(
+    "com.instagram.android",
+    "com.facebook.katana",
+    "com.zhiliaoapp.musically", // TikTok
+    "com.google.android.youtube",
+    "com.twitter.android",
+    "com.reddit.frontpage",
+    "com.snapchat.android",
+    "com.facebook.orca", // Messenger
+)
 private const val KEY_THEME = "theme_mode"
 private const val KEY_ACCENT = "accent"
 private const val KEY_FONT = "font"
@@ -38,7 +54,11 @@ private const val KEY_BACKEND = "ai_backend"
 private const val KEY_MODEL_URL = "gemma_url"
 private const val KEY_HF_TOKEN = "hf_token"
 
-// A LiteRT-community Gemma .task (editable in settings if the exact name differs).
+// Default download source. For customers this should be a PUBLIC, non-gated URL
+// you host yourself (GitHub Release / CDN / your own public HF repo) so no token
+// or license click is ever needed — the app-publisher accepts Gemma's license
+// once and redistributes. The gated litert-community URL below is only a
+// dev-time fallback (needs a token). The optional token field covers gated URLs.
 private const val DEFAULT_GEMMA_URL =
     "https://huggingface.co/litert-community/Gemma3-1B-IT/resolve/main/gemma3-1b-it-int4.task"
 
@@ -104,6 +124,7 @@ class LauncherStore(private val context: Context) {
         private set
     var gemmaModelUrl by mutableStateOf(prefs.getString(KEY_MODEL_URL, DEFAULT_GEMMA_URL) ?: DEFAULT_GEMMA_URL)
         private set
+    // Optional — only needed for gated URLs. Empty for a public/self-hosted model.
     var hfToken by mutableStateOf(prefs.getString(KEY_HF_TOKEN, "") ?: "")
         private set
 
@@ -220,6 +241,24 @@ class LauncherStore(private val context: Context) {
     fun toggleHidden(app: AppEntry) {
         if (!hidden.remove(app.key)) hidden.add(app.key)
         prefs.edit { putString(KEY_HIDDEN, hidden.joinToString(REC_SEP)) }
+    }
+
+    /** Packages the user treats as time-sinks (seeded with common ones). */
+    val distracting: SnapshotStateList<String> = mutableStateListOf<String>().apply {
+        val stored = prefs.getString(KEY_DISTRACTING, null)
+        if (stored == null) {
+            addAll(DEFAULT_DISTRACTING)
+            prefs.edit { putString(KEY_DISTRACTING, DEFAULT_DISTRACTING.joinToString(REC_SEP)) }
+        } else {
+            addAll(stored.split(REC_SEP).filter { it.isNotBlank() })
+        }
+    }
+
+    fun isDistracting(app: AppEntry): Boolean = distracting.contains(app.packageName)
+
+    fun toggleDistracting(app: AppEntry) {
+        if (!distracting.remove(app.packageName)) distracting.add(app.packageName)
+        prefs.edit { putString(KEY_DISTRACTING, distracting.joinToString(REC_SEP)) }
     }
 
     fun usageCount(app: AppEntry): Int = usage[app.key] ?: 0

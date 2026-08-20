@@ -26,6 +26,10 @@ object ModelDownloader {
         onProgress: (downloaded: Long, total: Long) -> Unit,
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
+            Log.d(
+                AI_TAG,
+                "download start url=$urlString token=${token?.take(6)}…(len=${token?.length ?: 0})",
+            )
             dest.parentFile?.mkdirs()
             val part = File(dest.path + ".part")
 
@@ -52,8 +56,13 @@ object ModelDownloader {
                     continue
                 }
                 if (code != HttpURLConnection.HTTP_OK) {
+                    val body = runCatching {
+                        connection.errorStream?.bufferedReader()?.readText()
+                    }.getOrNull()?.take(300)
+                    val hint = connection.getHeaderField("X-Error-Message")
                     connection.disconnect()
-                    throw IOException("download failed: HTTP $code")
+                    Log.w(AI_TAG, "download HTTP $code · hint=$hint · body=$body")
+                    throw IOException("HTTP $code${hint?.let { " · $it" } ?: ""}${body?.let { " · $it" } ?: ""}")
                 }
                 break
             }

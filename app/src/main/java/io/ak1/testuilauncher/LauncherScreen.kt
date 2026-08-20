@@ -132,15 +132,29 @@ fun LauncherScreen(store: LauncherStore) {
     var showHomeMenu by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var showVoice by remember { mutableStateOf(false) }
+    var guardApp by remember { mutableStateOf<AppEntry?>(null) }
 
     val overlayOpen = menuApp != null || pickerTarget != null || showHomeMenu ||
-        showSettings || showVoice
+        showSettings || showVoice || guardApp != null
     BackHandler(enabled = overlayOpen) {
         menuApp = null
         pickerTarget = null
         showHomeMenu = false
         showSettings = false
         showVoice = false
+        guardApp = null
+    }
+
+    // Launch, but pause on time-sinks that are already over today's limit.
+    val requestLaunch: (AppEntry) -> Unit = { app ->
+        val overLimit = UsageTracker.hasAccess(context) && store.isDistracting(app) &&
+            UsageTracker.usageTodayMs(context, app.packageName) >= DISTRACTION_THRESHOLD_MS
+        if (overLimit) {
+            guardApp = app
+        } else {
+            store.recordLaunch(app)
+            launchApp(context, app)
+        }
     }
 
     Box(
@@ -155,6 +169,7 @@ fun LauncherScreen(store: LauncherStore) {
                     store = store,
                     themeMode = store.themeMode,
                     onCycleTheme = { store.cycleTheme() },
+                    onLaunchApp = requestLaunch,
                     onLongPressApp = { menuApp = it },
                     onOpenSettings = { showSettings = true },
                     active = onDrawer,
@@ -164,6 +179,7 @@ fun LauncherScreen(store: LauncherStore) {
 
                 else -> HomePage(
                     store = store,
+                    onLaunchFavorite = requestLaunch,
                     onLongPressFavorite = { menuApp = it },
                     onLongPressShortcut = { pickerTarget = it },
                     onLongPressBackground = { showHomeMenu = true },
@@ -180,9 +196,11 @@ fun LauncherScreen(store: LauncherStore) {
                 isFavorite = store.isFavorite(app),
                 canAdd = store.favorites.size < MAX_FAVORITES,
                 isHidden = store.isHidden(app),
+                isDistracting = store.isDistracting(app),
                 onAdd = { store.addFavorite(app); menuApp = null },
                 onRemove = { store.removeFavorite(app); menuApp = null },
                 onToggleHide = { store.toggleHidden(app); menuApp = null },
+                onToggleDistracting = { store.toggleDistracting(app); menuApp = null },
                 onAppInfo = { openAppInfo(context, app.packageName); menuApp = null },
                 onDismiss = { menuApp = null },
             )
@@ -213,6 +231,42 @@ fun LauncherScreen(store: LauncherStore) {
         if (showVoice) {
             VoiceScreen(store = store, onClose = { showVoice = false })
         }
+
+        guardApp?.let { app ->
+            DistractionNudge(
+                app = app,
+                usedMs = UsageTracker.usageTodayMs(context, app.packageName),
+                onOpen = { store.recordLaunch(app); launchApp(context, app); guardApp = null },
+                onDismiss = { guardApp = null },
+            )
+        }
+    }
+}
+
+@Composable
+private fun DistractionNudge(
+    app: AppEntry,
+    usedMs: Long,
+    onOpen: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val palette = LocalPalette.current
+    val ff = LocalFontFamily.current
+    Scrim(onDismiss) {
+        MenuCard {
+            BasicText(
+                text = "${app.label.lowercase()} · ${formatDuration(usedMs)} today",
+                modifier = Modifier.padding(bottom = 10.dp),
+                style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = 1.sp, fontFamily = ff),
+            )
+            BasicText(
+                text = "you've already spent a while here today. open anyway?",
+                modifier = Modifier.padding(bottom = 16.dp),
+                style = TextStyle(color = palette.text, fontSize = 20.sp, fontFamily = ff),
+            )
+            MenuRow("not now", onDismiss)
+            MenuRow("open anyway", onOpen)
+        }
     }
 }
 
@@ -222,6 +276,7 @@ fun LauncherScreen(store: LauncherStore) {
 @Composable
 private fun HomePage(
     store: LauncherStore,
+    onLaunchFavorite: (AppEntry) -> Unit,
     onLongPressFavorite: (AppEntry) -> Unit,
     onLongPressShortcut: (ShortcutSide) -> Unit,
     onLongPressBackground: () -> Unit,
@@ -264,6 +319,24 @@ private fun HomePage(
             )
         }
 
+        // Today's screen time (the minimalist nudge). Taps to grant access.
+        val hasUsage = UsageTracker.hasAccess(context)
+        var screenMs by remember { mutableLongStateOf(0L) }
+        LaunchedEffect(hasUsage) {
+            while (hasUsage) {
+                screenMs = UsageTracker.screenTimeTodayMs(context)
+                delay(60_000)
+            }
+        }
+        BasicText(
+            text = if (hasUsage) "${formatDuration(screenMs)} today" else "track screen time",
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(start = 28.dp, top = 152.dp)
+                .clickable { if (!hasUsage) UsageTracker.openAccessSettings(context) },
+            style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = 1.sp, fontFamily = ff),
+        )
+
         // Favorites, vertically centered on the left.
         Column(
             modifier = Modifier
@@ -282,7 +355,7 @@ private fun HomePage(
                         text = app.label.lowercase(),
                         modifier = Modifier
                             .combinedClickable(
-                                onClick = { store.recordLaunch(app); launchApp(context, app) },
+                                onClick = { onLaunchFavorite(app) },
                                 onLongClick = { onLongPressFavorite(app) },
                             )
                             .padding(vertical = 9.dp),
@@ -390,6 +463,7 @@ private fun DrawerPage(
     store: LauncherStore,
     themeMode: ThemeMode,
     onCycleTheme: () -> Unit,
+    onLaunchApp: (AppEntry) -> Unit,
     onLongPressApp: (AppEntry) -> Unit,
     onOpenSettings: () -> Unit,
     active: Boolean,
@@ -407,7 +481,7 @@ private fun DrawerPage(
     val q = query.trim()
     val searching = q.isNotEmpty()
 
-    val onLaunch: (AppEntry) -> Unit = { app -> store.recordLaunch(app); launchApp(context, app) }
+    val onLaunch: (AppEntry) -> Unit = onLaunchApp
 
     // Browse list excludes hidden apps; search reveals everything (incl. hidden).
     val browse = apps.filterNot { store.isHidden(it) }
@@ -443,7 +517,12 @@ private fun DrawerPage(
             val intent = assistant?.decide(text, apps) ?: AiIntent.Web(text)
             val command = intent.toCommand(context)
             aiThinking = false
-            aiResult = command // shown as an outlined action button / answer
+            if (command.kind == CommandKind.ACTION && !command.confirm) {
+                command.run()      // confident action → just do it
+                aiResult = null
+            } else {
+                aiResult = command // fuzzy action (button) or answer (text)
+            }
         }
     }
 
@@ -910,9 +989,11 @@ private fun AppActionMenu(
     isFavorite: Boolean,
     canAdd: Boolean,
     isHidden: Boolean,
+    isDistracting: Boolean,
     onAdd: () -> Unit,
     onRemove: () -> Unit,
     onToggleHide: () -> Unit,
+    onToggleDistracting: () -> Unit,
     onAppInfo: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -934,6 +1015,7 @@ private fun AppActionMenu(
                 )
             }
             MenuRow(if (isHidden) "unhide app" else "hide app", onToggleHide)
+            MenuRow(if (isDistracting) "unmark distracting" else "mark distracting", onToggleDistracting)
             MenuRow("app info", onAppInfo)
         }
     }
