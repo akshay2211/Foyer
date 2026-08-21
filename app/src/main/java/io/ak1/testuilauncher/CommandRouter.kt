@@ -2,15 +2,18 @@ package io.ak1.testuilauncher
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.AlarmClock
+import android.provider.CalendarContract
+import android.provider.MediaStore
 import android.provider.Settings
 import android.util.Log
 import org.json.JSONObject
 
 /**
  * A resolved thing the user can run — produced by the AI, rendered by the UI.
- * The launcher does no intent *parsing*; the model decides, this just executes.
+ * The launcher does no intent *parsing*; the model decides, this executes.
  */
 enum class CommandKind { ANSWER, ACTION }
 
@@ -19,53 +22,153 @@ data class Command(
     val subtitle: String?,
     val kind: CommandKind,
     val confirm: Boolean = false,
+    /**
+     * When non-empty, this command is a *disambiguation*: the UI shows these as a
+     * "did you mean…" choice list instead of running [run]. Used when a contact
+     * name doesn't map to a single confident match.
+     */
+    val options: List<Command> = emptyList(),
     val run: () -> Unit,
 )
 
 /**
- * The structured decision the on-device model returns. These are the only
- * "tools" it can pick; everything the model wants to do maps to one of them.
+ * The structured decision the on-device model returns — one per capability in
+ * the catalog. [leaving] marks actions that hand off to another app (and thus
+ * background the launcher); the plan executor uses it to decide what can run
+ * inline vs. what can only be the terminal step. See [Plan].
  */
 sealed interface AiIntent {
-    data class OpenApp(val app: AppEntry, val confident: Boolean = true) : AiIntent
-    data class SetAlarm(val hour: Int, val minute: Int) : AiIntent
-    data class Call(val number: String) : AiIntent
-    data class OpenSetting(val key: String) : AiIntent
-    data class Web(val query: String) : AiIntent
-    data class Message(val app: String, val to: String, val text: String) : AiIntent
-    data class Answer(val text: String) : AiIntent
-    data object Unknown : AiIntent
-}
+    /** Does performing this send the user into another app / foreground UI? */
+    val leaving: Boolean
 
-/** Parses the model's JSON reply into an [AiIntent]. Lenient by design. */
-fun parseIntent(raw: String, apps: List<AppEntry>): AiIntent {
-    val cleaned = raw.replace("```json", "").replace("```", "")
-    // The model may emit several objects; take the first that maps to a real action.
-    val objects = Regex("\\{[^{}]*\\}").findAll(cleaned).map { it.value }.toList()
-    for (json in objects) {
-        val obj = runCatching { JSONObject(json) }.getOrNull() ?: continue
-        val intent = toIntent(obj, apps)
-        if (intent != AiIntent.Unknown) return intent
+    data class OpenApp(
+        val app: AppEntry,
+        val confident: Boolean = true,
+        /** Other close matches, shown as a "did you mean…" list when not confident. */
+        val alternatives: List<AppEntry> = emptyList(),
+    ) : AiIntent {
+        override val leaving get() = true
     }
-    Log.w(AI_TAG, "parse: no usable action in reply")
-    return AiIntent.Unknown
+    data class SetAlarm(val hour: Int, val minute: Int) : AiIntent {
+        override val leaving get() = false // set silently via SKIP_UI
+    }
+    data class SetTimer(val seconds: Int, val label: String?) : AiIntent {
+        override val leaving get() = false
+    }
+    data class Call(val number: String) : AiIntent {
+        override val leaving get() = true
+    }
+    data class OpenSetting(val key: String) : AiIntent {
+        override val leaving get() = true
+    }
+    data class Web(val query: String) : AiIntent {
+        override val leaving get() = true
+    }
+    data class Message(val app: String, val to: String, val text: String) : AiIntent {
+        override val leaving get() = true
+    }
+    data class Email(val to: String, val subject: String, val text: String) : AiIntent {
+        override val leaving get() = true
+    }
+    data class Navigate(val destination: String) : AiIntent {
+        override val leaving get() = true
+    }
+    data class ShowMap(val query: String) : AiIntent {
+        override val leaving get() = true
+    }
+    data class PlayMedia(val query: String) : AiIntent {
+        override val leaving get() = true
+    }
+    data class Capture(val video: Boolean) : AiIntent {
+        override val leaving get() = true
+    }
+    data class CreateEvent(val title: String, val whenText: String?) : AiIntent {
+        override val leaving get() = true
+    }
+    data class CreateNote(val text: String) : AiIntent {
+        override val leaving get() = false
+    }
+    data class Answer(val text: String) : AiIntent {
+        override val leaving get() = false
+    }
+    /** The user named an app that isn't installed — tell them, don't guess. */
+    data class AppNotFound(val name: String) : AiIntent {
+        override val leaving get() = false
+    }
+    /** A question about installed apps ("how many music apps") — answered locally, not by the LLM. */
+    data class FindApps(val query: String) : AiIntent {
+        override val leaving get() = false
+    }
+    data object Unknown : AiIntent {
+        override val leaving get() = false
+    }
 }
 
-private fun toIntent(obj: JSONObject, apps: List<AppEntry>): AiIntent =
+/** An ordered list of actions the model wants performed for one command. */
+typealias Plan = List<AiIntent>
+
+// ---- Parsing --------------------------------------------------------------
+
+/**
+ * Parses the model's reply into a [Plan]. Robust by design: it accepts a single
+ * object or a JSON array, salvages objects with a regex if the surrounding text
+ * is noisy, drops anything that doesn't map to a real capability, and coalesces
+ * redundant steps (e.g. "open whatsapp and message mom" → just the message).
+ */
+fun parsePlan(raw: String, index: AppIndex): Plan {
+    val cleaned = raw.replace("```json", "").replace("```", "")
+    val intents = Regex("\\{[^{}]*\\}").findAll(cleaned)
+        .mapNotNull { runCatching { JSONObject(it.value) }.getOrNull() }
+        .map { toIntent(it, index) }
+        .filter { it != AiIntent.Unknown }
+        .toList()
+    if (intents.isEmpty()) Log.w(AI_TAG, "parse: no usable action in reply")
+    return coalesce(intents)
+}
+
+/** Single-intent parse kept for callers that only want the first action. */
+fun parseIntent(raw: String, index: AppIndex): AiIntent =
+    parsePlan(raw, index).firstOrNull() ?: AiIntent.Unknown
+
+/**
+ * Removes an explicit "open <app>" when a later step already targets that app
+ * (messaging opens WhatsApp itself, so "open whatsapp and message mom" is one
+ * action, not two). Keeps genuinely independent steps intact.
+ */
+private fun coalesce(intents: Plan): Plan {
+    if (intents.size <= 1) return intents
+    val hasMessaging = intents.any { it is AiIntent.Message || it is AiIntent.Email }
+    return intents.filterNot { intent ->
+        intent is AiIntent.OpenApp && hasMessaging && run {
+            val l = intent.app.label.lowercase()
+            l.contains("whatsapp") || l.contains("message") || l.contains("sms") ||
+                l.contains("mail") || l.contains("gmail")
+        }
+    }
+}
+
+private fun toIntent(obj: JSONObject, index: AppIndex): AiIntent =
     when (obj.optString("action").lowercase()) {
         "open_app" -> {
             val name = obj.optString("app").trim()
-            val match = resolveApp(name, apps)
-            if (match == null) Log.w(AI_TAG, "parse: open_app '$name' not matched to any app")
-            match?.let { AiIntent.OpenApp(it.first, it.second) } ?: AiIntent.Unknown
+            val r = index.lookup(name)
+            when {
+                r.app == null -> { Log.w(AI_TAG, "parse: open_app '$name' not installed"); AiIntent.AppNotFound(name) }
+                r.confident -> AiIntent.OpenApp(r.app, true)
+                else -> AiIntent.OpenApp(r.app, false, r.candidates.ifEmpty { listOf(r.app) })
+            }
         }
         "alarm" -> {
             val h = obj.optInt("hour", -1)
             val m = obj.optInt("minute", 0)
             if (h in 0..23 && m in 0..59) AiIntent.SetAlarm(h, m) else AiIntent.Unknown
         }
+        "timer" -> {
+            val s = obj.optInt("seconds", -1)
+            if (s in 1..86_400) AiIntent.SetTimer(s, obj.optString("label").trim().ifBlank { null }) else AiIntent.Unknown
+        }
         "call" -> obj.optString("number").filter { it.isDigit() || it == '+' }
-            .takeIf { it.isNotEmpty() }?.let { AiIntent.Call(it) } ?: AiIntent.Unknown
+            .takeIf { it.count { c -> c.isDigit() } >= 3 }?.let { AiIntent.Call(it) } ?: AiIntent.Unknown
         "setting" -> obj.optString("key").lowercase().takeIf { it.isNotEmpty() }
             ?.let { AiIntent.OpenSetting(it) } ?: AiIntent.Unknown
         "web" -> obj.optString("query").takeIf { it.isNotBlank() }?.let { AiIntent.Web(it) } ?: AiIntent.Unknown
@@ -75,99 +178,265 @@ private fun toIntent(obj: JSONObject, apps: List<AppEntry>): AiIntent =
             val app = obj.optString("app").lowercase().ifBlank { "whatsapp" }
             if (to.isNotEmpty() && text.isNotEmpty()) AiIntent.Message(app, to, text) else AiIntent.Unknown
         }
+        "email" -> {
+            val to = obj.optString("to").trim()
+            val text = obj.optString("text").trim()
+            val subject = obj.optString("subject").trim()
+            if (text.isNotEmpty() || subject.isNotEmpty()) AiIntent.Email(to, subject, text) else AiIntent.Unknown
+        }
+        "navigate" -> obj.optString("to").takeIf { it.isNotBlank() }?.let { AiIntent.Navigate(it.trim()) } ?: AiIntent.Unknown
+        "map" -> obj.optString("query").takeIf { it.isNotBlank() }?.let { AiIntent.ShowMap(it.trim()) } ?: AiIntent.Unknown
+        "play" -> obj.optString("query").takeIf { it.isNotBlank() }?.let { AiIntent.PlayMedia(it.trim()) } ?: AiIntent.Unknown
+        "capture" -> AiIntent.Capture(video = obj.optString("kind").lowercase().contains("video"))
+        "event" -> obj.optString("title").takeIf { it.isNotBlank() }
+            ?.let { AiIntent.CreateEvent(it.trim(), obj.optString("when").trim().ifBlank { null }) } ?: AiIntent.Unknown
+        "note" -> obj.optString("text").takeIf { it.isNotBlank() }?.let { AiIntent.CreateNote(it.trim()) } ?: AiIntent.Unknown
         "answer" -> obj.optString("text").takeIf { it.isNotBlank() }?.let { AiIntent.Answer(it) } ?: AiIntent.Unknown
+        "find_apps", "list_apps", "count_apps" -> AiIntent.FindApps(obj.optString("query").trim())
         else -> AiIntent.Unknown
     }
 
-/** Resolves an app name to (app, confident). Confident = exact/prefix/substring;
- *  a fuzzy (edit-distance) hit returns confident=false so the UI can ask. */
-private fun resolveApp(name: String, apps: List<AppEntry>): Pair<AppEntry, Boolean>? {
-    if (name.isBlank()) return null
-    val n = name.lowercase()
-    apps.firstOrNull { it.label.equals(name, ignoreCase = true) }?.let { return it to true }
-    apps.firstOrNull { it.label.lowercase().startsWith(n) }?.let { return it to true }
-    apps.firstOrNull { it.label.lowercase().contains(n) }?.let { return it to true }
-    // Fuzzy: closest by edit distance, within a length-scaled threshold.
-    val best = apps.minByOrNull { levenshtein(n, it.label.lowercase()) } ?: return null
-    val distance = levenshtein(n, best.label.lowercase())
-    val threshold = maxOf(2, best.label.length / 3)
-    return if (distance <= threshold) best to false else null
-}
+// ---- Building & the validation gate ---------------------------------------
 
-private fun levenshtein(a: String, b: String): Int {
-    if (a == b) return 0
-    if (a.isEmpty()) return b.length
-    if (b.isEmpty()) return a.length
-    var prev = IntArray(b.length + 1) { it }
-    var curr = IntArray(b.length + 1)
-    for (i in 1..a.length) {
-        curr[0] = i
-        for (j in 1..b.length) {
-            val cost = if (a[i - 1] == b[j - 1]) 0 else 1
-            curr[j] = minOf(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost)
-        }
-        val tmp = prev; prev = curr; curr = tmp
+/** One built, device-validated step of a plan. */
+private class Step(
+    val title: String,
+    val subtitle: String?,
+    val kind: CommandKind,
+    val leaving: Boolean,
+    val confirm: Boolean,
+    val options: List<Command> = emptyList(),
+    val run: () -> Unit,
+)
+
+/**
+ * Turns a whole [Plan] into a single runnable [Command] the existing UI renders.
+ *
+ * Execution respects Android's reality that only *one* app hand-off can happen
+ * per command: non-leaving steps (silent alarm/timer, an answer, a saved note)
+ * run inline, then the leaving steps run. A plan with more than one leaving step
+ * (or any low-confidence / sensitive step) is marked [Command.confirm] so the
+ * user sees and approves it before anything fires.
+ */
+fun Plan.toCommand(context: Context): Command {
+    val steps = mapNotNull { it.build(context) }
+    if (steps.isEmpty()) return Command("didn't get that", null, CommandKind.ANSWER) {}
+
+    if (steps.size == 1) {
+        val s = steps[0]
+        return Command(s.title, s.subtitle, s.kind, s.confirm, s.options, s.run)
     }
-    return prev[b.length]
-}
 
-/** Turns an [AiIntent] into a runnable, display-ready [Command]. */
-fun AiIntent.toCommand(context: Context): Command = when (this) {
-    is AiIntent.OpenApp -> Command(
-        title = "open ${app.label.lowercase()}",
-        subtitle = "app",
+    val ordered = steps.sortedBy { it.leaving } // non-leaving first
+    val leavingCount = steps.count { it.leaving }
+    val confirm = steps.any { it.confirm } || leavingCount > 1
+    val subtitle = ordered.firstNotNullOfOrNull { it.subtitle }
+    return Command(
+        title = ordered.joinToString("  ·  ") { it.title },
+        subtitle = subtitle,
         kind = CommandKind.ACTION,
-        confirm = !confident,
+        confirm = confirm,
     ) {
-        launchApp(context, app)
+        ordered.forEach { step -> runCatching { step.run() } }
     }
-    is AiIntent.SetAlarm -> Command("set alarm ${"%d:%02d".format(hour, minute)}", "clock", CommandKind.ACTION) {
-        startNewTask(
-            context,
-            Intent(AlarmClock.ACTION_SET_ALARM)
-                .putExtra(AlarmClock.EXTRA_HOUR, hour)
-                .putExtra(AlarmClock.EXTRA_MINUTES, minute),
-        )
-    }
-    is AiIntent.Call -> Command("call $number", "dialer", CommandKind.ACTION) {
-        startNewTask(context, Intent(Intent.ACTION_DIAL, Uri.parse("tel:$number")))
-    }
-    is AiIntent.OpenSetting -> Command(settingLabel(key), "settings", CommandKind.ACTION) {
-        settingAction(key)?.let { startNewTask(context, Intent(it)) }
-    }
-    is AiIntent.Web -> Command("search web for “$query”", null, CommandKind.ACTION) {
-        webSearch(context, query)
-    }
-    is AiIntent.Message -> Command("message $to", "“$text”", CommandKind.ACTION) {
-        sendMessage(context, app, to, text)
-    }
-    is AiIntent.Answer -> Command(text, null, CommandKind.ANSWER) { }
-    AiIntent.Unknown -> Command("didn't get that", null, CommandKind.ANSWER) { }
 }
+
+/** Single-intent convenience for callers that don't build a plan. */
+fun AiIntent.toCommand(context: Context): Command = listOf(this).toCommand(context)
+
+/**
+ * Builds and *validates* one intent. Returns null only when nothing on the
+ * device can satisfy it and there's no sensible fallback — the plan then simply
+ * omits that step rather than firing a dead intent.
+ */
+private fun AiIntent.build(context: Context): Step? = when (this) {
+    is AiIntent.OpenApp -> when {
+        confident -> action("open ${app.label.lowercase()}", "app", leaving = true) { launchApp(context, app) }
+        // One close guess — a simple "did you mean X?" confirm.
+        alternatives.size <= 1 ->
+            action("open ${app.label.lowercase()}", "app", leaving = true, confirm = true) { launchApp(context, app) }
+        // Several close guesses — offer the choice list.
+        else -> Step(
+            title = "which app?",
+            subtitle = "app",
+            kind = CommandKind.ACTION,
+            leaving = true,
+            confirm = true,
+            options = alternatives.map { a ->
+                Command("open ${a.label.lowercase()}", "app", CommandKind.ACTION) { launchApp(context, a) }
+            },
+        ) { /* disambiguation only */ }
+    }
+    is AiIntent.SetAlarm -> Intent(AlarmClock.ACTION_SET_ALARM)
+        .putExtra(AlarmClock.EXTRA_HOUR, hour)
+        .putExtra(AlarmClock.EXTRA_MINUTES, minute)
+        .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
+        .validated(context)
+        ?.let { i -> action("set alarm ${"%d:%02d".format(hour, minute)}", "clock", leaving = false) { startNewTask(context, i) } }
+
+    is AiIntent.SetTimer -> Intent(AlarmClock.ACTION_SET_TIMER)
+        .putExtra(AlarmClock.EXTRA_LENGTH, seconds)
+        .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
+        .apply { label?.let { putExtra(AlarmClock.EXTRA_MESSAGE, it) } }
+        .validated(context)
+        ?.let { i -> action("timer ${seconds / 60}m", "clock", leaving = false) { startNewTask(context, i) } }
+
+    is AiIntent.Call -> Intent(Intent.ACTION_DIAL, Uri.parse("tel:$number"))
+        .validated(context)
+        ?.let { i -> action("call $number", "dialer", leaving = true) { startNewTask(context, i) } }
+
+    is AiIntent.OpenSetting -> {
+        // Prefer the specific screen; if the OEM/version doesn't expose it, fall
+        // back to the root Settings screen rather than failing silently (§7).
+        val specific = settingAction(key)?.let { Intent(it) }?.validated(context)
+        val intent = specific ?: Intent(Settings.ACTION_SETTINGS).validated(context)
+        intent?.let { i -> action(settingLabel(key), "settings", leaving = true) { startNewTask(context, i) } }
+    }
+
+    is AiIntent.Web -> action("search web for “$query”", null, leaving = true) { webSearch(context, query) }
+
+    is AiIntent.Message -> buildMessageStep(context, app, to, text)
+
+    is AiIntent.Email -> emailIntent(to, subject, text).validated(context)
+        ?.let { i -> action("email${if (to.isNotBlank()) " $to" else ""}", subject.ifBlank { text }, leaving = true) { startNewTask(context, i) } }
+        ?: action("search web for “$subject $text”", null, leaving = true) { webSearch(context, "$subject $text") }
+
+    is AiIntent.Navigate -> (navIntent(destination).validated(context) ?: geoIntent(destination).validated(context))
+        ?.let { i -> action("navigate to $destination", "maps", leaving = true) { startNewTask(context, i) } }
+        ?: action("search web for “directions to $destination”", null, leaving = true) { webSearch(context, "directions to $destination") }
+
+    is AiIntent.ShowMap -> geoIntent(query).validated(context)
+        ?.let { i -> action("map: $query", "maps", leaving = true) { startNewTask(context, i) } }
+        ?: action("search web for “$query”", null, leaving = true) { webSearch(context, query) }
+
+    is AiIntent.PlayMedia -> Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH)
+        .putExtra(MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*")
+        .putExtra(SearchExtras.QUERY, query)
+        .validated(context)
+        ?.let { i -> action("play $query", "media", leaving = true) { startNewTask(context, i) } }
+        ?: action("search web for “$query”", null, leaving = true) { webSearch(context, query) }
+
+    is AiIntent.Capture -> Intent(if (video) MediaStore.ACTION_VIDEO_CAPTURE else MediaStore.ACTION_IMAGE_CAPTURE)
+        .validated(context)
+        ?.let { i -> action(if (video) "record video" else "take photo", "camera", leaving = true) { startNewTask(context, i) } }
+
+    is AiIntent.CreateEvent -> eventIntent(title, whenText).validated(context)
+        ?.let { i -> action("add “$title” to calendar", whenText, leaving = true) { startNewTask(context, i) } }
+
+    is AiIntent.CreateNote -> noteIntent(text)?.validated(context)
+        ?.let { i -> action("new note", "“$text”", leaving = false) { startNewTask(context, i) } }
+        ?: Step("note: $text", null, CommandKind.ANSWER, leaving = false, confirm = false) {}
+
+    is AiIntent.Answer -> Step(text, null, CommandKind.ANSWER, leaving = false, confirm = false) {}
+
+    is AiIntent.AppNotFound -> Step("can't find $name on your phone", null, CommandKind.ANSWER, leaving = false, confirm = false) {}
+
+    // Normally rewritten to an Answer by the Assistant (which holds the app list); null is a safe no-op.
+    is AiIntent.FindApps -> null
+
+    AiIntent.Unknown -> null
+}
+
+private fun action(title: String, subtitle: String?, leaving: Boolean, confirm: Boolean = false, run: () -> Unit) =
+    Step(title, subtitle, CommandKind.ACTION, leaving, confirm, run = run)
+
+// ---- Intent construction (the only place raw Intents are made) ------------
+
+/** Search extras key, spelled out to avoid the android.app.SearchManager import. */
+private object SearchExtras { const val QUERY = "query" }
+
+private fun navIntent(destination: String): Intent =
+    Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=" + Uri.encode(destination)))
+
+private fun geoIntent(query: String): Intent =
+    Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=" + Uri.encode(query)))
+
+private fun emailIntent(to: String, subject: String, text: String): Intent {
+    val isEmail = to.contains("@")
+    return Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:" + if (isEmail) Uri.encode(to) else ""))
+        .putExtra(Intent.EXTRA_SUBJECT, subject)
+        .putExtra(Intent.EXTRA_TEXT, text)
+}
+
+private fun eventIntent(title: String, whenText: String?): Intent =
+    Intent(Intent.ACTION_INSERT)
+        .setData(CalendarContract.Events.CONTENT_URI)
+        .putExtra(CalendarContract.Events.TITLE, title)
+        .apply { whenText?.let { putExtra(CalendarContract.Events.DESCRIPTION, it) } }
+
+private fun noteIntent(text: String): Intent? =
+    if (android.os.Build.VERSION.SDK_INT >= 34) {
+        Intent("android.intent.action.CREATE_NOTE").putExtra(Intent.EXTRA_TEXT, text)
+    } else {
+        null
+    }
+
+/** The validation gate: an intent only becomes runnable if the device can handle it. */
+private fun Intent.validated(context: Context): Intent? =
+    if (context.packageManager.resolveActivity(this, PackageManager.MATCH_DEFAULT_ONLY) != null) this else null
 
 private fun startNewTask(context: Context, intent: Intent) {
     runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
 }
 
 /**
- * Opens a chat with [to] and the drafted [text] pre-filled. Android does not
- * allow auto-send, so the user taps send. Resolves a contact name to a number
- * via [resolveContactNumber] (needs READ_CONTACTS); a bare number is used as-is.
+ * Builds the messaging step, disambiguating the recipient first:
+ *  - a bare phone number is used as-is (no lookup),
+ *  - a contact name is resolved to ranked candidates; one confident match sends
+ *    straight through, but an ambiguous or fuzzy match becomes a "did you mean…"
+ *    [Command.options] choice list so we never open the wrong person's chat,
+ *  - no contacts / no permission falls back to the app's own contact picker.
  */
-private fun sendMessage(context: Context, app: String, to: String, text: String) {
+private fun buildMessageStep(context: Context, app: String, to: String, text: String): Step {
     val digits = to.filter { it.isDigit() || it == '+' }
-    val number = if (digits.count { it.isDigit() } >= 5) digits else resolveContactNumber(context, to)
+    if (digits.count { it.isDigit() } >= 5) {
+        return action("message $to", "“$text”", leaving = true) { composeMessage(context, app, digits, text) }
+    }
+
+    val matches = resolveContacts(context, to)
+    return when {
+        // No permission or no address book — hand off to the app's picker.
+        matches.isEmpty() ->
+            action("message $to", "“$text”", leaving = true) { composeMessage(context, app, null, text) }
+
+        // Exactly one strong match — safe to send straight through.
+        matches.size == 1 && matches[0].confident ->
+            action("message ${matches[0].name}", "“$text”", leaving = true) {
+                composeMessage(context, app, matches[0].number, text)
+            }
+
+        // Ambiguous — ask which person.
+        else -> {
+            val options = matches.take(4).map { c ->
+                Command("message ${c.name}", c.number, CommandKind.ACTION) {
+                    composeMessage(context, app, c.number, text)
+                }
+            }
+            Step(
+                title = "who did you mean?",
+                subtitle = "“$text”",
+                kind = CommandKind.ACTION,
+                leaving = true,
+                confirm = true,
+                options = options,
+            ) { /* disambiguation only — the chosen option runs */ }
+        }
+    }
+}
+
+/**
+ * Opens a chat with the given [number] (or the app's picker when null) with
+ * [text] pre-filled. Android does not allow auto-send, so the user taps send.
+ */
+private fun composeMessage(context: Context, app: String, number: String?, text: String) {
     val wantsWhatsApp = app.contains("whatsapp")
     val whatsAppInstalled = context.packageManager.getLaunchIntentForPackage("com.whatsapp") != null
 
     if (wantsWhatsApp && whatsAppInstalled) {
         val intent = if (number != null) {
-            // Open the exact chat with the message pre-filled.
             val e164 = number.filter { it.isDigit() }
             Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$e164?text=" + Uri.encode(text)))
         } else {
-            // No number resolved — hand the draft to WhatsApp's own contact
-            // picker instead of dropping to the SMS app.
             Intent(Intent.ACTION_SEND)
                 .setType("text/plain")
                 .setPackage("com.whatsapp")
@@ -176,22 +445,82 @@ private fun sendMessage(context: Context, app: String, to: String, text: String)
         startNewTask(context, intent)
         return
     }
-    // SMS (explicit sms request, or WhatsApp not installed).
     val smsUri = Uri.parse("smsto:" + (number ?: ""))
     startNewTask(context, Intent(Intent.ACTION_SENDTO, smsUri).putExtra("sms_body", text))
 }
 
-/** Best-effort contact-name -> phone number lookup. Returns null without permission. */
-private fun resolveContactNumber(context: Context, name: String): String? = runCatching {
+/** A contact candidate for a name query, with whether it's a confident match. */
+private data class ContactMatch(val name: String, val number: String, val confident: Boolean)
+
+/**
+ * Resolves a spoken/typed name to ranked contact candidates. Reads the whole
+ * phone book once and scores by tiers (exact → token → prefix → substring →
+ * fuzzy), mirroring [AppIndex.resolve]. "Confident" means an exact/token-level
+ * hit that clearly beats the runner-up; everything else is offered for
+ * disambiguation. Returns empty without READ_CONTACTS permission.
+ */
+private fun resolveContacts(context: Context, query: String, limit: Int = 4): List<ContactMatch> = runCatching {
+    val q = query.trim().lowercase()
+    if (q.isEmpty()) return emptyList()
+
     val uri = android.provider.ContactsContract.CommonDataKinds.Phone.CONTENT_URI
-    val projection = arrayOf(android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER)
-    val selection = "${android.provider.ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} LIKE ?"
-    context.contentResolver.query(uri, projection, selection, arrayOf("%$name%"), null)?.use { c ->
-        if (c.moveToFirst()) c.getString(0) else null
+    val nameCol = android.provider.ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME
+    val numCol = android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER
+    val seen = HashMap<String, Pair<String, Int>>() // number -> (name, score)
+
+    context.contentResolver.query(uri, arrayOf(nameCol, numCol), null, null, null)?.use { c ->
+        val ni = c.getColumnIndex(nameCol)
+        val pi = c.getColumnIndex(numCol)
+        while (c.moveToNext()) {
+            val name = c.getString(ni)?.trim() ?: continue
+            val number = c.getString(pi)?.trim() ?: continue
+            if (name.isEmpty() || number.isEmpty()) continue
+            val score = contactScore(q, name.lowercase())
+            if (score <= 0) continue
+            val key = number.filter { it.isDigit() }
+            val prev = seen[key]
+            if (prev == null || score > prev.second) seen[key] = name to score
+        }
     }
-}.getOrNull()
+
+    val ranked = seen.entries
+        .map { Triple(it.value.first, it.key, it.value.second) } // (name, digits, score)
+        .filter { it.second.isNotEmpty() }
+        .sortedByDescending { it.third }
+    if (ranked.isEmpty()) return emptyList()
+
+    val top = ranked[0]
+    val runnerUp = ranked.getOrNull(1)?.third ?: 0
+    // Confident only when the best is a strong tier AND clearly ahead of the next.
+    val confident = top.third >= STRONG_CONTACT_SCORE && top.third - runnerUp >= 2
+    ranked.take(limit).mapIndexed { i, (name, number, score) ->
+        ContactMatch(name, number, confident = i == 0 && confident)
+    }
+}.getOrDefault(emptyList())
+
+private const val STRONG_CONTACT_SCORE = 6
+
+/** Scores a contact name against the query; higher is better, 0 means no match. */
+private fun contactScore(q: String, name: String): Int {
+    val tokens = name.split(Regex("[^a-z0-9]+")).filter { it.isNotBlank() }
+    return when {
+        name == q -> 10
+        tokens.any { it == q } -> 8                       // matches a full first/last name
+        tokens.any { it.startsWith(q) } && q.length >= 3 -> 6
+        name.startsWith(q) -> 6
+        name.contains(q) && q.length >= 3 -> 4
+        // Fuzzy: close to any single name token (typos / mishearings).
+        tokens.any { AppIndex.levenshtein(q, it) <= maxOf(1, it.length / 4) } -> 3
+        else -> 0
+    }
+}
 
 private fun settingAction(key: String): String? = when (key) {
+    "root" -> Settings.ACTION_SETTINGS
+    "developer" -> Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS
+    "accessibility" -> Settings.ACTION_ACCESSIBILITY_SETTINGS
+    // No stable public constant across all versions; validated() + root fallback handle absence.
+    "notification" -> "android.settings.NOTIFICATION_SETTINGS"
     "wifi", "wi-fi" -> Settings.ACTION_WIFI_SETTINGS
     "bluetooth", "bt" -> Settings.ACTION_BLUETOOTH_SETTINGS
     "airplane" -> Settings.ACTION_AIRPLANE_MODE_SETTINGS
@@ -203,5 +532,8 @@ private fun settingAction(key: String): String? = when (key) {
     else -> null
 }
 
-private fun settingLabel(key: String): String =
-    if (settingAction(key) != null) "$key settings" else "settings"
+private fun settingLabel(key: String): String = when (key) {
+    "root" -> "settings"
+    "developer" -> "developer options"
+    else -> "$key settings"
+}

@@ -54,51 +54,47 @@ class AiIntentEngine(context: Context) {
 
 /**
  * Backend-agnostic decision: given any text generator (Nano or Gemma), ask the
- * model to pick one action. The model decides; we only parse + execute.
+ * model to pick one or more actions. The prompt is generated from the capability
+ * [CAPABILITIES] catalog and *grounded* with the actual installed apps that look
+ * relevant, so the model selects a real app instead of guessing a name. The
+ * model decides; we only parse + execute.
  */
 suspend fun decideIntent(
     generate: suspend (String) -> String?,
     query: String,
-    apps: List<AppEntry>,
-): AiIntent {
-    val prompt = """
-        Convert ONE phone command into ONE JSON action.
-        Output only a single JSON object. No list. No explanation. No code fences.
+    index: AppIndex,
+): Plan {
+    val prompt = buildString {
+        appendLine("Convert the phone command into JSON actions.")
+        appendLine("Output ONLY JSON — a single object, or a JSON array for several independent tasks. No prose, no code fences, no extra text.")
+        appendLine()
+        appendLine("Allowed actions:")
+        appendLine(allowedActionsBlock())
+        appendLine()
+        appendLine("For \"message\"/\"email\" you compose the text yourself. When opening an app, use one of the installed names listed below.")
+        appendLine("To send a message in an app, use ONE \"message\" action (it opens the app itself); do NOT emit \"open_app\" too.")
+        appendLine()
+        appendLine("Examples:")
+        appendLine(fewShotBlock())
+        appendLine(""""turn on wifi and open spotify" -> [{"action":"setting","key":"wifi"},{"action":"open_app","app":"Spotify"}]""")
+        groundingLine(index, query)?.let { appendLine(it) }
+        appendLine()
+        append("\"$query\" -> ")
+    }
 
-        Allowed actions:
-        {"action":"open_app","app":"<app name>"}
-        {"action":"alarm","hour":<0-23>,"minute":<0-59>}
-        {"action":"call","number":"<digits>"}
-        {"action":"setting","key":"wifi|bluetooth|airplane|battery|display|sound|location|data"}
-        {"action":"message","app":"whatsapp|sms","to":"<contact or number>","text":"<the message you write>"}
-        {"action":"web","query":"<text>"}
-        {"action":"answer","text":"<short answer>"}
-
-        For "message", YOU compose the message text yourself.
-
-        User: open camera
-        {"action":"open_app","app":"camera"}
-        User: launch the slack app
-        {"action":"open_app","app":"slack"}
-        User: set an alarm for 7:30 am
-        {"action":"alarm","hour":7,"minute":30}
-        User: turn on wifi
-        {"action":"setting","key":"wifi"}
-        User: whatsapp mom that i'll be home late
-        {"action":"message","app":"whatsapp","to":"mom","text":"Hi mom, I'll be home late tonight."}
-        User: text John asking if he's free tomorrow
-        {"action":"message","app":"sms","to":"John","text":"Hey John, are you free tomorrow?"}
-        User: what is 24 times 7
-        {"action":"answer","text":"168"}
-        User: $query
-    """.trimIndent()
-
-    Log.d(AI_TAG, "decide: query='$query' apps=${apps.size}")
+    Log.d(AI_TAG, "decide: query='$query'")
     val reply = generate(prompt)
     Log.d(AI_TAG, "decide: raw reply=${reply?.let { "\"$it\"" } ?: "null"}")
-    val intent = if (reply == null) AiIntent.Unknown else parseIntent(reply, apps)
-    Log.d(AI_TAG, "decide: parsed intent=$intent")
-    return intent
+    val plan = if (reply == null) emptyList() else parsePlan(reply, index)
+    Log.d(AI_TAG, "decide: parsed plan=$plan")
+    return plan
+}
+
+/** Grounds the prompt with installed apps relevant to [query], or null if none. */
+private fun groundingLine(index: AppIndex, query: String): String? {
+    val cands = index.candidates(query, 8)
+    return if (cands.isEmpty()) null
+    else "Installed apps you can open (use the exact name): " + cands.joinToString(", ") { it.label }
 }
 
 /**
@@ -106,10 +102,18 @@ suspend fun decideIntent(
  * and exposes a uniform [decide]. Falls back to a plain web search when no model
  * is usable, so callers never break.
  */
-/** One turn of the conversation: either the model spoke, or it wants to act. */
+/**
+ * One turn of the conversation:
+ *  - [Do]  the assistant wants to perform a plan,
+ *  - [Say] the assistant spoke,
+ *  - [Ask] the assistant needs the user to disambiguate — [candidates] are the
+ *    apps it's unsure between. The UI shows them as buttons AND re-opens the mic
+ *    so the user can just say "yes"/"no"; the answer resolves against pending state.
+ */
 sealed interface AgentTurn {
     data class Say(val text: String) : AgentTurn
-    data class Do(val intent: AiIntent) : AgentTurn
+    data class Do(val plan: Plan) : AgentTurn
+    data class Ask(val text: String, val candidates: List<AppEntry>) : AgentTurn
 }
 
 class Assistant(
@@ -119,71 +123,189 @@ class Assistant(
     private var ready = false
     private val history = ArrayDeque<String>()
 
-    /** One-shot command classification (used by the typed bar). */
-    suspend fun decide(query: String, apps: List<AppEntry>): AiIntent {
-        if (!ready) ready = prepareFn()
-        return if (ready) decideIntent(generateFn, query, apps) else AiIntent.Web(query)
+    /** A confirmation we're waiting on: the apps the last question offered, best first. */
+    private var pendingCandidates: List<AppEntry> = emptyList()
+
+    // Cache the index by the app-list identity so it's built once, not per query.
+    private var cachedApps: List<AppEntry>? = null
+    private var cachedIndex: AppIndex? = null
+
+    private fun indexFor(apps: List<AppEntry>): AppIndex {
+        if (cachedApps !== apps || cachedIndex == null) {
+            cachedIndex = AppIndex.of(apps)
+            cachedApps = apps
+        }
+        return cachedIndex!!
     }
 
-    /** Multi-turn conversation: the model can chat, answer, or emit a tool call. */
-    suspend fun converse(userText: String, apps: List<AppEntry>): AgentTurn {
+    /** One-shot command classification (used by the typed bar). */
+    suspend fun decide(query: String, apps: List<AppEntry>): Plan {
+        val index = indexFor(apps)
+        val text = Normalizer.normalize(query)
+        Log.d(AI_TAG, "assistant input=\"$query\" normalized=\"$text\"")
+        // Tier-0: obvious commands never touch the model.
+        fastRoute(text, index)?.let { Log.d(AI_TAG, "route=DETERMINISTIC llm=false -> $it"); return it }
         if (!ready) ready = prepareFn()
-        if (!ready) return AgentTurn.Do(AiIntent.Web(userText))
+        Log.d(AI_TAG, "route=SEMANTIC_FALLBACK llm=$ready")
+        val plan = if (ready) decideIntent(generateFn, text, index) else listOf(AiIntent.Web(text))
+        return resolveInventory(plan, apps)
+    }
 
-        val convo = history.joinToString("\n")
-        val prompt = """
-            You are a concise on-device phone assistant. You can chat, answer questions, or perform actions.
-            To perform an action, reply with ONLY one JSON tool call from this exact list:
-            {"action":"open_app","app":"<name>"}
-            {"action":"alarm","hour":<0-23>,"minute":<0-59>}
-            {"action":"call","number":"<digits>"}
-            {"action":"setting","key":"wifi|bluetooth|airplane|battery|display|sound|location|data"}
-            {"action":"message","app":"whatsapp|sms","to":"<contact>","text":"<message you write>"}
-            {"action":"web","query":"<text>"}
-            For any question, fact, or chit-chat, reply in ONE short plain-text sentence. Never invent new JSON actions.
+    /** Multi-turn conversation: the model can chat, answer, ask, or emit a plan. */
+    suspend fun converse(userText: String, apps: List<AppEntry>): AgentTurn {
+        val index = indexFor(apps)
+        val text = Normalizer.normalize(userText)
+        Log.d(AI_TAG, "assistant input=\"$userText\" normalized=\"$text\" pending=${pendingCandidates.size}")
 
-            User: open camera
-            {"action":"open_app","app":"camera"}
-            User: send a message to Mitali that i'll be playing cricket today
-            {"action":"message","app":"whatsapp","to":"Mitali","text":"I'll be playing cricket today."}
-            User: open whatsapp and message John i'm on my way
-            {"action":"message","app":"whatsapp","to":"John","text":"I'm on my way."}
-            User: set an alarm for 7
-            {"action":"alarm","hour":7,"minute":0}
-            User: how tall is the eiffel tower
-            It's about 330 metres (1,083 ft).
-            User: turn on wifi
-            {"action":"setting","key":"wifi"}
+        // 0. If we asked "did you mean…?", interpret a yes/no/next before anything else.
+        resolvePending(text)?.let { Log.d(AI_TAG, "route=CONFIRMATION llm=false"); return it }
 
-            $convo
-            User: $userText
-            Assistant:
-        """.trimIndent()
+        // 1. Tier-0 resolver — no model call.
+        fastRoute(text, index)?.let {
+            Log.d(AI_TAG, "route=DETERMINISTIC llm=false -> $it")
+            return turnFromPlan(text, it)
+        }
 
-        Log.d(AI_TAG, "converse: '$userText'")
-        val reply = generateFn(prompt)?.trim().orEmpty()
+        // 2. The model.
+        if (!ready) ready = prepareFn()
+        if (!ready) return AgentTurn.Do(listOf(AiIntent.Web(text)))
+
+        val prompt = buildConversePrompt(index, text)
+        Log.d(AI_TAG, "route=SEMANTIC_FALLBACK llm=true")
+        val reply = generateFn(prompt).orEmpty()
         Log.d(AI_TAG, "converse reply='$reply'")
 
-        history.addLast("User: $userText")
-        val intent = parseIntent(reply, apps)
-        val turn = if (intent != AiIntent.Unknown) {
-            history.addLast("Assistant: (performed an action)")
-            AgentTurn.Do(intent)
-        } else {
-            // Don't echo raw JSON if the model invented an unknown action.
-            val text = when {
-                reply.isBlank() -> "sorry, i didn't catch that"
-                reply.trimStart().startsWith("{") -> "i can't do that one yet"
-                else -> reply
-            }
-            history.addLast("Assistant: $text")
-            AgentTurn.Say(text)
+        // Parse plan from the RAW reply (JSON extraction tolerates trailing noise);
+        // only sanitise the free-text path.
+        val plan = resolveInventory(parsePlan(reply, index), apps)
+        if (plan.isNotEmpty()) return turnFromPlan(text, plan)
+
+        val clean = sanitizeReply(reply)
+        val answer = when {
+            clean.isBlank() -> "sorry, i didn't catch that"
+            clean.trimStart().startsWith("{") || clean.trimStart().startsWith("[") -> "i can't do that one yet"
+            else -> clean
         }
-        while (history.size > 8) history.removeFirst()
-        return turn
+        remember(text, answer)
+        return AgentTurn.Say(answer)
     }
 
-    fun resetConversation() = history.clear()
+    /** Turns a plan into a turn, converting an ambiguous app-open into a spoken question. */
+    private fun turnFromPlan(userText: String, plan: Plan): AgentTurn {
+        val open = plan.singleOrNull() as? AiIntent.OpenApp
+        if (open != null && !open.confident) {
+            val candidates = open.alternatives.ifEmpty { listOf(open.app) }
+            pendingCandidates = candidates
+            val q = askText(candidates)
+            remember(userText, q)
+            return AgentTurn.Ask(q, candidates)
+        }
+        pendingCandidates = emptyList()
+        remember(userText, "(done)")
+        return AgentTurn.Do(plan)
+    }
+
+    /**
+     * Handles the answer to a pending "did you mean…?": "yes" opens the top
+     * candidate, "no" drops it and offers the next (or asks openly when none
+     * remain), anything else is treated as a fresh request.
+     */
+    private fun resolvePending(userText: String): AgentTurn? {
+        if (pendingCandidates.isEmpty()) return null
+        val t = userText.trim().lowercase()
+        return when {
+            isAffirmative(t) -> {
+                val app = pendingCandidates.first()
+                pendingCandidates = emptyList()
+                remember(userText, "(done)")
+                AgentTurn.Do(listOf(AiIntent.OpenApp(app, confident = true)))
+            }
+            isNegative(t) -> {
+                val rest = pendingCandidates.drop(1)
+                pendingCandidates = rest
+                if (rest.isEmpty()) {
+                    remember(userText, "which app did you mean?")
+                    AgentTurn.Say("which app did you mean?")
+                } else {
+                    val q = askText(rest)
+                    remember(userText, q)
+                    AgentTurn.Ask(q, rest)
+                }
+            }
+            else -> { pendingCandidates = emptyList(); null } // fresh request
+        }
+    }
+
+    private fun buildConversePrompt(index: AppIndex, userText: String): String {
+        val convo = history.joinToString("\n")
+        return buildString {
+            appendLine("You are a concise on-device phone assistant. You either perform an action or answer.")
+            appendLine("If the command maps to an action, output ONLY JSON — one object, or an array for several independent tasks:")
+            appendLine(allowedActionsBlock())
+            appendLine("Otherwise (a question, fact, or chit-chat) reply with ONE short plain sentence.")
+            appendLine("Never invent new JSON actions. Never write \"User:\" or extra turns. Answer only the last line.")
+            appendLine("For \"message\"/\"email\" you compose the text. When opening an app, use one of the installed names below.")
+            appendLine("To send a message in an app, use ONE \"message\" action (it opens the app itself); do NOT emit \"open_app\" too.")
+            appendLine()
+            appendLine("Examples:")
+            appendLine(fewShotBlock())
+            appendLine(""""how tall is the eiffel tower" -> It's about 330 metres (1,083 ft).""")
+            appendLine(""""turn on wifi and open spotify" -> [{"action":"setting","key":"wifi"},{"action":"open_app","app":"Spotify"}]""")
+            groundingLine(index, userText)?.let { appendLine(it) }
+            appendLine()
+            if (convo.isNotBlank()) {
+                appendLine("Conversation so far:")
+                appendLine(convo)
+                appendLine()
+            }
+            append("\"$userText\" -> ")
+        }
+    }
+
+    /** Answers "how many/list X apps" locally from the app list, so the model never guesses inventory. */
+    private fun resolveInventory(plan: Plan, apps: List<AppEntry>): Plan =
+        plan.map { if (it is AiIntent.FindApps) AiIntent.Answer(AppCatalog.describe(apps, it.query)) else it }
+
+    /** Records one exchange in the neutral `"input" -> reply` form used by the prompt. */
+    private fun remember(userText: String, reply: String) {
+        history.addLast("\"$userText\" -> $reply")
+        while (history.size > 6) history.removeFirst()
+    }
+
+    fun resetConversation() {
+        history.clear()
+        pendingCandidates = emptyList()
+    }
+}
+
+/** "Did you mean X?" / "…X, Y, or Z?" for a candidate list. */
+private fun askText(candidates: List<AppEntry>): String {
+    val names = candidates.map { it.label }
+    return when (names.size) {
+        1 -> "did you mean ${names[0]}?"
+        else -> "did you mean " + names.dropLast(1).joinToString(", ") + ", or ${names.last()}?"
+    }
+}
+
+private val AFFIRMATIVE = setOf(
+    "yes", "yeah", "yep", "yup", "sure", "ok", "okay", "correct", "right", "confirm",
+    "do it", "open it", "that one", "yes please", "haan", "ha",
+)
+private val NEGATIVE = setOf("no", "nope", "nah", "not that", "wrong", "nahi")
+
+private fun isAffirmative(t: String): Boolean = t in AFFIRMATIVE || t.startsWith("yes")
+private fun isNegative(t: String): Boolean = t in NEGATIVE || t.startsWith("no ") || t == "no"
+
+/**
+ * Trims a model reply down to a single answer: strips any leaked chat-control
+ * tokens and cuts everything from the first hallucinated new turn / example
+ * ("User:", "Assistant:", or a fresh `"..." ->` line) onward.
+ */
+private fun sanitizeReply(raw: String): String {
+    var s = raw.replace("<end_of_turn>", "").replace("<start_of_turn>", "").replace("<eos>", "").trim()
+    Regex("(?im)(^|\\n)\\s*(user|assistant)\\s*:").find(s)?.let { s = s.substring(0, it.range.first) }
+    Regex("\\n\\s*\"[^\"]*\"\\s*->").find(s)?.let { s = s.substring(0, it.range.first) }
+    return s.trim().removePrefix("->").trim()
 }
 
 /** Builds the [Assistant] for the active backend, or null if AI is off/unusable. */

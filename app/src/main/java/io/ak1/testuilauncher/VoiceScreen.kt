@@ -70,6 +70,8 @@ fun VoiceScreen(store: LauncherStore, onClose: () -> Unit) {
     var heard by remember { mutableStateOf<String?>(null) }
     var replyLabel by remember { mutableStateOf<String?>(null) }
     var actionCommand by remember { mutableStateOf<Command?>(null) }
+    // Bumped when the assistant asks a question, to re-open the mic for the answer.
+    var relistenTick by remember { mutableStateOf(0) }
 
     val recognizer = remember { if (sttAvailable) SpeechRecognizer.createSpeechRecognizer(context) else null }
     DisposableEffect(Unit) { onDispose { recognizer?.destroy() } }
@@ -86,10 +88,10 @@ fun VoiceScreen(store: LauncherStore, onClose: () -> Unit) {
         status = "thinking…"
         scope.launch {
             Log.d(AI_TAG, "voice heard='$text' apps=${apps.size}")
-            val turn = assistant?.converse(text, apps) ?: AgentTurn.Do(AiIntent.Web(text))
+            val turn = assistant?.converse(text, apps) ?: AgentTurn.Do(listOf(AiIntent.Web(text)))
             when (turn) {
                 is AgentTurn.Do -> {
-                    val command = turn.intent.toCommand(context)
+                    val command = turn.plan.toCommand(context)
                     when {
                         command.kind == CommandKind.ACTION && !command.confirm -> {
                             command.run() // confident action → just do it
@@ -109,13 +111,31 @@ fun VoiceScreen(store: LauncherStore, onClose: () -> Unit) {
                     replyLabel = turn.text // the model just talked
                     status = "tap anywhere to reply"
                 }
+                is AgentTurn.Ask -> {
+                    // Disambiguation: show the question + a button per candidate, and
+                    // re-open the mic so the user can just say "yes"/"no".
+                    actionCommand = Command(
+                        title = turn.text,
+                        subtitle = null,
+                        kind = CommandKind.ACTION,
+                        confirm = true,
+                        options = turn.candidates.map { app ->
+                            Command("open ${app.label.lowercase()}", null, CommandKind.ACTION) { launchApp(context, app) }
+                        },
+                    ) {}
+                    status = "say “yes” or “no” — or tap"
+                    relistenTick++
+                }
             }
         }
     }
 
-    fun startListening() {
+    fun startListening(keepUi: Boolean = false) {
         val r = recognizer ?: return
-        status = "listening…"; heard = null; replyLabel = null; actionCommand = null
+        status = "listening…"
+        // When re-opening the mic to hear a yes/no answer, keep the question and
+        // its buttons on screen instead of clearing them.
+        if (!keepUi) { heard = null; replyLabel = null; actionCommand = null }
         r.setRecognitionListener(object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) {}
             override fun onBeginningOfSpeech() {}
@@ -159,6 +179,12 @@ fun VoiceScreen(store: LauncherStore, onClose: () -> Unit) {
             hasMic() -> startListening()
             else -> micPermission.launch(Manifest.permission.RECORD_AUDIO)
         }
+    }
+
+    // When the assistant asks a question, re-open the mic to hear the answer while
+    // keeping the question + candidate buttons on screen.
+    LaunchedEffect(relistenTick) {
+        if (relistenTick > 0 && sttAvailable && hasMic()) startListening(keepUi = true)
     }
 
     LaunchedEffect(Unit) {
@@ -211,15 +237,31 @@ fun VoiceScreen(store: LauncherStore, onClose: () -> Unit) {
                 )
             }
             actionCommand?.let { cmd ->
-                ActionButton(
-                    label = if (cmd.confirm) "did you mean:  ${cmd.title}?" else cmd.title,
-                ) { cmd.run(); onClose() }
-                cmd.subtitle?.let { sub ->
+                if (cmd.options.isNotEmpty()) {
+                    // Disambiguation: show the question, then each candidate as its own button.
                     BasicText(
-                        text = sub,
-                        modifier = Modifier.padding(top = 10.dp),
-                        style = TextStyle(color = palette.muted, fontSize = 15.sp, fontFamily = ff),
+                        text = cmd.title,
+                        modifier = Modifier.padding(bottom = 12.dp),
+                        style = TextStyle(color = palette.text, fontSize = 22.sp, fontFamily = ff),
                     )
+                    cmd.options.forEach { opt ->
+                        Box(Modifier.padding(bottom = 10.dp)) {
+                            ActionButton(label = "${opt.title}${opt.subtitle?.let { "  ·  $it" } ?: ""}") {
+                                opt.run(); onClose()
+                            }
+                        }
+                    }
+                } else {
+                    ActionButton(
+                        label = if (cmd.confirm) "did you mean:  ${cmd.title}?" else cmd.title,
+                    ) { cmd.run(); onClose() }
+                    cmd.subtitle?.let { sub ->
+                        BasicText(
+                            text = sub,
+                            modifier = Modifier.padding(top = 10.dp),
+                            style = TextStyle(color = palette.muted, fontSize = 15.sp, fontFamily = ff),
+                        )
+                    }
                 }
             }
         }

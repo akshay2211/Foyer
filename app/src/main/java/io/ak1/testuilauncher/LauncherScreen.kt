@@ -2,6 +2,7 @@ package io.ak1.testuilauncher
 
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -91,7 +92,15 @@ data class AppEntry(
     val label: String,
     val packageName: String,
     val activityName: String,
-)
+) {
+    /**
+     * Android's declared app category (ApplicationInfo.CATEGORY_*), or -1 if
+     * unknown/pre-API-26. Kept out of the primary constructor so it stays out of
+     * equals/hashCode/copy and the persisted (favorites/shortcuts) encoding —
+     * it's populated only on the live list from [loadLaunchableApps].
+     */
+    var category: Int = -1
+}
 
 fun loadLaunchableApps(context: Context): List<AppEntry> {
     val pm = context.packageManager
@@ -103,7 +112,9 @@ fun loadLaunchableApps(context: Context): List<AppEntry> {
             if (ai.packageName == self) return@mapNotNull null
             val label = ri.loadLabel(pm).toString().trim()
             if (label.isEmpty()) return@mapNotNull null
-            AppEntry(label = label, packageName = ai.packageName, activityName = ai.name)
+            AppEntry(label = label, packageName = ai.packageName, activityName = ai.name).also {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) it.category = ai.applicationInfo.category
+            }
         }
         .sortedBy { it.label.lowercase() }
 }
@@ -514,8 +525,8 @@ private fun DrawerPage(
         scope.launch {
             aiThinking = true
             aiResult = null
-            val intent = assistant?.decide(text, apps) ?: AiIntent.Web(text)
-            val command = intent.toCommand(context)
+            val plan = assistant?.decide(text, apps) ?: listOf(AiIntent.Web(text))
+            val command = plan.toCommand(context)
             aiThinking = false
             if (command.kind == CommandKind.ACTION && !command.confirm) {
                 command.run()      // confident action → just do it
@@ -646,14 +657,28 @@ private fun DrawerPage(
                     } else {
                         aiResult?.let { cmd ->
                             item(key = "ai-result") {
-                                if (cmd.kind == CommandKind.ACTION) {
-                                    Box(Modifier.padding(vertical = 10.dp)) {
+                                when {
+                                    cmd.options.isNotEmpty() -> Column(Modifier.padding(vertical = 6.dp)) {
+                                        // Disambiguation: the question, then one button per candidate.
+                                        BasicText(
+                                            text = cmd.title,
+                                            modifier = Modifier.padding(vertical = 6.dp),
+                                            style = TextStyle(color = palette.muted, fontSize = 15.sp, fontFamily = ff),
+                                        )
+                                        cmd.options.forEach { opt ->
+                                            Box(Modifier.padding(vertical = 6.dp)) {
+                                                ActionButton(
+                                                    label = "${opt.title}${opt.subtitle?.let { "  ·  $it" } ?: ""}",
+                                                ) { focusManager.clearFocus(); opt.run() }
+                                            }
+                                        }
+                                    }
+                                    cmd.kind == CommandKind.ACTION -> Box(Modifier.padding(vertical = 10.dp)) {
                                         ActionButton(
                                             label = if (cmd.confirm) "did you mean: ${cmd.title}?" else cmd.title,
                                         ) { focusManager.clearFocus(); cmd.run() }
                                     }
-                                } else {
-                                    CommandRow(cmd) { focusManager.clearFocus() }
+                                    else -> CommandRow(cmd) { focusManager.clearFocus() }
                                 }
                             }
                         }

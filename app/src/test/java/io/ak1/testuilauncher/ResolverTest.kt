@@ -1,0 +1,126 @@
+package io.ak1.testuilauncher
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * Unit tests for the deterministic, offline layers of the assistant (SRS §14):
+ * text normalization, the app resolver, the action registry, and Tier-0 routing.
+ * These are pure Kotlin — no Android runtime, no LLM.
+ */
+class ResolverTest {
+
+    private fun app(label: String, pkg: String = label.lowercase().replace(" ", ".")) =
+        AppEntry(label = label, packageName = "com.$pkg", activityName = "Main")
+
+    private val apps = listOf(
+        app("Spotify"), app("WhatsApp"), app("Blinkit"),
+        app("Google Maps"), app("Google Drive"), app("Camera"), app("Instagram"),
+    )
+    private val index = AppIndex.of(apps)
+
+    // ---- §5.2 Normalization ----
+
+    @Test fun normalize_collapses_repeated_prefix() {
+        assertEquals("open developer options", Normalizer.normalize("open open developer options"))
+        assertEquals("developer options", Normalizer.stripLeadingVerb("open developer options"))
+    }
+
+    @Test fun normalize_collapses_whitespace_keeps_case() {
+        assertEquals("OPEN Spotify", Normalizer.normalize("  OPEN   Spotify "))
+    }
+
+    // ---- §14.1 Resolver ----
+
+    @Test fun exact_match_is_confident() {
+        val r = index.lookup("spotify")
+        assertEquals("Spotify", r.app?.label); assertTrue(r.confident)
+    }
+
+    @Test fun typo_resolves_via_subsequence() {
+        val r = index.lookup("spotfy")
+        assertEquals("Spotify", r.app?.label); assertTrue(r.confident)
+    }
+
+    @Test fun spaced_name_resolves() {
+        val r = index.lookup("whats app")
+        assertEquals("WhatsApp", r.app?.label); assertTrue(r.confident)
+    }
+
+    @Test fun blanket_offers_blinkit_but_not_confident() {
+        val r = index.lookup("blanket")
+        assertEquals("Blinkit", r.app?.label)
+        assertTrue(!r.confident)
+        assertTrue(r.candidates.any { it.label == "Blinkit" })
+    }
+
+    @Test fun uninstalled_app_is_no_match() {
+        val r = index.lookup("netflix")
+        assertNull(r.app)
+    }
+
+    @Test fun multiple_google_apps_are_ambiguous() {
+        val r = index.lookup("google")
+        assertTrue(!r.confident)
+        assertTrue(r.candidates.size >= 2)
+    }
+
+    @Test fun alias_music_maps_to_spotify() {
+        val r = index.lookup("music")
+        assertEquals("Spotify", r.app?.label); assertTrue(r.confident)
+    }
+
+    // ---- §5.4 Action registry ----
+
+    @Test fun registry_resolves_developer_and_wifi() {
+        assertEquals("developer", ActionRegistry.settingKey("developer options"))
+        assertEquals("developer", ActionRegistry.settingKey("developer mode"))
+        assertEquals("wifi", ActionRegistry.settingKey("wifi settings"))
+        assertNull(ActionRegistry.settingKey("spotify"))
+    }
+
+    // ---- §14.3 Tier-0 routing (deterministic, no LLM) ----
+
+    @Test fun route_open_app_confident() {
+        val plan = fastRoute("open spotify", index)!!
+        assertEquals(AiIntent.OpenApp(app("Spotify"), true).let { it.app.label to it.confident },
+            (plan[0] as AiIntent.OpenApp).let { it.app.label to it.confident })
+    }
+
+    @Test fun route_open_open_developer_options_hits_settings() {
+        val plan = fastRoute(Normalizer.normalize("open open developer options"), index)!!
+        assertEquals("developer", (plan[0] as AiIntent.OpenSetting).key)
+    }
+
+    @Test fun route_bare_developer_options_hits_settings() {
+        val plan = fastRoute("developer options", index)!!
+        assertEquals("developer", (plan[0] as AiIntent.OpenSetting).key)
+    }
+
+    @Test fun route_ambiguous_open_is_not_confident() {
+        val plan = fastRoute("open blanket", index)!!
+        assertTrue(!(plan[0] as AiIntent.OpenApp).confident)
+    }
+
+    @Test fun route_conversational_falls_through_to_llm() {
+        assertNull(fastRoute("what's the weather like", index))
+    }
+
+    // ---- §6 Deterministic inventory queries ----
+
+    @Test fun catalog_counts_by_category() {
+        val music = listOf(app("Spotify").also { it.category = 1 }, app("Gaana").also { it.category = 1 })
+        val other = listOf(app("Chrome").also { it.category = 7 })
+        val answer = AppCatalog.describe(music + other, "music")
+        assertTrue(answer.contains("2"))
+        assertTrue(answer.contains("Spotify"))
+        assertTrue(!answer.contains("Chrome"))
+    }
+
+    @Test fun catalog_reports_none_when_absent() {
+        val answer = AppCatalog.describe(listOf(app("Chrome").also { it.category = 7 }), "music")
+        assertTrue(answer.lowercase().contains("don't see any"))
+    }
+}
