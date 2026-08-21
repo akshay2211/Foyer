@@ -126,6 +126,19 @@ class Assistant(
     /** A confirmation we're waiting on: the apps the last question offered, best first. */
     private var pendingCandidates: List<AppEntry> = emptyList()
 
+    /** When the pending confirmation goes stale (§11). A late "yes" after this is ignored. */
+    private var pendingExpiresAt: Long = 0L
+
+    private fun setPending(candidates: List<AppEntry>) {
+        pendingCandidates = candidates
+        pendingExpiresAt = System.currentTimeMillis() + PENDING_TIMEOUT_MS
+    }
+
+    private fun clearPending() {
+        pendingCandidates = emptyList()
+        pendingExpiresAt = 0L
+    }
+
     // Cache the index by the app-list identity so it's built once, not per query.
     private var cachedApps: List<AppEntry>? = null
     private var cachedIndex: AppIndex? = null
@@ -195,12 +208,12 @@ class Assistant(
         val open = plan.singleOrNull() as? AiIntent.OpenApp
         if (open != null && !open.confident) {
             val candidates = open.alternatives.ifEmpty { listOf(open.app) }
-            pendingCandidates = candidates
+            setPending(candidates)
             val q = askText(candidates)
             remember(userText, q)
             return AgentTurn.Ask(q, candidates)
         }
-        pendingCandidates = emptyList()
+        clearPending()
         remember(userText, "(done)")
         return AgentTurn.Do(plan)
     }
@@ -212,27 +225,30 @@ class Assistant(
      */
     private fun resolvePending(userText: String): AgentTurn? {
         if (pendingCandidates.isEmpty()) return null
+        // Stale pending: a late confirmation is ignored; treat as a fresh request.
+        if (System.currentTimeMillis() > pendingExpiresAt) { clearPending(); return null }
         val t = userText.trim().lowercase()
         return when {
             isAffirmative(t) -> {
                 val app = pendingCandidates.first()
-                pendingCandidates = emptyList()
+                clearPending()
                 remember(userText, "(done)")
                 AgentTurn.Do(listOf(AiIntent.OpenApp(app, confident = true)))
             }
             isNegative(t) -> {
                 val rest = pendingCandidates.drop(1)
-                pendingCandidates = rest
                 if (rest.isEmpty()) {
+                    clearPending()
                     remember(userText, "which app did you mean?")
                     AgentTurn.Say("which app did you mean?")
                 } else {
+                    setPending(rest)
                     val q = askText(rest)
                     remember(userText, q)
                     AgentTurn.Ask(q, rest)
                 }
             }
-            else -> { pendingCandidates = emptyList(); null } // fresh request
+            else -> { clearPending(); null } // fresh request
         }
     }
 
@@ -274,9 +290,12 @@ class Assistant(
 
     fun resetConversation() {
         history.clear()
-        pendingCandidates = emptyList()
+        clearPending()
     }
 }
+
+/** How long a "did you mean…?" confirmation stays valid before a late "yes" is ignored. */
+private const val PENDING_TIMEOUT_MS = 60_000L
 
 /** "Did you mean X?" / "…X, Y, or Z?" for a candidate list. */
 private fun askText(candidates: List<AppEntry>): String {

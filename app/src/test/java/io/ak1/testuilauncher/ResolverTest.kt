@@ -72,13 +72,44 @@ class ResolverTest {
         assertEquals("Spotify", r.app?.label); assertTrue(r.confident)
     }
 
-    // ---- §5.4 Action registry ----
+    // ---- §15 Confidence bands (numeric, centralized) ----
+
+    @Test fun confidence_scores_land_in_expected_bands() {
+        val cfg = ResolverConfig.DEFAULT
+        assertTrue(index.lookup("spotify").score >= cfg.autoThreshold)      // execute
+        val blanket = index.lookup("blanket")
+        assertTrue(blanket.score >= cfg.confirmThreshold && blanket.score < cfg.autoThreshold) // confirm
+        assertEquals(1, blanket.candidates.size)                            // single "did you mean"
+        val google = index.lookup("google")
+        assertTrue(google.score in cfg.candidateThreshold..cfg.confirmThreshold) // candidates band
+        assertTrue(index.lookup("netflix").score < cfg.candidateThreshold)  // no match
+    }
+
+    @Test fun thresholds_are_tunable() {
+        // A stricter policy turns an auto-open into a confirmation.
+        val strict = ResolverConfig(autoThreshold = 0.99f)
+        val r = index.lookup("spotfy", strict) // subsequence scores 0.90
+        assertTrue(!r.confident)
+    }
+
+    // ---- §5.4 / §12 Action registry ----
 
     @Test fun registry_resolves_developer_and_wifi() {
         assertEquals("developer", ActionRegistry.settingKey("developer options"))
         assertEquals("developer", ActionRegistry.settingKey("developer mode"))
+        assertEquals("developer", ActionRegistry.settingKey("usb debugging"))
         assertEquals("wifi", ActionRegistry.settingKey("wifi settings"))
         assertNull(ActionRegistry.settingKey("spotify"))
+    }
+
+    @Test fun registry_exposes_definitions_with_category() {
+        val dev = ActionRegistry.definition("developer")!!
+        assertEquals(ActionCategory.DEVELOPER, dev.category)
+        assertTrue(dev.aliases.contains("developer options"))
+        // Every alias round-trips to a real definition.
+        ActionRegistry.ACTIONS.forEach { a ->
+            a.aliases.forEach { assertEquals(a.id, ActionRegistry.settingKey(it)) }
+        }
     }
 
     // ---- §14.3 Tier-0 routing (deterministic, no LLM) ----

@@ -31,63 +31,78 @@ class AppIndex private constructor(private val entries: List<Indexed>) {
      *  - [confident] false                    → ask; [candidates] holds the
      *    "did you mean…" options (best first, includes [app]).
      */
-    data class Resolution(val app: AppEntry?, val confident: Boolean, val candidates: List<AppEntry>) {
+    data class Resolution(
+        val app: AppEntry?,
+        val confident: Boolean,
+        val candidates: List<AppEntry>,
+        /** Match strength in [0,1]; drives the confidence policy. */
+        val score: Float = 0f,
+    ) {
         companion object {
-            val NONE = Resolution(null, false, emptyList())
-            fun sure(app: AppEntry) = Resolution(app, true, emptyList())
+            val NONE = Resolution(null, false, emptyList(), 0f)
         }
     }
 
     /**
      * Deterministic app resolver — the launcher's job, not the LLM's. Progressive
-     * tiers: exact → alias → acronym → prefix → substring → subsequence → fuzzy.
-     * A tier that matches exactly one app is confident (open now); a tier that
-     * matches several is ambiguous (ask which); fuzzy is always ask; nothing
-     * within the fuzzy threshold is a no-match.
+     * tiers (exact → alias → acronym → prefix → substring → subsequence → fuzzy)
+     * each yield a numeric [Resolution.score]; the confidence *decision* (execute /
+     * confirm / present candidates / no-match) is derived from the centralized,
+     * tunable [ResolverConfig] thresholds (SoT §15) rather than hard-coded per tier.
      */
-    fun lookup(name: String): Resolution {
+    fun lookup(name: String, config: ResolverConfig = ResolverConfig.DEFAULT): Resolution {
         val q = name.trim().lowercase()
         if (q.isEmpty()) return Resolution.NONE
         val qc = q.filter { it.isLetterOrDigit() }
 
-        // 1. Exact (full label or punctuation-stripped) — always confident.
+        // 1. Exact (full label or punctuation-stripped).
         entries.firstOrNull { it.label == q || (qc.isNotEmpty() && it.compact == qc) }
-            ?.let { return Resolution.sure(it.app) }
+            ?.let { return decide(it.app, 1.0f, emptyList(), config) }
 
         // 2. Alias / semantic shortcut ("music" → spotify, "yt" → youtube).
         ALIASES[q]?.let { target ->
             entries.firstOrNull { it.label == target || it.label.startsWith(target) || it.label.contains(target) }
-                ?.let { return Resolution.sure(it.app) }
+                ?.let { return decide(it.app, 0.97f, emptyList(), config) }
         }
 
-        // 3. Acronym ("ym" → YouTube Music).
-        if (qc.length >= 2) tierResult(entries.filter { it.acronym == qc })?.let { return it }
+        // 3. Acronym ("ym" → YouTube Music). Unique → strong, several → ambiguous.
+        if (qc.length >= 2) entries.filter { it.acronym == qc }.ifNotEmpty {
+            return decide(it[0].app, if (it.size == 1) 0.95f else 0.60f, it.map { e -> e.app }, config)
+        }
 
-        // 4. Prefix — label or any token starts with the query. Unique → confident,
-        //    several ("google" → Google, Google Maps, …) → ask which.
-        tierResult(entries.filter { it.label.startsWith(q) || it.tokens.any { t -> t.startsWith(q) } })?.let { return it }
+        // 4. Prefix — label or any token starts with the query.
+        entries.filter { it.label.startsWith(q) || it.tokens.any { t -> t.startsWith(q) } }.ifNotEmpty {
+            return decide(it[0].app, if (it.size == 1) 0.92f else 0.60f, it.map { e -> e.app }, config)
+        }
 
         // 5. Substring.
-        tierResult(entries.filter { it.label.contains(q) })?.let { return it }
+        entries.filter { it.label.contains(q) }.ifNotEmpty {
+            return decide(it[0].app, if (it.size == 1) 0.90f else 0.55f, it.map { e -> e.app }, config)
+        }
 
-        // 6. Subsequence — handles dropped letters ("spotfy" → Spotify) as confident.
+        // 6. Subsequence — handles dropped letters ("spotfy" → Spotify).
         if (qc.length >= 3) entries.firstOrNull { isSubsequence(qc, it.compact) }
-            ?.let { return Resolution.sure(it.app) }
+            ?.let { return decide(it.app, 0.90f, emptyList(), config) }
 
-        // 7. Fuzzy edit-distance — always ask; nothing close enough → no match.
+        // 7. Fuzzy edit-distance → score scaled by distance; thresholds decide.
         val ranked = entries.map { it to levenshtein(q, it.label) }.sortedBy { it.second }
         val best = ranked.firstOrNull() ?: return Resolution.NONE
-        if (best.second > maxOf(2, best.first.label.length / 3)) return Resolution.NONE
-        val candidates = ranked.filter { it.second <= maxOf(3, it.first.label.length / 2) }
+        val score = 1f - best.second.toFloat() / maxOf(q.length, best.first.label.length)
+        val close = ranked.filter { it.second <= maxOf(3, it.first.label.length / 2) }
             .take(4).map { it.first.app }
-        return Resolution(best.first.app, false, candidates.ifEmpty { listOf(best.first.app) })
+        return decide(best.first.app, score, close, config)
     }
 
-    /** A tier hit: one match → confident, several → ambiguous list, none → null (try next tier). */
-    private fun tierResult(hits: List<Indexed>): Resolution? = when {
-        hits.isEmpty() -> null
-        hits.size == 1 -> Resolution.sure(hits[0].app)
-        else -> Resolution(hits[0].app, false, hits.take(4).map { it.app })
+    /** Applies the centralized confidence bands to a scored match (SoT §15). */
+    private fun decide(app: AppEntry, score: Float, candidates: List<AppEntry>, config: ResolverConfig): Resolution = when {
+        score < config.candidateThreshold -> Resolution.NONE                       // < 0.40 → no match
+        score >= config.autoThreshold -> Resolution(app, true, emptyList(), score) // ≥ 0.90 → execute
+        score >= config.confirmThreshold -> Resolution(app, false, listOf(app), score) // 0.70–0.89 → confirm best
+        else -> Resolution(app, false, candidates.ifEmpty { listOf(app) }, score)  // 0.40–0.69 → candidates
+    }
+
+    private inline fun <T> List<T>.ifNotEmpty(block: (List<T>) -> Unit) {
+        if (isNotEmpty()) block(this)
     }
 
     /** Top-K installed apps most relevant to [query], for grounding the prompt. */
