@@ -139,6 +139,16 @@ class ResolverTest {
         assertNull(fastRoute("what's the weather like", index))
     }
 
+    @Test fun route_inventory_question_is_deterministic() {
+        assertEquals("music", (fastRoute("how many music apps do i have", index)!![0] as AiIntent.FindApps).query)
+        assertEquals("music", (fastRoute("list all music apps", index)!![0] as AiIntent.FindApps).query)
+    }
+
+    @Test fun route_usage_question_not_treated_as_inventory() {
+        // "…use most today" is a (future) usage question, not an inventory count.
+        assertNull(fastRoute("what apps did i use most today", index))
+    }
+
     // ---- §6 Deterministic inventory queries ----
 
     @Test fun catalog_counts_by_category() {

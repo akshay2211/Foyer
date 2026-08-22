@@ -16,6 +16,15 @@ fun fastRoute(query: String, index: AppIndex): Plan? {
     // Anything joining two clauses is a plan — let the model compose it.
     if (" and " in q || "," in q || " then " in q) return null
 
+    // Inventory questions about installed apps ("how many music apps", "list my
+    // games") — answered locally, never guessed by the model (SoT §6). Guarded
+    // against usage-style questions (those are a future feature).
+    if (!q.contains("use") && !q.contains("using") && !q.contains("time") && !q.contains("most")) {
+        Regex("^(?:how many|list all|list my|list|which|what|show me)\\s+(.*?)\\bapps?\\b.*$").find(q)?.let { m ->
+            return listOf(AiIntent.FindApps(m.groupValues[1].trim().removePrefix("my ").trim()))
+        }
+    }
+
     // System/settings actions first — a bare phrase ("developer options") or a
     // "turn on/off X" toggle. Deterministic, no app-list search, no model call.
     ActionRegistry.settingKey(q)?.let { return listOf(AiIntent.OpenSetting(it)) }

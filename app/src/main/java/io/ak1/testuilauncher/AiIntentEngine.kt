@@ -157,7 +157,11 @@ class Assistant(
         val text = Normalizer.normalize(query)
         Log.d(AI_TAG, "assistant input=\"$query\" normalized=\"$text\"")
         // Tier-0: obvious commands never touch the model.
-        fastRoute(text, index)?.let { Log.d(AI_TAG, "route=DETERMINISTIC llm=false -> $it"); return it }
+        fastRoute(text, index)?.let {
+            val plan = resolveInventory(it, apps)
+            Log.d(AI_TAG, "route=DETERMINISTIC llm=false -> $plan")
+            return plan
+        }
         if (!ready) ready = prepareFn()
         Log.d(AI_TAG, "route=SEMANTIC_FALLBACK llm=$ready")
         val plan = if (ready) decideIntent(generateFn, text, index) else listOf(AiIntent.Web(text))
@@ -173,10 +177,11 @@ class Assistant(
         // 0. If we asked "did you mean…?", interpret a yes/no/next before anything else.
         resolvePending(text)?.let { Log.d(AI_TAG, "route=CONFIRMATION llm=false"); return it }
 
-        // 1. Tier-0 resolver — no model call.
+        // 1. Tier-0 resolver — no model call. Inventory questions are answered locally here.
         fastRoute(text, index)?.let {
-            Log.d(AI_TAG, "route=DETERMINISTIC llm=false -> $it")
-            return turnFromPlan(text, it)
+            val plan = resolveInventory(it, apps)
+            Log.d(AI_TAG, "route=DETERMINISTIC llm=false -> $plan")
+            return turnFromPlan(text, plan)
         }
 
         // 2. The model.
