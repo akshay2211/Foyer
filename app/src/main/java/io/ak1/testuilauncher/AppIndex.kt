@@ -80,9 +80,12 @@ class AppIndex private constructor(private val entries: List<Indexed>) {
             return decide(it[0].app, if (it.size == 1) 0.90f else 0.55f, it.map { e -> e.app }, config)
         }
 
-        // 6. Subsequence — handles dropped letters ("spotfy" → Spotify).
-        if (qc.length >= 3) entries.firstOrNull { isSubsequence(qc, it.compact) }
-            ?.let { return decide(it.app, 0.90f, emptyList(), config) }
+        // 6. Subsequence — dropped-letter typos ("spotfy" → Spotify). Gated on length
+        //    so a short query isn't spuriously found scattered across a long name
+        //    ("amol" ⊄ "warmup & cooldown"): at most 2 letters may be missing.
+        if (qc.length >= 3) entries.firstOrNull {
+            isSubsequence(qc, it.compact) && qc.length >= it.compact.length - 2
+        }?.let { return decide(it.app, 0.90f, emptyList(), config) }
 
         // 7. Fuzzy edit-distance → score scaled by distance; thresholds decide.
         val ranked = entries.map { it to levenshtein(q, it.label) }.sortedBy { it.second }

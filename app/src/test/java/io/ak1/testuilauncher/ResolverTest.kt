@@ -61,6 +61,13 @@ class ResolverTest {
         assertNull(r.app)
     }
 
+    @Test fun short_query_is_not_a_spurious_subsequence() {
+        // "amol" is a scattered subsequence of "warmup & cooldown" but must NOT
+        // confidently auto-open it (regression for the Amol/AMUL bug).
+        val idx = AppIndex.of(listOf(app("Warmup & Cooldown")))
+        assertTrue(!idx.lookup("amol").confident)
+    }
+
     @Test fun multiple_google_apps_are_ambiguous() {
         val r = index.lookup("google")
         assertTrue(!r.confident)
