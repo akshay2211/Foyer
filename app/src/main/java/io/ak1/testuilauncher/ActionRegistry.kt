@@ -81,4 +81,14 @@ object ActionRegistry {
 
     /** Looks up the definition for a settings key. */
     fun definition(id: String): ActionDefinition? = ACTIONS.firstOrNull { it.id == id }
+
+    /** Pipe-joined keys for the "setting" action schema in the prompt. */
+    fun keyList(): String = ACTIONS.joinToString("|") { it.id }
+
+    /**
+     * Compact `key: alias, alias…` reference for grounding the model on a semantic
+     * settings request (e.g. mapping "usb debugging" → developer) — SoT §16.
+     */
+    fun promptReference(): String =
+        ACTIONS.joinToString("\n") { a -> "${a.id}: ${a.aliases.joinToString(", ")}" }
 }

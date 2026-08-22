@@ -29,7 +29,10 @@ val CAPABILITIES: List<Capability> = listOf(
     Capability("alarm", """{"action":"alarm","hour":<0-23>,"minute":<0-59>}"""),
     Capability("timer", """{"action":"timer","seconds":<int>,"label":"<optional>"}"""),
     Capability("call", """{"action":"call","number":"<digits>"}"""),
-    Capability("setting", """{"action":"setting","key":"wifi|bluetooth|airplane|battery|display|sound|location|data"}"""),
+    Capability(
+        "setting", """{"action":"setting","key":"${ActionRegistry.keyList()}"}""",
+        listOf("where can i enable usb debugging" to """{"action":"setting","key":"developer"}"""),
+    ),
     Capability(
         "message", """{"action":"message","app":"whatsapp|sms","to":"<contact or number>","text":"<the message you write>"}""",
         listOf(

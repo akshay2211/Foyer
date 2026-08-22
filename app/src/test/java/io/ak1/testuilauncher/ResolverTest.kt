@@ -130,6 +130,21 @@ class ResolverTest {
         assertEquals("developer", (plan[0] as AiIntent.OpenSetting).key)
     }
 
+    @Test fun route_verbed_settings_phrases_are_deterministic() {
+        assertEquals("developer", (fastRoute("enable usb debugging", index)!![0] as AiIntent.OpenSetting).key)
+        assertEquals("wifi", (fastRoute("take me to wifi settings", index)!![0] as AiIntent.OpenSetting).key)
+        assertEquals("accessibility", (fastRoute("open accessibility settings", index)!![0] as AiIntent.OpenSetting).key)
+    }
+
+    @Test fun setting_schema_includes_full_registry_keys() {
+        // The model's "setting" schema is generated from the registry, so it can
+        // emit developer/accessibility/etc. for paraphrased requests.
+        val schema = allowedActionsBlock()
+        assertTrue(schema.contains("developer"))
+        assertTrue(schema.contains("accessibility"))
+        assertTrue(ActionRegistry.promptReference().contains("usb debugging"))
+    }
+
     @Test fun route_ambiguous_open_is_not_confident() {
         val plan = fastRoute("open blanket", index)!!
         assertTrue(!(plan[0] as AiIntent.OpenApp).confident)

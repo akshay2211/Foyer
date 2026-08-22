@@ -25,11 +25,16 @@ fun fastRoute(query: String, index: AppIndex): Plan? {
         }
     }
 
-    // System/settings actions first — a bare phrase ("developer options") or a
-    // "turn on/off X" toggle. Deterministic, no app-list search, no model call.
+    // System/settings actions first — a bare phrase ("developer options"), a
+    // "turn on/off X" toggle, or a lightly-verbed request ("enable usb debugging",
+    // "take me to wifi settings"). Deterministic: no app-list search, no model call.
     ActionRegistry.settingKey(q)?.let { return listOf(AiIntent.OpenSetting(it)) }
-    val toggle = q.removePrefix("turn on ").removePrefix("turn off ").removePrefix("toggle ").trim()
-    if (toggle != q) ActionRegistry.settingKey(toggle)?.let { return listOf(AiIntent.OpenSetting(it)) }
+    val settingsPhrase = q
+        .removePrefix("turn on ").removePrefix("turn off ").removePrefix("toggle ")
+        .removePrefix("enable ").removePrefix("disable ")
+        .removePrefix("open ").removePrefix("go to ").removePrefix("show me ").removePrefix("take me to ")
+        .trim()
+    if (settingsPhrase != q) ActionRegistry.settingKey(settingsPhrase)?.let { return listOf(AiIntent.OpenSetting(it)) }
 
     Regex("^(?:open|launch|start|run|go to|show)\\s+(?:the\\s+)?(.+?)(?:\\s+app)?$").find(q)?.let { m ->
         val name = m.groupValues[1].trim()
