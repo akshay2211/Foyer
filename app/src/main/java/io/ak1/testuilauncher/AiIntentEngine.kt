@@ -69,23 +69,22 @@ suspend fun decideIntent(
         appendLine("Output ONLY JSON — a single object, or a JSON array for several independent tasks. No prose, no code fences, no extra text.")
         appendLine()
         appendLine("Allowed actions:")
-        appendLine(allowedActionsBlock())
+        appendLine(STABLE_ACTIONS)
         appendLine()
         appendLine("For \"message\"/\"email\" you compose the text yourself. When opening an app, use one of the installed names listed below.")
         appendLine("To send a message in an app, use ONE \"message\" action (it opens the app itself); do NOT emit \"open_app\" too.")
-        appendLine("For a settings request, use \"setting\" with the closest key below:")
-        appendLine(ActionRegistry.promptReference())
+        settingsBlock(query)?.let { appendLine(it) }
         appendLine()
         appendLine("Examples:")
-        appendLine(fewShotBlock())
+        appendLine(STABLE_FEWSHOTS)
         appendLine(""""turn on wifi and open spotify" -> [{"action":"setting","key":"wifi"},{"action":"open_app","app":"Spotify"}]""")
         groundingLine(index, query)?.let { appendLine(it) }
         appendLine()
         append("\"$query\" -> ")
     }
 
-    Log.d(AI_TAG, "decide: query='$query'")
-    val reply = generate(prompt)
+    Log.d(AI_TAG, "decide: query='$query' promptChars=${prompt.length}")
+    val reply = timedGenerate(generate, prompt)
     Log.d(AI_TAG, "decide: raw reply=${reply?.let { "\"$it\"" } ?: "null"}")
     val plan = if (reply == null) emptyList() else parsePlan(reply, index)
     Log.d(AI_TAG, "decide: parsed plan=$plan")
@@ -97,6 +96,37 @@ private fun groundingLine(index: AppIndex, query: String): String? {
     val cands = index.candidates(query, 8)
     return if (cands.isEmpty()) null
     else "Installed apps you can open (use the exact name): " + cands.joinToString(", ") { it.label }
+}
+
+// The instruction/catalog/few-shot preamble is identical every turn — build the
+// generated blocks once instead of re-joining the catalog on each request.
+private val STABLE_ACTIONS: String by lazy { allowedActionsBlock() }
+private val STABLE_FEWSHOTS: String by lazy { fewShotBlock() }
+
+private val SETTINGS_HINTS = setOf(
+    "setting", "settings", "wifi", "wi-fi", "bluetooth", "developer", "usb", "debugging",
+    "brightness", "display", "screen", "volume", "sound", "audio", "notification", "notifications",
+    "location", "gps", "accessibility", "airplane", "flight", "battery", "data", "mobile",
+    "enable", "disable",
+)
+
+/**
+ * The settings-key reference — included only when the request looks settings-related
+ * (retrieval-first, SoT §16), so non-settings prompts don't carry ~12 extra lines.
+ */
+private fun settingsBlock(query: String): String? =
+    if (query.lowercase().split(Regex("[^a-z0-9]+")).any { it in SETTINGS_HINTS }) {
+        "For a settings request, use \"setting\" with the closest key below:\n" + ActionRegistry.promptReference()
+    } else {
+        null
+    }
+
+/** Runs a model call, timing it and recording metrics (latency, prompt size, success). */
+private suspend fun timedGenerate(generate: suspend (String) -> String?, prompt: String): String? {
+    val t0 = System.currentTimeMillis()
+    val reply = generate(prompt)
+    AiMetrics.recordLlm(System.currentTimeMillis() - t0, ok = !reply.isNullOrBlank(), promptChars = prompt.length)
+    return reply
 }
 
 /**
@@ -155,6 +185,7 @@ class Assistant(
 
     /** One-shot command classification (used by the typed bar). */
     suspend fun decide(query: String, apps: List<AppEntry>): Plan {
+        AiMetrics.recordRequest()
         val index = indexFor(apps)
         val text = Normalizer.normalize(query)
         Log.d(AI_TAG, "assistant input=\"$query\" normalized=\"$text\"")
@@ -172,6 +203,7 @@ class Assistant(
 
     /** Multi-turn conversation: the model can chat, answer, ask, or emit a plan. */
     suspend fun converse(userText: String, apps: List<AppEntry>): AgentTurn {
+        AiMetrics.recordRequest()
         val index = indexFor(apps)
         val text = Normalizer.normalize(userText)
         Log.d(AI_TAG, "assistant input=\"$userText\" normalized=\"$text\" pending=${pendingCandidates.size}")
@@ -191,8 +223,8 @@ class Assistant(
         if (!ready) return AgentTurn.Do(listOf(AiIntent.Web(text)))
 
         val prompt = buildConversePrompt(index, text)
-        Log.d(AI_TAG, "route=SEMANTIC_FALLBACK llm=true")
-        val reply = generateFn(prompt).orEmpty()
+        Log.d(AI_TAG, "route=SEMANTIC_FALLBACK llm=true promptChars=${prompt.length}")
+        val reply = timedGenerate(generateFn, prompt).orEmpty()
         Log.d(AI_TAG, "converse reply='$reply'")
 
         // Parse plan from the RAW reply (JSON extraction tolerates trailing noise);
@@ -264,16 +296,15 @@ class Assistant(
         return buildString {
             appendLine("You are a concise on-device phone assistant. You either perform an action or answer.")
             appendLine("If the command maps to an action, output ONLY JSON — one object, or an array for several independent tasks:")
-            appendLine(allowedActionsBlock())
+            appendLine(STABLE_ACTIONS)
             appendLine("Otherwise (a question, fact, or chit-chat) reply with ONE short plain sentence.")
             appendLine("Never invent new JSON actions. Never write \"User:\" or extra turns. Answer only the last line.")
             appendLine("For \"message\"/\"email\" you compose the text. When opening an app, use one of the installed names below.")
             appendLine("To send a message in an app, use ONE \"message\" action (it opens the app itself); do NOT emit \"open_app\" too.")
-            appendLine("For a settings request, use \"setting\" with the closest key below:")
-            appendLine(ActionRegistry.promptReference())
+            settingsBlock(userText)?.let { appendLine(it) }
             appendLine()
             appendLine("Examples:")
-            appendLine(fewShotBlock())
+            appendLine(STABLE_FEWSHOTS)
             appendLine(""""how tall is the eiffel tower" -> It's about 330 metres (1,083 ft).""")
             appendLine(""""turn on wifi and open spotify" -> [{"action":"setting","key":"wifi"},{"action":"open_app","app":"Spotify"}]""")
             groundingLine(index, userText)?.let { appendLine(it) }
