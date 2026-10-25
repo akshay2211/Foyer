@@ -4,13 +4,13 @@ plugins {
 }
 
 android {
-    namespace = "io.ak1.testuilauncher"
+    namespace = "com.foyerlauncher.foyer"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "io.ak1.testuilauncher"
+        applicationId = "com.foyerlauncher.foyer"
         minSdk = 24
         targetSdk = 36
         versionCode = 1

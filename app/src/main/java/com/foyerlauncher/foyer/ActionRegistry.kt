@@ -1,4 +1,4 @@
-package io.ak1.testuilauncher
+package com.foyerlauncher.foyer
 
 /** Broad grouping for a system action, for future filtering/retrieval (§12). */
 enum class ActionCategory { SYSTEM, CONNECTIVITY, DISPLAY, PRIVACY, DEVELOPER, POWER }

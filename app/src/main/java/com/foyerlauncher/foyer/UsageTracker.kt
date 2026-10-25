@@ -1,4 +1,4 @@
-package io.ak1.testuilauncher
+package com.foyerlauncher.foyer
 
 import android.app.AppOpsManager
 import android.app.usage.UsageStatsManager

@@ -1,4 +1,4 @@
-package io.ak1.testuilauncher
+package com.foyerlauncher.foyer
 
 /**
  * Answers questions *about* the installed apps deterministically from the local

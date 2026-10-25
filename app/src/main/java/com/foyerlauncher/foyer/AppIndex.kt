@@ -1,4 +1,4 @@
-package io.ak1.testuilauncher
+package com.foyerlauncher.foyer
 
 /**
  * Precomputed, query-efficient index over the installed apps. Built once per app

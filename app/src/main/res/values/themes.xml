@@ -2,7 +2,7 @@
     <!-- Pure-Compose app: only the window background matters (shown before the
          first frame). Everything else is drawn by Compose. window_bg is a
          DayNight color so the pre-draw flash matches the active theme. -->
-    <style name="Theme.TestUiLauncher" parent="@android:style/Theme.Material.NoActionBar">
+    <style name="Theme.Foyer" parent="@android:style/Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/window_bg</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>

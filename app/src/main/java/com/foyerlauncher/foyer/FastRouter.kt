@@ -1,4 +1,4 @@
-package io.ak1.testuilauncher
+package com.foyerlauncher.foyer
 
 /**
  * Tier-0 deterministic router. The obvious ~70% of launcher commands — "open X",

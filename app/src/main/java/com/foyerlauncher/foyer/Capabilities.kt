@@ -1,4 +1,4 @@
-package io.ak1.testuilauncher
+package com.foyerlauncher.foyer
 
 /**
  * The capability catalog — the single source of truth for what the on-device

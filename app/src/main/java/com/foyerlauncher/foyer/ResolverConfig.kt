@@ -1,4 +1,4 @@
-package io.ak1.testuilauncher
+package com.foyerlauncher.foyer
 
 /**
  * Centralized, tunable confidence policy for app resolution (SoT §15). These are

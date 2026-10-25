@@ -1,4 +1,4 @@
-package io.ak1.testuilauncher
+package com.foyerlauncher.foyer
 
 import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme

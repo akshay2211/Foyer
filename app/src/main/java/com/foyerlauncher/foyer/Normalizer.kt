@@ -1,4 +1,4 @@
-package io.ak1.testuilauncher
+package com.foyerlauncher.foyer
 
 /**
  * Cheap deterministic text cleanup applied before any routing (§5.2). Keeps the

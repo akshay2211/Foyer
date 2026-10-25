@@ -1,4 +1,4 @@
-package io.ak1.testuilauncher
+package com.foyerlauncher.foyer
 
 import android.content.Context
 import android.os.Build
@@ -60,31 +60,19 @@ class AiIntentEngine(context: Context) {
  * model decides; we only parse + execute.
  */
 suspend fun decideIntent(
-    generate: suspend (String) -> String?,
+    generate: suspend (String, String) -> String?,
     query: String,
     index: AppIndex,
 ): Plan {
-    val prompt = buildString {
-        appendLine("Convert the phone command into JSON actions.")
-        appendLine("Output ONLY JSON — a single object, or a JSON array for several independent tasks. No prose, no code fences, no extra text.")
-        appendLine()
-        appendLine("Allowed actions:")
-        appendLine(STABLE_ACTIONS)
-        appendLine()
-        appendLine("For \"message\"/\"email\" you compose the text yourself. When opening an app, use one of the installed names listed below.")
-        appendLine("To send a message in an app, use ONE \"message\" action (it opens the app itself); do NOT emit \"open_app\" too.")
+    // Variable, query-dependent tail; the stable preamble is [DECIDE_PREFIX].
+    val suffix = buildString {
         settingsBlock(query)?.let { appendLine(it) }
-        appendLine()
-        appendLine("Examples:")
-        appendLine(STABLE_FEWSHOTS)
-        appendLine(""""turn on wifi and open spotify" -> [{"action":"setting","key":"wifi"},{"action":"open_app","app":"Spotify"}]""")
         groundingLine(index, query)?.let { appendLine(it) }
-        appendLine()
         append("\"$query\" -> ")
     }
 
-    Log.d(AI_TAG, "decide: query='$query' promptChars=${prompt.length}")
-    val reply = timedGenerate(generate, prompt)
+    Log.d(AI_TAG, "decide: query='$query' promptChars=${DECIDE_PREFIX.length + suffix.length}")
+    val reply = timedGenerate(generate, DECIDE_PREFIX, suffix)
     Log.d(AI_TAG, "decide: raw reply=${reply?.let { "\"$it\"" } ?: "null"}")
     val plan = if (reply == null) emptyList() else parsePlan(reply, index)
     Log.d(AI_TAG, "decide: parsed plan=$plan")
@@ -102,6 +90,45 @@ private fun groundingLine(index: AppIndex, query: String): String? {
 // generated blocks once instead of re-joining the catalog on each request.
 private val STABLE_ACTIONS: String by lazy { allowedActionsBlock() }
 private val STABLE_FEWSHOTS: String by lazy { fewShotBlock() }
+
+/**
+ * The stable, query-independent preambles used as the KV prefix-cache key
+ * ([GemmaEngine.generate]). Everything that varies per turn (settings block,
+ * app grounding, conversation history, the command itself) lives in the suffix.
+ */
+private val DECIDE_PREFIX: String by lazy {
+    buildString {
+        appendLine("Convert the phone command into JSON actions.")
+        appendLine("Output ONLY JSON — a single object, or a JSON array for several independent tasks. No prose, no code fences, no extra text.")
+        appendLine()
+        appendLine("Allowed actions:")
+        appendLine(STABLE_ACTIONS)
+        appendLine()
+        appendLine("For \"message\"/\"email\" you compose the text yourself. When opening an app, use one of the installed names listed below.")
+        appendLine("To send a message in an app, use ONE \"message\" action (it opens the app itself); do NOT emit \"open_app\" too.")
+        appendLine()
+        appendLine("Examples:")
+        appendLine(STABLE_FEWSHOTS)
+        appendLine(""""turn on wifi and open spotify" -> [{"action":"setting","key":"wifi"},{"action":"open_app","app":"Spotify"}]""")
+    }
+}
+
+private val CONVERSE_PREFIX: String by lazy {
+    buildString {
+        appendLine("You are a concise on-device phone assistant. You either perform an action or answer.")
+        appendLine("If the command maps to an action, output ONLY JSON — one object, or an array for several independent tasks:")
+        appendLine(STABLE_ACTIONS)
+        appendLine("Otherwise (a question, fact, or chit-chat) reply with ONE short plain sentence.")
+        appendLine("Never invent new JSON actions. Never write \"User:\" or extra turns. Answer only the last line.")
+        appendLine("For \"message\"/\"email\" you compose the text. When opening an app, use one of the installed names below.")
+        appendLine("To send a message in an app, use ONE \"message\" action (it opens the app itself); do NOT emit \"open_app\" too.")
+        appendLine()
+        appendLine("Examples:")
+        appendLine(STABLE_FEWSHOTS)
+        appendLine(""""how tall is the eiffel tower" -> It's about 330 metres (1,083 ft).""")
+        appendLine(""""turn on wifi and open spotify" -> [{"action":"setting","key":"wifi"},{"action":"open_app","app":"Spotify"}]""")
+    }
+}
 
 private val SETTINGS_HINTS = setOf(
     "setting", "settings", "wifi", "wi-fi", "bluetooth", "developer", "usb", "debugging",
@@ -121,11 +148,15 @@ private fun settingsBlock(query: String): String? =
         null
     }
 
-/** Runs a model call, timing it and recording metrics (latency, prompt size, success). */
-private suspend fun timedGenerate(generate: suspend (String) -> String?, prompt: String): String? {
+/** Runs a model call (stable prefix + variable suffix), timing it and recording metrics. */
+private suspend fun timedGenerate(
+    generate: suspend (String, String) -> String?,
+    prefix: String,
+    suffix: String,
+): String? {
     val t0 = System.currentTimeMillis()
-    val reply = generate(prompt)
-    AiMetrics.recordLlm(System.currentTimeMillis() - t0, ok = !reply.isNullOrBlank(), promptChars = prompt.length)
+    val reply = generate(prefix, suffix)
+    AiMetrics.recordLlm(System.currentTimeMillis() - t0, ok = !reply.isNullOrBlank(), promptChars = prefix.length + suffix.length)
     return reply
 }
 
@@ -150,7 +181,7 @@ sealed interface AgentTurn {
 
 class Assistant(
     private val prepareFn: suspend () -> Boolean,
-    private val generateFn: suspend (String) -> String?,
+    private val generateFn: suspend (prefix: String, suffix: String) -> String?,
 ) {
     private var ready = false
     private val history = ArrayDeque<String>()
@@ -222,9 +253,9 @@ class Assistant(
         if (!ready) ready = prepareFn()
         if (!ready) return AgentTurn.Do(listOf(AiIntent.Web(text)))
 
-        val prompt = buildConversePrompt(index, text)
-        Log.d(AI_TAG, "route=SEMANTIC_FALLBACK llm=true promptChars=${prompt.length}")
-        val reply = timedGenerate(generateFn, prompt).orEmpty()
+        val suffix = buildConverseSuffix(index, text)
+        Log.d(AI_TAG, "route=SEMANTIC_FALLBACK llm=true promptChars=${CONVERSE_PREFIX.length + suffix.length}")
+        val reply = timedGenerate(generateFn, CONVERSE_PREFIX, suffix).orEmpty()
         Log.d(AI_TAG, "converse reply='$reply'")
 
         // Parse plan from the RAW reply (JSON extraction tolerates trailing noise);
@@ -291,24 +322,12 @@ class Assistant(
         }
     }
 
-    private fun buildConversePrompt(index: AppIndex, userText: String): String {
+    /** The per-turn variable tail for a conversation; the preamble is [CONVERSE_PREFIX]. */
+    private fun buildConverseSuffix(index: AppIndex, userText: String): String {
         val convo = history.joinToString("\n")
         return buildString {
-            appendLine("You are a concise on-device phone assistant. You either perform an action or answer.")
-            appendLine("If the command maps to an action, output ONLY JSON — one object, or an array for several independent tasks:")
-            appendLine(STABLE_ACTIONS)
-            appendLine("Otherwise (a question, fact, or chit-chat) reply with ONE short plain sentence.")
-            appendLine("Never invent new JSON actions. Never write \"User:\" or extra turns. Answer only the last line.")
-            appendLine("For \"message\"/\"email\" you compose the text. When opening an app, use one of the installed names below.")
-            appendLine("To send a message in an app, use ONE \"message\" action (it opens the app itself); do NOT emit \"open_app\" too.")
             settingsBlock(userText)?.let { appendLine(it) }
-            appendLine()
-            appendLine("Examples:")
-            appendLine(STABLE_FEWSHOTS)
-            appendLine(""""how tall is the eiffel tower" -> It's about 330 metres (1,083 ft).""")
-            appendLine(""""turn on wifi and open spotify" -> [{"action":"setting","key":"wifi"},{"action":"open_app","app":"Spotify"}]""")
             groundingLine(index, userText)?.let { appendLine(it) }
-            appendLine()
             if (convo.isNotBlank()) {
                 appendLine("Conversation so far:")
                 appendLine(convo)
@@ -377,13 +396,15 @@ fun rememberAssistant(store: LauncherStore): Assistant? {
         when (store.activeBackend) {
             Backend.GEMMA -> if (downloaded) {
                 val engine = GemmaEngine(context, gemmaModelFile(context).path)
-                Assistant({ engine.prepare() }, engine::generate)
+                // Gemma reuses the prefilled preamble via its prefix-cache path.
+                Assistant({ engine.prepare() }, { prefix, suffix -> engine.generate(prefix, suffix) })
             } else {
                 null
             }
             Backend.NANO -> if (aiSupported()) {
                 val engine = AiIntentEngine(context)
-                Assistant({ engine.prepare() == AiStatus.READY }, engine::generate)
+                // Nano has no session cache; concatenate to the same single prompt.
+                Assistant({ engine.prepare() == AiStatus.READY }, { prefix, suffix -> engine.generate(prefix + suffix) })
             } else {
                 null
             }

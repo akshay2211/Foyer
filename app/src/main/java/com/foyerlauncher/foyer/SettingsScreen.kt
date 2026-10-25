@@ -1,4 +1,4 @@
-package io.ak1.testuilauncher
+package com.foyerlauncher.foyer
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable

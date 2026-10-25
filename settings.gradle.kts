@@ -22,6 +22,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "TestUiLauncher"
+rootProject.name = "Foyer"
 include(":app")
  

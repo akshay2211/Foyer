@@ -1,4 +1,4 @@
-package io.ak1.testuilauncher
+package com.foyerlauncher.foyer
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
