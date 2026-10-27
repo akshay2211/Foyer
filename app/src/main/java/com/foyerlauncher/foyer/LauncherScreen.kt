@@ -11,6 +11,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -910,6 +911,7 @@ private fun DrawerPage(
                     apps = browse,
                     listState = listState,
                     leadingItemCount = leadingCount,
+                    style = store.fastScrollStyle,
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .fillMaxHeight(),
@@ -1025,6 +1027,7 @@ private fun AlphabetScroller(
     apps: List<AppEntry>,
     listState: LazyListState,
     leadingItemCount: Int = 0,
+    style: FastScrollStyle = FastScrollStyle.INTERACTIVE,
     modifier: Modifier = Modifier,
 ) {
     val palette = LocalPalette.current
@@ -1071,85 +1074,175 @@ private fun AlphabetScroller(
         targetIndex(letter)?.let { ti -> scope.launch { listState.scrollToItem(ti + leadingItemCount) } }
     }
 
+    val context = LocalContext.current
+    val ff = LocalFontFamily.current
+
+    // What the finger is on right now: the landing app plus the two after it.
+    val previewApps = remember(activeLetter, isDragging, apps) {
+        if (!isDragging || activeLetter == null) emptyList()
+        else targetIndex(activeLetter!!)?.let { ti -> apps.drop(ti).take(3) } ?: emptyList()
+    }
+    // Icon of the landing app only — loaded lazily, cached, scrub-time only (#4).
+    var previewIcon by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+    LaunchedEffect(previewApps.firstOrNull()?.key, style) {
+        previewIcon = null
+        if (style == FastScrollStyle.INTERACTIVE) {
+            previewApps.firstOrNull()?.let { previewIcon = AppIconCache.icon(context, it) }
+        }
+    }
+
     Box(modifier) {
         val bubbleVisible = isDragging && activeLetter != null
         val bubbleAlpha by animateFloatAsState(
             targetValue = if (bubbleVisible) 1f else 0f,
             label = "bubbleAlpha",
         )
-        if (bubbleAlpha > 0.01f) {
-            val bubbleSize = 76.dp
-            val bubblePx = with(density) { bubbleSize.toPx() }
-            val offsetX = with(density) { (-108).dp.roundToPx() }
-            Box(
+        if (bubbleAlpha > 0.01f && style == FastScrollStyle.INTERACTIVE) {
+            // Preview card: big letter, the landing app (icon + name), and the
+            // next two apps of the section for context.
+            val cardOffsetX = with(density) { (-236).dp.roundToPx() }
+            val cardHalf = with(density) { 44.dp.toPx() }
+            Column(
                 Modifier
                     .align(Alignment.TopEnd)
-                    .offset {
-                        IntOffset(x = offsetX, y = (pointerY - bubblePx / 2f).roundToInt())
-                    }
+                    .offset { IntOffset(x = cardOffsetX, y = (pointerY - cardHalf).roundToInt().coerceAtLeast(0)) }
                     .alpha(bubbleAlpha)
-                    .size(bubbleSize)
-                    .background(palette.accent, CircleShape),
+                    .width(200.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(palette.background)
+                    .border(1.dp, palette.muted.copy(alpha = 0.35f), RoundedCornerShape(18.dp))
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
             ) {
-                BasicText(
-                    text = (activeLetter ?: ' ').toString(),
-                    modifier = Modifier.align(Alignment.Center),
-                    style = TextStyle(
-                        color = palette.onAccent,
-                        fontSize = 34.sp,
-                        fontWeight = FontWeight.Medium,
-                    ),
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    BasicText(
+                        text = (activeLetter ?: ' ').toString(),
+                        style = TextStyle(color = palette.accent, fontSize = 30.sp, fontWeight = FontWeight.Medium, fontFamily = ff),
+                    )
+                    previewApps.firstOrNull()?.let { target ->
+                        previewIcon?.let { icon ->
+                            Image(
+                                bitmap = icon,
+                                contentDescription = null,
+                                modifier = Modifier.padding(start = 12.dp).size(30.dp),
+                            )
+                        }
+                        BasicText(
+                            text = target.label.lowercase(),
+                            modifier = Modifier.padding(start = 10.dp),
+                            style = TextStyle(color = palette.text, fontSize = 16.sp, fontFamily = ff),
+                            maxLines = 1,
+                        )
+                    }
+                }
+                previewApps.drop(1).forEach { next ->
+                    BasicText(
+                        text = next.label.lowercase(),
+                        modifier = Modifier.padding(top = 5.dp),
+                        style = TextStyle(color = palette.muted, fontSize = 13.sp, fontFamily = ff),
+                        maxLines = 1,
+                    )
+                }
             }
         }
 
-        Column(
-            Modifier
-                .align(Alignment.CenterEnd)
-                .fillMaxHeight()
-                .width(30.dp)
-                .onSizeChanged { railHeight = it.height }
-                .pointerInput(apps) {
-                    detectVerticalDragGestures(
-                        onDragStart = { offset -> isDragging = true; updateFromY(offset.y) },
-                        onDragEnd = { isDragging = false },
-                        onDragCancel = { isDragging = false },
-                        onVerticalDrag = { change, _ -> change.consume(); updateFromY(change.position.y) },
+        val railModifier = Modifier
+            .align(Alignment.CenterEnd)
+            .fillMaxHeight()
+            .width(30.dp)
+            .onSizeChanged { railHeight = it.height }
+            .pointerInput(apps) {
+                detectVerticalDragGestures(
+                    onDragStart = { offset -> isDragging = true; updateFromY(offset.y) },
+                    onDragEnd = { isDragging = false },
+                    onDragCancel = { isDragging = false },
+                    onVerticalDrag = { change, _ -> change.consume(); updateFromY(change.position.y) },
+                )
+            }
+            .pointerInput(apps) {
+                detectTapGestures { offset -> updateFromY(offset.y) }
+            }
+            .semantics {
+                contentDescription = "fast scroll, A to Z"
+                currentSection?.let { stateDescription = "section $it" }
+            }
+
+        when (style) {
+            FastScrollStyle.INTERACTIVE -> Column(
+                railModifier,
+                verticalArrangement = Arrangement.SpaceBetween,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                letters.forEach { c ->
+                    val active = if (isDragging) c == activeLetter else c == currentSection
+                    val enabled = indexForLetter.containsKey(c)
+                    val targetColor = when {
+                        active -> palette.accent
+                        enabled -> palette.muted
+                        else -> palette.muted.copy(alpha = 0.35f)
+                    }
+                    val color by animateColorAsState(targetColor, label = "letterColor")
+                    val scale by animateFloatAsState(if (active) 1.5f else 1f, label = "letterScale")
+                    BasicText(
+                        text = c.toString(),
+                        modifier = Modifier.graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                        },
+                        style = TextStyle(
+                            color = color,
+                            fontSize = 10.sp,
+                            fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+                            textAlign = TextAlign.Center,
+                        ),
                     )
                 }
-                .pointerInput(apps) {
-                    detectTapGestures { offset -> updateFromY(offset.y) }
-                }
-                .semantics {
-                    contentDescription = "fast scroll, A to Z"
-                    currentSection?.let { stateDescription = "section $it" }
-                },
-            verticalArrangement = Arrangement.SpaceBetween,
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            letters.forEach { c ->
-                val active = if (isDragging) c == activeLetter else c == currentSection
-                val enabled = indexForLetter.containsKey(c)
-                val targetColor = when {
-                    active -> palette.accent
-                    enabled -> palette.muted
-                    else -> palette.muted.copy(alpha = 0.35f)
-                }
-                val color by animateColorAsState(targetColor, label = "letterColor")
-                val scale by animateFloatAsState(if (active) 1.5f else 1f, label = "letterScale")
-                BasicText(
-                    text = c.toString(),
-                    modifier = Modifier.graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                    },
-                    style = TextStyle(
-                        color = color,
-                        fontSize = 10.sp,
-                        fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
-                        textAlign = TextAlign.Center,
-                    ),
+            }
+
+            FastScrollStyle.SIMPLE -> Box(railModifier) {
+                // A hairline with a small handle; the letter whispers beside it
+                // only while dragging. Zero visual noise otherwise.
+                Box(
+                    Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 13.dp)
+                        .fillMaxHeight()
+                        .width(2.dp)
+                        .background(palette.muted.copy(alpha = 0.25f)),
                 )
+                val handleFrac = when {
+                    isDragging && railHeight > 0 -> pointerY / railHeight
+                    else -> {
+                        val section = currentSection
+                        if (section != null) letters.indexOf(section).toFloat() / letters.size else 0f
+                    }
+                }
+                Box(
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .offset {
+                            IntOffset(
+                                x = with(density) { (-9).dp.roundToPx() },
+                                y = ((railHeight - with(density) { 14.dp.roundToPx() }) * handleFrac.coerceIn(0f, 1f)).roundToInt(),
+                            )
+                        }
+                        .size(width = 10.dp, height = 14.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(if (isDragging) palette.accent else palette.muted.copy(alpha = 0.6f)),
+                )
+                if (isDragging && activeLetter != null) {
+                    BasicText(
+                        text = activeLetter.toString(),
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .offset {
+                                IntOffset(
+                                    x = with(density) { (-34).dp.roundToPx() },
+                                    y = (pointerY - with(density) { 10.dp.toPx() }).roundToInt().coerceAtLeast(0),
+                                )
+                            },
+                        style = TextStyle(color = palette.muted, fontSize = 15.sp, fontWeight = FontWeight.Medium, fontFamily = ff),
+                    )
+                }
             }
         }
     }

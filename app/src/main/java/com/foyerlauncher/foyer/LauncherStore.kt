@@ -38,6 +38,7 @@ private const val KEY_LEFT = "shortcut_left"
 private const val KEY_RIGHT = "shortcut_right"
 private const val KEY_CLOCK = "show_clock"
 private const val KEY_CLOCK_STYLE = "clock_style"
+private const val KEY_FAST_SCROLL = "fast_scroll_style"
 private const val KEY_HIDDEN = "hidden"
 private const val KEY_USAGE = "usage"
 private const val KEY_DISTRACTING = "distracting"
@@ -154,6 +155,14 @@ class LauncherStore(private val context: Context) {
     fun cycleClockStyle() {
         clockStyle = clockStyle.next()
         prefs.edit { putString(KEY_CLOCK_STYLE, clockStyle.name) }
+    }
+
+    var fastScrollStyle by mutableStateOf(enumFromPrefs(KEY_FAST_SCROLL, FastScrollStyle.INTERACTIVE))
+        private set
+
+    fun cycleFastScroll() {
+        fastScrollStyle = fastScrollStyle.next()
+        prefs.edit { putString(KEY_FAST_SCROLL, fastScrollStyle.name) }
     }
 
     /** First-run onboarding (pitch + default-launcher prompt) shown exactly once. */
@@ -547,6 +556,7 @@ class LauncherStore(private val context: Context) {
         put("aliases", JSONObject(aliases.toMap() as Map<*, *>))
         put("appLimits", JSONObject(appLimits.toMap() as Map<*, *>))
         put("clockStyle", clockStyle.name)
+        put("fastScroll", fastScrollStyle.name)
         put("theme", themeMode.name)
         put("accent", accent.name)
         put("font", font.name)
@@ -619,6 +629,8 @@ class LauncherStore(private val context: Context) {
             clockStyle = if (o.optBoolean("showClock", true)) ClockStyle.DIGITAL else ClockStyle.OFF
         }
         prefs.edit { putString(KEY_CLOCK_STYLE, clockStyle.name) }
+        fastScrollStyle = enumOrCurrent(o.optString("fastScroll"), fastScrollStyle)
+        prefs.edit { putString(KEY_FAST_SCROLL, fastScrollStyle.name) }
         themeMode = enumOrCurrent(o.optString("theme"), themeMode)
         accent = enumOrCurrent(o.optString("accent"), accent)
         font = enumOrCurrent(o.optString("font"), font)

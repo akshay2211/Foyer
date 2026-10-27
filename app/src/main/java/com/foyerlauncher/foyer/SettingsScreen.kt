@@ -120,6 +120,7 @@ fun SettingsScreen(store: LauncherStore, onClose: () -> Unit) {
 
         SettingRow("theme", store.themeMode.label) { store.cycleTheme() }
         SettingRow("clock", store.clockStyle.label) { store.cycleClockStyle() }
+        SettingRow("fast scroll", store.fastScrollStyle.label) { store.cycleFastScroll() }
 
         val scope = rememberCoroutineScope()
         SettingRow("on-device ai", if (store.aiEnabled) "on" else "off") { store.toggleAi() }
