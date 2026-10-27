@@ -14,7 +14,11 @@ package com.foyerlauncher.foyer
  *    name. This is where device-discovered entries (app shortcuts, deep-link
  *    targets) would also be folded in later — same ranking, richer corpus.
  */
-class AppIndex private constructor(private val entries: List<Indexed>) {
+class AppIndex private constructor(
+    private val entries: List<Indexed>,
+    /** User-taught alias (lowercase) → [AppEntry] — the top resolution tier. */
+    private val userAliases: Map<String, AppEntry>,
+) {
 
     private class Indexed(
         val app: AppEntry,
@@ -54,6 +58,9 @@ class AppIndex private constructor(private val entries: List<Indexed>) {
         val q = name.trim().lowercase()
         if (q.isEmpty()) return Resolution.NONE
         val qc = q.filter { it.isLetterOrDigit() }
+
+        // 0. User-taught alias — the user said so; open it, no questions.
+        userAliases[q]?.let { return decide(it, 1.0f, emptyList(), config) }
 
         // 1. Exact (full label or punctuation-stripped).
         entries.firstOrNull { it.label == q || (qc.isNotEmpty() && it.compact == qc) }
@@ -156,7 +163,11 @@ class AppIndex private constructor(private val entries: List<Indexed>) {
             "clock" to "clock", "alarm" to "clock",
         )
 
-        fun of(apps: List<AppEntry>): AppIndex = AppIndex(
+        /**
+         * [userAliases] maps alias text → [AppEntry.key]; entries whose key no
+         * longer resolves to an installed app are dropped here.
+         */
+        fun of(apps: List<AppEntry>, userAliases: Map<String, String> = emptyMap()): AppIndex = AppIndex(
             apps.map { app ->
                 val label = app.label.lowercase()
                 val tokens = tokenize(label)
@@ -167,6 +178,12 @@ class AppIndex private constructor(private val entries: List<Indexed>) {
                     acronym = tokens.mapNotNull { it.firstOrNull() }.joinToString(""),
                     compact = label.filter { it.isLetterOrDigit() },
                 )
+            },
+            userAliases = buildMap {
+                if (userAliases.isNotEmpty()) {
+                    val byKey = apps.associateBy { "${it.packageName}/${it.activityName}" + if (it.userSerial != 0L) "/${it.userSerial}" else "" }
+                    userAliases.forEach { (alias, key) -> byKey[key]?.let { put(alias.lowercase(), it) } }
+                }
             },
         )
 

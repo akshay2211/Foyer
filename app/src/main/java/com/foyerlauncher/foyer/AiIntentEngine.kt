@@ -182,6 +182,8 @@ sealed interface AgentTurn {
 class Assistant(
     private val prepareFn: suspend () -> Boolean,
     private val generateFn: suspend (prefix: String, suffix: String) -> String?,
+    /** Snapshot of the user-taught aliases (alias → app key) at query time. */
+    private val aliasesFn: () -> Map<String, String> = { emptyMap() },
 ) {
     private var ready = false
     private val history = ArrayDeque<String>()
@@ -202,14 +204,18 @@ class Assistant(
         pendingExpiresAt = 0L
     }
 
-    // Cache the index by the app-list identity so it's built once, not per query.
+    // Cache the index by app-list identity + alias snapshot so it's built once,
+    // not per query, but refreshes when the user teaches a new alias.
     private var cachedApps: List<AppEntry>? = null
+    private var cachedAliases: Map<String, String>? = null
     private var cachedIndex: AppIndex? = null
 
     private fun indexFor(apps: List<AppEntry>): AppIndex {
-        if (cachedApps !== apps || cachedIndex == null) {
-            cachedIndex = AppIndex.of(apps)
+        val aliases = aliasesFn()
+        if (cachedApps !== apps || cachedAliases != aliases || cachedIndex == null) {
+            cachedIndex = AppIndex.of(apps, aliases)
             cachedApps = apps
+            cachedAliases = aliases
         }
         return cachedIndex!!
     }
@@ -397,14 +403,22 @@ fun rememberAssistant(store: LauncherStore): Assistant? {
             Backend.GEMMA -> if (downloaded) {
                 val engine = GemmaEngine(context, gemmaModelFile(context).path)
                 // Gemma reuses the prefilled preamble via its prefix-cache path.
-                Assistant({ engine.prepare() }, { prefix, suffix -> engine.generate(prefix, suffix) })
+                Assistant(
+                    { engine.prepare() },
+                    { prefix, suffix -> engine.generate(prefix, suffix) },
+                    { store.aliases.toMap() },
+                )
             } else {
                 null
             }
             Backend.NANO -> if (aiSupported()) {
                 val engine = AiIntentEngine(context)
                 // Nano has no session cache; concatenate to the same single prompt.
-                Assistant({ engine.prepare() == AiStatus.READY }, { prefix, suffix -> engine.generate(prefix + suffix) })
+                Assistant(
+                    { engine.prepare() == AiStatus.READY },
+                    { prefix, suffix -> engine.generate(prefix + suffix) },
+                    { store.aliases.toMap() },
+                )
             } else {
                 null
             }

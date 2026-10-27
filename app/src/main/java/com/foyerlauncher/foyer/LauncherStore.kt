@@ -51,6 +51,7 @@ private val DEFAULT_DISTRACTING = setOf(
     "com.facebook.orca", // Messenger
 )
 private const val KEY_ONBOARDED = "onboarded"
+private const val KEY_ALIASES = "aliases"
 private const val KEY_THEME = "theme_mode"
 private const val KEY_ACCENT = "accent"
 private const val KEY_FONT = "font"
@@ -227,6 +228,7 @@ class LauncherStore(private val context: Context) {
         favorites.clear()
         hidden.clear()
         usage.clear()
+        aliases.clear()
         showClock = true
         themeMode = ThemeMode.SYSTEM
         accent = AccentChoice.MONO
@@ -273,6 +275,38 @@ class LauncherStore(private val context: Context) {
     fun toggleHidden(app: AppEntry) {
         if (!hidden.remove(app.key)) hidden.add(app.key)
         prefs.edit { putString(KEY_HIDDEN, hidden.joinToString(REC_SEP)) }
+    }
+
+    /**
+     * User-taught nicknames: alias text (lowercase) → [AppEntry.key]. These are
+     * the highest-confidence resolution tier — "bank" → HDFC opens instantly,
+     * before fuzzy matching or any model call.
+     */
+    val aliases: SnapshotStateMap<String, String> = mutableStateMapOf<String, String>().apply {
+        (prefs.getString(KEY_ALIASES, "") ?: "")
+            .split(REC_SEP)
+            .forEach { rec ->
+                val p = rec.split(UNIT_SEP)
+                if (p.size == 2) put(p[0], p[1])
+            }
+    }
+
+    fun addAlias(alias: String, app: AppEntry) {
+        val a = alias.trim().lowercase()
+        if (a.isEmpty()) return
+        aliases[a] = app.key
+        persistAliases()
+    }
+
+    fun removeAlias(alias: String) {
+        aliases.remove(alias)
+        persistAliases()
+    }
+
+    private fun persistAliases() {
+        prefs.edit {
+            putString(KEY_ALIASES, aliases.entries.joinToString(REC_SEP) { "${it.key}$UNIT_SEP${it.value}" })
+        }
     }
 
     /** Packages the user treats as time-sinks (seeded with common ones). */
@@ -357,6 +391,11 @@ class LauncherStore(private val context: Context) {
         }
         if (userSerial == 0L && distracting.remove(packageName)) {
             prefs.edit { putString(KEY_DISTRACTING, distracting.joinToString(REC_SEP)) }
+        }
+        val staleAliases = aliases.filterValues { keyMatches(it, packageName, userSerial) }.keys
+        if (staleAliases.isNotEmpty()) {
+            staleAliases.forEach { aliases.remove(it) }
+            persistAliases()
         }
         if (leftShortcut?.packageName == packageName && leftShortcut?.userSerial == userSerial) {
             leftShortcut = resolveAsLauncher(context, Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA), "camera")

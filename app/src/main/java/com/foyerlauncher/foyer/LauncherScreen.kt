@@ -190,9 +190,10 @@ fun LauncherScreen(store: LauncherStore) {
     var showSettings by remember { mutableStateOf(false) }
     var showVoice by remember { mutableStateOf(false) }
     var guardApp by remember { mutableStateOf<AppEntry?>(null) }
+    var aliasApp by remember { mutableStateOf<AppEntry?>(null) }
 
     val overlayOpen = menuApp != null || pickerTarget != null || showHomeMenu ||
-        showSettings || showVoice || guardApp != null
+        showSettings || showVoice || guardApp != null || aliasApp != null
     BackHandler(enabled = overlayOpen) {
         menuApp = null
         pickerTarget = null
@@ -200,6 +201,7 @@ fun LauncherScreen(store: LauncherStore) {
         showSettings = false
         showVoice = false
         guardApp = null
+        aliasApp = null
     }
 
     // Launch, but pause on time-sinks that are already over today's limit.
@@ -261,7 +263,18 @@ fun LauncherScreen(store: LauncherStore) {
                 onToggleDistracting = { store.toggleDistracting(app); menuApp = null },
                 onAppInfo = { openAppInfo(context, app.packageName); menuApp = null },
                 onUninstall = { requestUninstall(context, app); menuApp = null },
+                aliases = store.aliases.filterValues { it == app.key }.keys.sorted(),
+                onAddAlias = { menuApp = null; aliasApp = app },
+                onRemoveAlias = { store.removeAlias(it) },
                 onDismiss = { menuApp = null },
+            )
+        }
+
+        aliasApp?.let { app ->
+            AliasPrompt(
+                app = app,
+                onSave = { alias -> store.addAlias(alias, app); aliasApp = null },
+                onDismiss = { aliasApp = null },
             )
         }
 
@@ -543,7 +556,12 @@ private fun DrawerPage(
     // Browse list excludes hidden apps; search reveals everything (incl. hidden).
     val browse = apps.filterNot { store.isHidden(it) }
     val searchResults = if (searching) {
-        apps.filter { it.label.startsWith(q, ignoreCase = true) }
+        // User-taught aliases rank first, then label prefixes.
+        val aliased = store.aliases
+            .filterKeys { it.startsWith(q, ignoreCase = true) }
+            .values
+            .mapNotNull { key -> apps.firstOrNull { it.key == key } }
+        (aliased + apps.filter { it.label.startsWith(q, ignoreCase = true) }).distinct()
     } else {
         emptyList()
     }
@@ -1075,6 +1093,9 @@ private fun AppActionMenu(
     onToggleDistracting: () -> Unit,
     onAppInfo: () -> Unit,
     onUninstall: () -> Unit,
+    aliases: List<String>,
+    onAddAlias: () -> Unit,
+    onRemoveAlias: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     FoyerSheet(title = app.label.lowercase(), onDismiss = onDismiss) {
@@ -1089,8 +1110,87 @@ private fun AppActionMenu(
             active = isDistracting,
             onClick = onToggleDistracting,
         )
+        // Taught nicknames: tap one to forget it, or teach a new one.
+        aliases.forEach { alias ->
+            SheetRow("alias “$alias”  ·  remove", active = true, onClick = { onRemoveAlias(alias) })
+        }
+        SheetRow("add alias", onClick = onAddAlias)
         SheetRow("app info", onClick = onAppInfo)
         if (canUninstall) SheetRow("uninstall", onClick = onUninstall)
+    }
+}
+
+/**
+ * Top-anchored alias input (top, because the IME would cover a bottom sheet —
+ * the window uses adjustNothing). Enter saves, scrim/back dismisses.
+ */
+@Composable
+private fun AliasPrompt(
+    app: AppEntry,
+    onSave: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val palette = LocalPalette.current
+    val ff = LocalFontFamily.current
+    var text by remember { mutableStateOf("") }
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        delay(60)
+        runCatching { focusRequester.requestFocus() }
+    }
+    Scrim(onDismiss) {
+        Column(
+            Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 120.dp)
+                .fillMaxWidth(0.82f)
+                .clip(RoundedCornerShape(22.dp))
+                .background(palette.background)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                ) {}
+                .padding(horizontal = 22.dp, vertical = 18.dp),
+        ) {
+            BasicText(
+                text = "alias for ${app.label.lowercase()}",
+                modifier = Modifier.padding(bottom = 10.dp),
+                style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = 1.sp, fontFamily = ff),
+            )
+            BasicTextField(
+                value = text,
+                onValueChange = { text = it },
+                singleLine = true,
+                textStyle = TextStyle(color = palette.text, fontSize = 20.sp, fontFamily = ff),
+                cursorBrush = SolidColor(palette.accent),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { if (text.isNotBlank()) onSave(text) }),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester)
+                    .padding(vertical = 6.dp),
+                decorationBox = { inner ->
+                    if (text.isEmpty()) {
+                        BasicText(
+                            text = "e.g. bank",
+                            style = TextStyle(color = palette.muted, fontSize = 20.sp, fontFamily = ff),
+                        )
+                    }
+                    inner()
+                },
+            )
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(palette.muted.copy(alpha = 0.25f)),
+            )
+            BasicText(
+                text = "“${text.trim().lowercase().ifEmpty { "…" }}” will open ${app.label.lowercase()}",
+                modifier = Modifier.padding(top = 10.dp),
+                style = TextStyle(color = palette.muted, fontSize = 13.sp, fontFamily = ff),
+            )
+        }
     }
 }
 

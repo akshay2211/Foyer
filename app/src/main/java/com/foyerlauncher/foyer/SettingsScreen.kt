@@ -129,6 +129,15 @@ fun SettingsScreen(store: LauncherStore, onClose: () -> Unit) {
             }
         }
 
+        if (store.aliases.isNotEmpty()) {
+            ChoiceLabel("aliases")
+            store.aliases.entries.sortedBy { it.key }.forEach { (alias, key) ->
+                SettingRow("“$alias” → ${key.substringBefore('/').substringAfterLast('.')}", "remove") {
+                    store.removeAlias(alias)
+                }
+            }
+        }
+
         ChoiceLabel("font")
         Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
             FontChoice.entries.forEach { choice ->

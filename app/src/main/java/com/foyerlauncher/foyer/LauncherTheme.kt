@@ -54,7 +54,7 @@ private val LightBase = Palette(
 )
 
 private val DarkBase = Palette(
-    background = Color(0xFF000000),
+    background = Color(0xFF050506),
     text = Color(0xFFEDEDED),
     muted = Color(0xFF6A6A6A),
     accent = Color(0xFFEDEDED),
