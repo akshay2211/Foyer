@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="432" height="432">
+  <!-- Adaptive icon foreground layer: deconstructed geometric "F"
+       (transparent background, 66dp safe zone respected) -->
+  <g stroke="#FFF" stroke-width="4.5" fill="none">
+    <path d="M44.5,33 H71"/>
+    <path d="M66,49 H40.25 V77"/>
+  </g>
+</svg>

@@ -1,5 +1,7 @@
 package com.foyerlauncher.foyer
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -58,10 +60,22 @@ fun SettingsScreen(store: LauncherStore, onClose: () -> Unit) {
         }
 
         BasicText(
-            text = "un",
+            text = "foyer",
             modifier = Modifier.padding(top = 20.dp, bottom = 36.dp),
             style = TextStyle(color = palette.text, fontSize = 64.sp, fontWeight = FontWeight.Thin, fontFamily = ff),
         )
+
+        // Re-entry point for the onboarding prompt, visible only while another
+        // launcher is the default home.
+        var isDefault by remember { mutableStateOf(isDefaultLauncher(context)) }
+        val roleRequest = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            isDefault = isDefaultLauncher(context)
+        }
+        if (!isDefault) {
+            SettingRow("default launcher", "set foyer") {
+                runCatching { roleRequest.launch(defaultLauncherIntent(context)) }
+            }
+        }
 
         SettingRow("theme", store.themeMode.label) { store.cycleTheme() }
 
@@ -128,10 +142,18 @@ fun SettingsScreen(store: LauncherStore, onClose: () -> Unit) {
             }
         }
 
+        // Leaves the app — the ↗ marks it as the device's settings, not foyer's.
+        BasicText(
+            text = "android settings ↗",
+            modifier = Modifier
+                .padding(top = 30.dp)
+                .clickable { openSettings(context) },
+            style = TextStyle(color = palette.text, fontSize = 22.sp, fontFamily = ff),
+        )
         BasicText(
             text = "about",
             modifier = Modifier
-                .padding(top = 30.dp)
+                .padding(top = 22.dp)
                 .clickable { openAppInfo(context, context.packageName) },
             style = TextStyle(color = palette.text, fontSize = 22.sp, fontFamily = ff),
         )

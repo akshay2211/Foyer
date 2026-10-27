@@ -2,7 +2,11 @@ package com.foyerlauncher.foyer
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.LauncherApps
 import android.os.Build
+import android.os.Process
+import android.os.UserHandle
+import android.os.UserManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -45,6 +49,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -52,7 +57,6 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -71,8 +75,11 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
@@ -87,11 +94,17 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
 
-/** A launchable app: just what we need to show a name and start it. */
+/**
+ * A launchable app: just what we need to show a name and start it. [userSerial]
+ * identifies which profile the app lives in: 0 = the launcher's own (personal)
+ * profile, otherwise the work/private profile's stable serial number — the same
+ * package can be installed in both, and they are distinct entries.
+ */
 data class AppEntry(
     val label: String,
     val packageName: String,
     val activityName: String,
+    val userSerial: Long = 0L,
 ) {
     /**
      * Android's declared app category (ApplicationInfo.CATEGORY_*), or -1 if
@@ -102,21 +115,33 @@ data class AppEntry(
     var category: Int = -1
 }
 
+/**
+ * Enumerates launchable apps across *all* profiles (personal + work + private
+ * space) via [LauncherApps] — plain PackageManager queries only see the personal
+ * profile. Locked/quiet profiles simply don't return activities, so their apps
+ * disappear while paused, which is the system-consistent behavior.
+ */
 fun loadLaunchableApps(context: Context): List<AppEntry> {
-    val pm = context.packageManager
-    val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+    val la = context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as LauncherApps
+    val um = context.getSystemService(Context.USER_SERVICE) as UserManager
     val self = context.packageName
-    return pm.queryIntentActivities(intent, 0)
-        .mapNotNull { ri ->
-            val ai = ri.activityInfo ?: return@mapNotNull null
-            if (ai.packageName == self) return@mapNotNull null
-            val label = ri.loadLabel(pm).toString().trim()
+    val me = Process.myUserHandle()
+    return um.userProfiles.flatMap { user ->
+        val serial = if (user == me) 0L else um.getSerialNumberForUser(user)
+        la.getActivityList(null, user).mapNotNull { ai ->
+            if (ai.applicationInfo.packageName == self) return@mapNotNull null
+            val label = ai.label.toString().trim()
             if (label.isEmpty()) return@mapNotNull null
-            AppEntry(label = label, packageName = ai.packageName, activityName = ai.name).also {
+            AppEntry(
+                label = label,
+                packageName = ai.componentName.packageName,
+                activityName = ai.componentName.className,
+                userSerial = serial,
+            ).also {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) it.category = ai.applicationInfo.category
             }
         }
-        .sortedBy { it.label.lowercase() }
+    }.sortedBy { it.label.lowercase() }
 }
 
 private fun sectionOf(label: String): Char {
@@ -129,8 +154,29 @@ fun LauncherScreen(store: LauncherStore) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    val apps by produceState(initialValue = emptyList<AppEntry>(), context) {
-        value = withContext(Dispatchers.IO) { loadLaunchableApps(context) }
+    var apps by remember { mutableStateOf(emptyList<AppEntry>()) }
+    // Load once, then keep in sync with installs/uninstalls/profile changes in
+    // any profile; on removal also drop the app's stored state (favorites etc).
+    DisposableEffect(Unit) {
+        fun reload() {
+            scope.launch { apps = withContext(Dispatchers.IO) { loadLaunchableApps(context) } }
+        }
+        reload()
+        val la = context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as LauncherApps
+        val um = context.getSystemService(Context.USER_SERVICE) as UserManager
+        val callback = object : LauncherApps.Callback() {
+            override fun onPackageRemoved(packageName: String, user: UserHandle) {
+                val serial = if (user == Process.myUserHandle()) 0L else um.getSerialNumberForUser(user)
+                store.pruneApp(packageName, serial)
+                reload()
+            }
+            override fun onPackageAdded(packageName: String, user: UserHandle) = reload()
+            override fun onPackageChanged(packageName: String, user: UserHandle) = reload()
+            override fun onPackagesAvailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) = reload()
+            override fun onPackagesUnavailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) = reload()
+        }
+        la.registerCallback(callback)
+        onDispose { la.unregisterCallback(callback) }
     }
 
     // Page 0 = app drawer (to the left), page 1 = home (start here). Swiping
@@ -208,11 +254,13 @@ fun LauncherScreen(store: LauncherStore) {
                 canAdd = store.favorites.size < MAX_FAVORITES,
                 isHidden = store.isHidden(app),
                 isDistracting = store.isDistracting(app),
+                canUninstall = remember(app) { canUninstall(context, app) },
                 onAdd = { store.addFavorite(app); menuApp = null },
                 onRemove = { store.removeFavorite(app); menuApp = null },
                 onToggleHide = { store.toggleHidden(app); menuApp = null },
                 onToggleDistracting = { store.toggleDistracting(app); menuApp = null },
                 onAppInfo = { openAppInfo(context, app.packageName); menuApp = null },
+                onUninstall = { requestUninstall(context, app); menuApp = null },
                 onDismiss = { menuApp = null },
             )
         }
@@ -250,6 +298,11 @@ fun LauncherScreen(store: LauncherStore) {
                 onOpen = { store.recordLaunch(app); launchApp(context, app); guardApp = null },
                 onDismiss = { guardApp = null },
             )
+        }
+
+        // First launch only: pitch + default-launcher prompt, above everything.
+        if (!store.onboarded) {
+            OnboardingScreen(onDone = { store.markOnboarded() })
         }
     }
 }
@@ -758,7 +811,13 @@ private fun AppRow(
     val palette = LocalPalette.current
     val ff = LocalFontFamily.current
     BasicText(
-        text = app.label.lowercase(),
+        text = buildAnnotatedString {
+            append(app.label.lowercase())
+            // Same app can exist in two profiles; mark the work/private copy.
+            if (app.userSerial != 0L) {
+                withStyle(SpanStyle(color = palette.muted, fontSize = 13.sp)) { append("  · work") }
+            }
+        },
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(
@@ -1015,11 +1074,13 @@ private fun AppActionMenu(
     canAdd: Boolean,
     isHidden: Boolean,
     isDistracting: Boolean,
+    canUninstall: Boolean,
     onAdd: () -> Unit,
     onRemove: () -> Unit,
     onToggleHide: () -> Unit,
     onToggleDistracting: () -> Unit,
     onAppInfo: () -> Unit,
+    onUninstall: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val palette = LocalPalette.current
@@ -1042,6 +1103,7 @@ private fun AppActionMenu(
             MenuRow(if (isHidden) "unhide app" else "hide app", onToggleHide)
             MenuRow(if (isDistracting) "unmark distracting" else "mark distracting", onToggleDistracting)
             MenuRow("app info", onAppInfo)
+            if (canUninstall) MenuRow("uninstall", onUninstall)
         }
     }
 }

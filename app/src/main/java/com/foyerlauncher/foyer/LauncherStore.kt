@@ -1,9 +1,13 @@
 package com.foyerlauncher.foyer
 
 import android.app.SearchManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
+import android.content.pm.LauncherApps
 import android.net.Uri
+import android.os.UserManager
 import android.provider.AlarmClock
 import android.provider.MediaStore
 import android.provider.Settings
@@ -46,6 +50,7 @@ private val DEFAULT_DISTRACTING = setOf(
     "com.snapchat.android",
     "com.facebook.orca", // Messenger
 )
+private const val KEY_ONBOARDED = "onboarded"
 private const val KEY_THEME = "theme_mode"
 private const val KEY_ACCENT = "accent"
 private const val KEY_FONT = "font"
@@ -62,19 +67,37 @@ private const val KEY_HF_TOKEN = "hf_token"
 private const val DEFAULT_GEMMA_URL =
     "https://huggingface.co/litert-community/Gemma3-1B-IT/resolve/main/gemma3-1b-it-int4.task"
 
-/** Stable identity for an app across sessions. */
-val AppEntry.key: String get() = "$packageName/$activityName"
+/**
+ * Stable identity for an app across sessions. Personal-profile apps keep the
+ * historical two-part form so pre-existing prefs stay valid; other profiles
+ * append their user serial ('/' never appears in package or class names).
+ */
+val AppEntry.key: String
+    get() = if (userSerial == 0L) "$packageName/$activityName" else "$packageName/$activityName/$userSerial"
+
+/** True if a stored [AppEntry.key] belongs to [packageName] in profile [userSerial]. */
+private fun keyMatches(key: String, packageName: String, userSerial: Long): Boolean {
+    if (!key.startsWith("$packageName/")) return false
+    val serialPart = key.substringAfter('/').substringAfter('/', missingDelimiterValue = "")
+    return if (userSerial == 0L) serialPart.isEmpty() else serialPart == userSerial.toString()
+}
 
 // Field/record separators that will never appear in a package or label.
 private const val UNIT_SEP = '\u001F'
 private const val REC_SEP = "\u001E"
 
-private fun AppEntry.encode(): String = "$label$UNIT_SEP$packageName$UNIT_SEP$activityName"
+private fun AppEntry.encode(): String =
+    "$label$UNIT_SEP$packageName$UNIT_SEP$activityName" +
+        if (userSerial != 0L) "$UNIT_SEP$userSerial" else ""
 
 private fun decodeApp(raw: String?): AppEntry? {
     if (raw.isNullOrBlank()) return null
     val parts = raw.split(UNIT_SEP)
-    return if (parts.size == 3) AppEntry(parts[0], parts[1], parts[2]) else null
+    return when (parts.size) {
+        3 -> AppEntry(parts[0], parts[1], parts[2])
+        4 -> AppEntry(parts[0], parts[1], parts[2], parts[3].toLongOrNull() ?: 0L)
+        else -> null
+    }
 }
 
 /**
@@ -102,6 +125,15 @@ class LauncherStore(private val context: Context) {
 
     var showClock by mutableStateOf(prefs.getBoolean(KEY_CLOCK, true))
         private set
+
+    /** First-run onboarding (pitch + default-launcher prompt) shown exactly once. */
+    var onboarded by mutableStateOf(prefs.getBoolean(KEY_ONBOARDED, false))
+        private set
+
+    fun markOnboarded() {
+        onboarded = true
+        prefs.edit { putBoolean(KEY_ONBOARDED, true) }
+    }
 
     var themeMode by mutableStateOf(enumFromPrefs(KEY_THEME, ThemeMode.SYSTEM))
         private set
@@ -303,6 +335,38 @@ class LauncherStore(private val context: Context) {
     private fun persistFavorites() {
         prefs.edit { putString(KEY_FAVS, favorites.joinToString(REC_SEP) { it.encode() }) }
     }
+
+    /**
+     * Drops all stored state for a package that was uninstalled from profile
+     * [userSerial], so favorites/hidden/usage don't accumulate ghosts. The
+     * package-only distracting list is touched only for the personal profile.
+     */
+    fun pruneApp(packageName: String, userSerial: Long = 0L) {
+        if (favorites.removeAll { it.packageName == packageName && it.userSerial == userSerial }) {
+            persistFavorites()
+        }
+        if (hidden.removeAll { keyMatches(it, packageName, userSerial) }) {
+            prefs.edit { putString(KEY_HIDDEN, hidden.joinToString(REC_SEP)) }
+        }
+        val staleUsage = usage.keys.filter { keyMatches(it, packageName, userSerial) }
+        if (staleUsage.isNotEmpty()) {
+            staleUsage.forEach { usage.remove(it) }
+            prefs.edit {
+                putString(KEY_USAGE, usage.entries.joinToString(REC_SEP) { "${it.key}$UNIT_SEP${it.value}" })
+            }
+        }
+        if (userSerial == 0L && distracting.remove(packageName)) {
+            prefs.edit { putString(KEY_DISTRACTING, distracting.joinToString(REC_SEP)) }
+        }
+        if (leftShortcut?.packageName == packageName && leftShortcut?.userSerial == userSerial) {
+            leftShortcut = resolveAsLauncher(context, Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA), "camera")
+            prefs.edit { remove(KEY_LEFT) }
+        }
+        if (rightShortcut?.packageName == packageName && rightShortcut?.userSerial == userSerial) {
+            rightShortcut = resolveAsLauncher(context, Intent(Intent.ACTION_DIAL), "phone")
+            prefs.edit { remove(KEY_RIGHT) }
+        }
+    }
 }
 
 enum class ShortcutSide { LEFT, RIGHT }
@@ -318,11 +382,45 @@ fun rememberLauncherStore(): LauncherStore {
 // ---- Intent helpers -------------------------------------------------------
 
 fun launchApp(context: Context, app: AppEntry) {
+    // Apps in another profile (work / private space) must be started through
+    // LauncherApps so they open as *that* profile's copy.
+    if (app.userSerial != 0L) {
+        runCatching {
+            val um = context.getSystemService(Context.USER_SERVICE) as UserManager
+            val user = um.getUserForSerialNumber(app.userSerial) ?: return
+            val la = context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as LauncherApps
+            la.startMainActivity(ComponentName(app.packageName, app.activityName), user, null, null)
+        }
+        return
+    }
     val intent = Intent(Intent.ACTION_MAIN)
         .addCategory(Intent.CATEGORY_LAUNCHER)
         .setClassName(app.packageName, app.activityName)
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
     runCatching { context.startActivity(intent) }
+}
+
+/**
+ * Whether the long-press menu should offer uninstall: personal-profile,
+ * non-system apps only (system apps can't be uninstalled, and other profiles'
+ * apps are managed from within that profile).
+ */
+fun canUninstall(context: Context, app: AppEntry): Boolean {
+    if (app.userSerial != 0L) return false
+    return runCatching {
+        val ai = context.packageManager.getApplicationInfo(app.packageName, 0)
+        ai.flags and ApplicationInfo.FLAG_SYSTEM == 0
+    }.getOrDefault(false)
+}
+
+/** Fires the system uninstall confirmation for [app]; the OS does the rest. */
+fun requestUninstall(context: Context, app: AppEntry) {
+    runCatching {
+        context.startActivity(
+            Intent(Intent.ACTION_DELETE, Uri.fromParts("package", app.packageName, null))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    }
 }
 
 fun openSettings(context: Context) {

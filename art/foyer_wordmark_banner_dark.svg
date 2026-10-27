@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1188 318" width="1188" height="318">
+  <!-- FOYER wordmark banner: white on brand dark, matches launcher icon palette -->
+  <rect width="1188" height="318" fill="#131313"/>
+  <g stroke="#FFFFFF" stroke-width="14" fill="none">
+    <path d="M38,52 H196"/>
+    <path d="M196,158 L45,158 L45,264"/>
+    <circle cx="342" cy="158" r="106"/>
+    <path d="M505,52 L568,115"/>
+    <path d="M670,52 L585,158 L585,264"/>
+    <path d="M735,52 H895"/>
+    <path d="M895,158 L742,158 L742,264 L895,264"/>
+    <path d="M965,52 L1068,52 A53,53 0 0 1 1068,158 L972,158 L972,264"/>
+    <path d="M1028,158 L1138,264"/>
+  </g>
+</svg>
