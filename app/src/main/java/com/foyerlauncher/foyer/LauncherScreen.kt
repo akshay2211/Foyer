@@ -316,21 +316,14 @@ private fun DistractionNudge(
 ) {
     val palette = LocalPalette.current
     val ff = LocalFontFamily.current
-    Scrim(onDismiss) {
-        MenuCard {
-            BasicText(
-                text = "${app.label.lowercase()} · ${formatDuration(usedMs)} today",
-                modifier = Modifier.padding(bottom = 10.dp),
-                style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = 1.sp, fontFamily = ff),
-            )
-            BasicText(
-                text = "you've already spent a while here today. open anyway?",
-                modifier = Modifier.padding(bottom = 16.dp),
-                style = TextStyle(color = palette.text, fontSize = 20.sp, fontFamily = ff),
-            )
-            MenuRow("not now", onDismiss)
-            MenuRow("open anyway", onOpen)
-        }
+    FoyerSheet(title = "${app.label.lowercase()} · ${formatDuration(usedMs)} today", onDismiss = onDismiss) {
+        BasicText(
+            text = "you've already spent a while here today. open anyway?",
+            modifier = Modifier.padding(top = 6.dp, bottom = 10.dp),
+            style = TextStyle(color = palette.text, fontSize = 20.sp, fontFamily = ff),
+        )
+        SheetRow("not now", onClick = onDismiss)
+        SheetRow("open anyway", onClick = onOpen)
     }
 }
 
@@ -1043,6 +1036,7 @@ private fun BoxScope.MenuCard(content: @Composable ColumnScope.() -> Unit) {
             .align(Alignment.Center)
             .fillMaxWidth(0.82f)
             .clip(RoundedCornerShape(22.dp))
+            .border(1.dp, palette.muted.copy(alpha = 0.6f), RoundedCornerShape(22.dp))
             .background(palette.background)
             // Swallow taps so touching the card doesn't dismiss via the scrim.
             .clickable(
@@ -1083,28 +1077,20 @@ private fun AppActionMenu(
     onUninstall: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val palette = LocalPalette.current
-    Scrim(onDismiss) {
-        MenuCard {
-            BasicText(
-                text = app.label,
-                modifier = Modifier.padding(bottom = 6.dp),
-                style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = 1.sp),
-            )
-            when {
-                isFavorite -> MenuRow("remove from home", onRemove)
-                canAdd -> MenuRow("add to home", onAdd)
-                else -> BasicText(
-                    text = "home is full (max $MAX_FAVORITES)",
-                    modifier = Modifier.padding(vertical = 14.dp),
-                    style = TextStyle(color = palette.muted, fontSize = 18.sp),
-                )
-            }
-            MenuRow(if (isHidden) "unhide app" else "hide app", onToggleHide)
-            MenuRow(if (isDistracting) "unmark distracting" else "mark distracting", onToggleDistracting)
-            MenuRow("app info", onAppInfo)
-            if (canUninstall) MenuRow("uninstall", onUninstall)
+    FoyerSheet(title = app.label.lowercase(), onDismiss = onDismiss) {
+        when {
+            isFavorite -> SheetRow("remove from home", active = true, onClick = onRemove)
+            canAdd -> SheetRow("add to home", onClick = onAdd)
+            else -> SheetNote("home is full (max $MAX_FAVORITES)")
         }
+        SheetRow(if (isHidden) "unhide app" else "hide app", active = isHidden, onClick = onToggleHide)
+        SheetRow(
+            if (isDistracting) "unmark distracting" else "mark distracting",
+            active = isDistracting,
+            onClick = onToggleDistracting,
+        )
+        SheetRow("app info", onClick = onAppInfo)
+        if (canUninstall) SheetRow("uninstall", onClick = onUninstall)
     }
 }
 
@@ -1115,17 +1101,9 @@ private fun HomeMenu(
     onOpenSettings: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val palette = LocalPalette.current
-    Scrim(onDismiss) {
-        MenuCard {
-            BasicText(
-                text = "home",
-                modifier = Modifier.padding(bottom = 6.dp),
-                style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = 1.sp),
-            )
-            MenuRow(if (showClock) "hide clock" else "show clock", onToggleClock)
-            MenuRow("settings", onOpenSettings)
-        }
+    FoyerSheet(title = "home", onDismiss = onDismiss) {
+        SheetRow(if (showClock) "hide clock" else "show clock", active = showClock, onClick = onToggleClock)
+        SheetRow("settings", onClick = onOpenSettings)
     }
 }
 
@@ -1137,36 +1115,17 @@ private fun AppPicker(
     onDismiss: () -> Unit,
 ) {
     val palette = LocalPalette.current
-    Scrim(onDismiss) {
-        Column(
-            modifier = Modifier
-                .align(Alignment.Center)
-                .fillMaxWidth(0.86f)
-                .fillMaxHeight(0.72f)
-                .clip(RoundedCornerShape(22.dp))
-                .background(palette.background)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                ) {}
-                .padding(horizontal = 20.dp, vertical = 18.dp),
-        ) {
-            BasicText(
-                text = "choose ${side.name.lowercase()} shortcut",
-                modifier = Modifier.padding(bottom = 10.dp),
-                style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = 1.sp),
-            )
-            LazyColumn(Modifier.weight(1f)) {
-                items(apps, key = { it.packageName + "/" + it.activityName }) { app ->
-                    BasicText(
-                        text = app.label,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onPick(app) }
-                            .padding(vertical = 12.dp),
-                        style = TextStyle(color = palette.text, fontSize = 18.sp),
-                    )
-                }
+    FoyerSheet(title = "choose ${side.name.lowercase()} shortcut", onDismiss = onDismiss) {
+        LazyColumn(Modifier.fillMaxHeight(0.62f)) {
+            items(apps, key = { it.key }) { app ->
+                BasicText(
+                    text = app.label,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onPick(app) }
+                        .padding(vertical = 12.dp),
+                    style = TextStyle(color = palette.text, fontSize = 18.sp),
+                )
             }
         }
     }
