@@ -195,9 +195,10 @@ fun LauncherScreen(store: LauncherStore) {
     var showVoice by remember { mutableStateOf(false) }
     var guardApp by remember { mutableStateOf<AppEntry?>(null) }
     var aliasApp by remember { mutableStateOf<AppEntry?>(null) }
+    var showUsage by remember { mutableStateOf(false) }
 
     val overlayOpen = menuApp != null || pickerTarget != null || showHomeMenu ||
-        showSettings || showVoice || guardApp != null || aliasApp != null
+        showSettings || showVoice || guardApp != null || aliasApp != null || showUsage
     BackHandler(enabled = overlayOpen) {
         menuApp = null
         pickerTarget = null
@@ -206,6 +207,7 @@ fun LauncherScreen(store: LauncherStore) {
         showVoice = false
         guardApp = null
         aliasApp = null
+        showUsage = false
     }
 
     // Launch, but pause on time-sinks that are already over today's limit.
@@ -257,6 +259,7 @@ fun LauncherScreen(store: LauncherStore) {
                         onSwipeUp = { runGestureAction(context, store.swipeUpAction, gestureUi) },
                         onSwipeDown = { runGestureAction(context, store.swipeDownAction, gestureUi) },
                         onDoubleTap = { runGestureAction(context, store.doubleTapAction, gestureUi) },
+                        onOpenUsage = { showUsage = true },
                     )
                 }
             }
@@ -326,6 +329,10 @@ fun LauncherScreen(store: LauncherStore) {
             )
         }
 
+        if (showUsage) {
+            UsageSummaryScreen(apps = apps, store = store, onClose = { showUsage = false })
+        }
+
         // First launch only: pitch + default-launcher prompt, above everything.
         if (!store.onboarded) {
             OnboardingScreen(onDone = { store.markOnboarded() })
@@ -367,6 +374,7 @@ private fun HomePage(
     onSwipeUp: () -> Unit,
     onSwipeDown: () -> Unit,
     onDoubleTap: () -> Unit,
+    onOpenUsage: () -> Unit,
 ) {
     val context = LocalContext.current
     val palette = LocalPalette.current
@@ -420,7 +428,9 @@ private fun HomePage(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .padding(start = 28.dp, top = 152.dp)
-                .clickable { if (!hasUsage) UsageTracker.openAccessSettings(context) },
+                .clickable(onClickLabel = if (hasUsage) "open screen time summary" else "grant usage access") {
+                    if (hasUsage) onOpenUsage() else UsageTracker.openAccessSettings(context)
+                },
             style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = 1.sp, fontFamily = ff),
         )
 
