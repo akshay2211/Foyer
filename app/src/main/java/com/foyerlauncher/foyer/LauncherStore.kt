@@ -68,12 +68,12 @@ private const val KEY_BACKEND = "ai_backend"
 private const val KEY_MODEL_URL = "gemma_url"
 private const val KEY_HF_TOKEN = "hf_token"
 
-// Default download source. For customers this should be a PUBLIC, non-gated URL
-// you host yourself (GitHub Release / CDN / your own public HF repo) so no token
-// or license click is ever needed — the app-publisher accepts Gemma's license
-// once and redistributes. The gated litert-community URL below is only a
-// dev-time fallback (needs a token). The optional token field covers gated URLs.
-private const val DEFAULT_GEMMA_URL =
+// Product decision (2026-10-28): Foyer never ships or hosts a model — users
+// bring their own third-party model; we only make setup easy. This is a
+// known-good *suggestion* the user can one-tap fill, but fetching it is their
+// action under the model's own license (gated: needs the HF license click +
+// a classic read token).
+const val SUGGESTED_GEMMA_URL =
     "https://huggingface.co/litert-community/Gemma3-1B-IT/resolve/main/gemma3-1b-it-int4.task"
 
 /**
@@ -187,7 +187,8 @@ class LauncherStore(private val context: Context) {
     /** Which brain answers: Gemini Nano (AICore) or a downloaded Gemma. */
     var activeBackend by mutableStateOf(enumFromPrefs(KEY_BACKEND, Backend.NANO))
         private set
-    var gemmaModelUrl by mutableStateOf(prefs.getString(KEY_MODEL_URL, DEFAULT_GEMMA_URL) ?: DEFAULT_GEMMA_URL)
+    // Empty until the user supplies a model URL — Foyer bundles no model.
+    var gemmaModelUrl by mutableStateOf(prefs.getString(KEY_MODEL_URL, "") ?: "")
         private set
     // Optional — only needed for gated URLs. Empty for a public/self-hosted model.
     var hfToken by mutableStateOf(prefs.getString(KEY_HF_TOKEN, "") ?: "")
@@ -209,11 +210,6 @@ class LauncherStore(private val context: Context) {
         private set
 
     fun modelDownloaded(): Boolean = gemmaModelFile(context).exists()
-
-    /** True while the default (recommended) model URL is selected. */
-    val usingPresetModel: Boolean get() = gemmaModelUrl == DEFAULT_GEMMA_URL
-
-    fun usePresetModel() = setModelUrl(DEFAULT_GEMMA_URL)
 
     /**
      * Loads the downloaded model and runs a one-word prompt so setup ends with
@@ -250,6 +246,10 @@ class LauncherStore(private val context: Context) {
 
     suspend fun downloadModel() {
         if (isDownloading) return
+        if (gemmaModelUrl.isBlank()) {
+            downloadError = "paste a model url first"
+            return
+        }
         // Storage pre-check: the recommended model is ~555 MB; demand headroom
         // so the download can't wedge the phone into a low-storage state.
         val free = android.os.StatFs(context.filesDir.path).availableBytes

@@ -68,17 +68,19 @@ fun AiGuideScreen(onClose: () -> Unit) {
                 "nano is google's gemini nano, built into some phones (pixel 8 and later, " +
                     "recent galaxy flagships) via aicore. nothing to download — if your " +
                     "phone has it, it just works.\n\n" +
-                    "gemma is an open model that foyer downloads once (~555 mb) and runs " +
-                    "itself. it works on any reasonably modern phone (android 7+, 4 gb+ ram) " +
-                    "— this is the right choice when nano says “not available”.",
+                    "gemma is an open model you bring yourself and foyer runs locally. " +
+                    "it works on any reasonably modern phone (android 7+, 4 gb+ ram) — " +
+                    "this is the right choice when nano says “not available”.",
             )
             Section(
                 "bring your own model",
-                "under “model”, switch from the recommended gemma to “custom url” and " +
-                    "paste a direct link to any mediapipe .task model file. the default " +
-                    "needs no token or sign-in. gated hugging face models additionally " +
-                    "need the license accepted on their page plus a classic read token " +
-                    "(fine-grained tokens fail with a 401).",
+                "foyer ships no model and hosts no downloads — you choose one and foyer " +
+                    "sets it up. paste a direct link to any mediapipe .task model file " +
+                    "under “model url” (the suggestion button fills a known-good gemma 3 " +
+                    "1b link). models you fetch are under their own licenses: gated " +
+                    "hugging face models need the license accepted on their page plus a " +
+                    "classic read token (fine-grained tokens fail with a 401). public, " +
+                    "non-gated .task files need nothing.",
             )
             Section(
                 "troubleshooting",

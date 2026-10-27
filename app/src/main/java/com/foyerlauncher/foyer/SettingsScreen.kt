@@ -166,23 +166,20 @@ fun SettingsScreen(store: LauncherStore, onClose: () -> Unit) {
                         ModelNote("downloading… $pct%  (${mb(store.downloadedBytes)} / ${mb(store.totalBytes)})")
                     }
                     else -> {
-                        // Step 1: pick a model. The recommended preset needs no
-                        // token and no decisions; custom is for the adventurous.
-                        SettingRow(
-                            "model",
-                            if (store.usingPresetModel) "gemma 3 1b · ~555 mb" else "custom url",
-                        ) {
-                            if (store.usingPresetModel) store.setModelUrl("") else store.usePresetModel()
+                        // Foyer ships no model (user decision, 2026-10-28): the
+                        // user brings a third-party .task model; we only make
+                        // the setup easy — paste a URL, or one-tap a suggestion.
+                        ModelNote("foyer includes no model — bring your own: paste a direct link to a mediapipe .task file")
+                        ModelUrlField(store)
+                        ModelTokenField(store)
+                        if (store.gemmaModelUrl.isBlank()) {
+                            Box(Modifier.padding(top = 10.dp)) {
+                                ActionButton("suggest: gemma 3 1b · ~555 mb") { store.setModelUrl(SUGGESTED_GEMMA_URL) }
+                            }
+                            ModelNote("gated model — accept its license on hugging face and set a classic read token")
                         }
-                        if (store.usingPresetModel) {
-                            ModelNote("recommended · no token or account needed")
-                        } else {
-                            ModelNote("paste a direct link to a mediapipe .task file")
-                            ModelUrlField(store)
-                            ModelTokenField(store)
-                        }
-                        // Step 2: download (storage is pre-checked), then a
-                        // self-test proves the model answers.
+                        // Download (storage is pre-checked), then a self-test
+                        // proves the model answers.
                         Box(Modifier.padding(vertical = 10.dp)) {
                             ActionButton("download & set up") { scope.launch { store.downloadModel() } }
                         }
@@ -381,15 +378,14 @@ private fun ModelNote(text: String) {
 private fun ModelUrlField(store: LauncherStore) {
     val palette = LocalPalette.current
     val ff = LocalFontFamily.current
-    var url by remember { mutableStateOf(store.gemmaModelUrl) }
     Column(Modifier.padding(top = 8.dp)) {
         BasicText(
             text = "model url",
             style = TextStyle(color = palette.muted, fontSize = 11.sp, letterSpacing = 1.sp, fontFamily = ff),
         )
         BasicTextField(
-            value = url,
-            onValueChange = { url = it; store.setModelUrl(it) },
+            value = store.gemmaModelUrl,
+            onValueChange = { store.setModelUrl(it) },
             singleLine = true,
             textStyle = TextStyle(color = palette.text, fontSize = 13.sp, fontFamily = ff),
             cursorBrush = SolidColor(palette.accent),
