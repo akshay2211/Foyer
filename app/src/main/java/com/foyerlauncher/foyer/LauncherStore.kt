@@ -23,9 +23,14 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.edit
+import org.json.JSONArray
+import org.json.JSONObject
 
 /** Most favorites we allow pinned on the home screen. */
 const val MAX_FAVORITES = 10
+
+/** Schema version of the settings backup JSON (#11). */
+const val BACKUP_VERSION = 1
 
 private const val PREFS = "launcher_prefs"
 private const val KEY_FAVS = "favorites"
@@ -396,6 +401,109 @@ class LauncherStore(private val context: Context) {
     private fun persistFavorites() {
         prefs.edit { putString(KEY_FAVS, favorites.joinToString(REC_SEP) { it.encode() }) }
     }
+
+    // ---- Backup (user-controlled file, no server, no accounts; see #11) ----
+
+    /** Everything restorable as versioned JSON. Deliberately excludes the HF token. */
+    fun exportBackup(): String = JSONObject().apply {
+        put("app", "foyer")
+        put("version", BACKUP_VERSION)
+        put("favorites", JSONArray(favorites.map { it.encode() }))
+        put("hidden", JSONArray(hidden.toList()))
+        put("distracting", JSONArray(distracting.toList()))
+        put("aliases", JSONObject(aliases.toMap() as Map<*, *>))
+        put("showClock", showClock)
+        put("theme", themeMode.name)
+        put("accent", accent.name)
+        put("font", font.name)
+        put("aiEnabled", aiEnabled)
+        put("backend", activeBackend.name)
+        put("modelUrl", gemmaModelUrl)
+        put("swipeUp", swipeUpAction.name)
+        put("swipeDown", swipeDownAction.name)
+        put("doubleTap", doubleTapAction.name)
+        leftShortcut?.let { put("leftShortcut", it.encode()) }
+        rightShortcut?.let { put("rightShortcut", it.encode()) }
+    }.toString(2)
+
+    /** What an import would restore — shown for confirmation before [applyBackup]. */
+    data class BackupSummary(
+        val favorites: Int,
+        val hidden: Int,
+        val distracting: Int,
+        val aliases: Int,
+        internal val json: JSONObject,
+    )
+
+    fun parseBackup(raw: String): Result<BackupSummary> = runCatching {
+        val o = JSONObject(raw)
+        require(o.optString("app") == "foyer") { "not a foyer backup file" }
+        require(o.optInt("version", Int.MAX_VALUE) <= BACKUP_VERSION) {
+            "backup from a newer foyer — update the app first"
+        }
+        BackupSummary(
+            favorites = o.optJSONArray("favorites")?.length() ?: 0,
+            hidden = o.optJSONArray("hidden")?.length() ?: 0,
+            distracting = o.optJSONArray("distracting")?.length() ?: 0,
+            aliases = o.optJSONObject("aliases")?.length() ?: 0,
+            json = o,
+        )
+    }
+
+    fun applyBackup(summary: BackupSummary) {
+        val o = summary.json
+        o.optJSONArray("favorites")?.let { arr ->
+            favorites.clear()
+            (0 until arr.length()).mapNotNull { decodeApp(arr.optString(it)) }.let { favorites.addAll(it) }
+            persistFavorites()
+        }
+        o.optJSONArray("hidden")?.let { arr ->
+            hidden.clear()
+            (0 until arr.length()).mapNotNull { arr.optString(it).ifBlank { null } }.let { hidden.addAll(it) }
+            prefs.edit { putString(KEY_HIDDEN, hidden.joinToString(REC_SEP)) }
+        }
+        o.optJSONArray("distracting")?.let { arr ->
+            distracting.clear()
+            (0 until arr.length()).mapNotNull { arr.optString(it).ifBlank { null } }.let { distracting.addAll(it) }
+            prefs.edit { putString(KEY_DISTRACTING, distracting.joinToString(REC_SEP)) }
+        }
+        o.optJSONObject("aliases")?.let { obj ->
+            aliases.clear()
+            obj.keys().forEach { k -> aliases[k] = obj.optString(k) }
+            persistAliases()
+        }
+        if (o.has("showClock")) {
+            showClock = o.optBoolean("showClock", true)
+            prefs.edit { putBoolean(KEY_CLOCK, showClock) }
+        }
+        themeMode = enumOrCurrent(o.optString("theme"), themeMode)
+        accent = enumOrCurrent(o.optString("accent"), accent)
+        font = enumOrCurrent(o.optString("font"), font)
+        swipeUpAction = enumOrCurrent(o.optString("swipeUp"), swipeUpAction)
+        swipeDownAction = enumOrCurrent(o.optString("swipeDown"), swipeDownAction)
+        doubleTapAction = enumOrCurrent(o.optString("doubleTap"), doubleTapAction)
+        if (o.has("aiEnabled")) aiEnabled = o.optBoolean("aiEnabled", aiEnabled)
+        activeBackend = enumOrCurrent(o.optString("backend"), activeBackend)
+        o.optString("modelUrl").ifBlank { null }?.let { gemmaModelUrl = it }
+        decodeApp(o.optString("leftShortcut").ifBlank { null })?.let { leftShortcut = it }
+        decodeApp(o.optString("rightShortcut").ifBlank { null })?.let { rightShortcut = it }
+        prefs.edit {
+            putString(KEY_THEME, themeMode.name)
+            putString(KEY_ACCENT, accent.name)
+            putString(KEY_FONT, font.name)
+            putString(KEY_SWIPE_UP, swipeUpAction.name)
+            putString(KEY_SWIPE_DOWN, swipeDownAction.name)
+            putString(KEY_DOUBLE_TAP, doubleTapAction.name)
+            putBoolean(KEY_AI, aiEnabled)
+            putString(KEY_BACKEND, activeBackend.name)
+            putString(KEY_MODEL_URL, gemmaModelUrl)
+            leftShortcut?.let { putString(KEY_LEFT, it.encode()) }
+            rightShortcut?.let { putString(KEY_RIGHT, it.encode()) }
+        }
+    }
+
+    private inline fun <reified T : Enum<T>> enumOrCurrent(raw: String?, current: T): T =
+        if (raw.isNullOrBlank()) current else runCatching { enumValueOf<T>(raw) }.getOrDefault(current)
 
     /**
      * Drops all stored state for a package that was uninstalled from profile

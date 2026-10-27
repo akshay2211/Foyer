@@ -44,6 +44,38 @@ fun SettingsScreen(store: LauncherStore, onClose: () -> Unit) {
     val ff = LocalFontFamily.current
     val tagStyle = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = 2.sp, fontFamily = ff)
 
+    // Backup: user-controlled file via the system picker (no server, no account).
+    var backupNote by remember { mutableStateOf<String?>(null) }
+    var importPreview by remember { mutableStateOf<LauncherStore.BackupSummary?>(null) }
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json"),
+    ) { uri ->
+        backupNote = if (uri == null) {
+            null
+        } else {
+            runCatching {
+                context.contentResolver.openOutputStream(uri)?.use { it.write(store.exportBackup().toByteArray()) }
+            }.fold({ "settings exported ✓" }, { "export failed: ${it.message}" })
+        }
+    }
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            val raw = runCatching {
+                context.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }
+            }.getOrNull()
+            if (raw == null) {
+                backupNote = "couldn't read that file"
+            } else {
+                store.parseBackup(raw)
+                    .onSuccess { importPreview = it; backupNote = null }
+                    .onFailure { backupNote = it.message }
+            }
+        }
+    }
+
+    Box(Modifier.fillMaxSize()) {
     Column(
         Modifier
             .fillMaxSize()
@@ -180,6 +212,11 @@ fun SettingsScreen(store: LauncherStore, onClose: () -> Unit) {
             }
         }
 
+        ChoiceLabel("backup")
+        SettingRow("export settings", "to a file you choose") { exportLauncher.launch("foyer-backup.json") }
+        SettingRow("import settings", "from a backup file") { importLauncher.launch(arrayOf("*/*")) }
+        backupNote?.let { ModelNote(it) }
+
         // Leaves the app — the ↗ marks it as the device's settings, not foyer's.
         BasicText(
             text = "android settings ↗",
@@ -202,6 +239,24 @@ fun SettingsScreen(store: LauncherStore, onClose: () -> Unit) {
                 .clickable { store.resetAll(); onClose() },
             style = TextStyle(color = palette.accent, fontSize = 22.sp, fontFamily = ff),
         )
+    }
+
+    // Import confirmation: show what the file restores before touching state.
+    importPreview?.let { preview ->
+        FoyerSheet(title = "restore from backup?", onDismiss = { importPreview = null }) {
+            SheetNote(
+                "restores ${preview.favorites} favorites, ${preview.hidden} hidden apps, " +
+                    "${preview.distracting} distracting marks, ${preview.aliases} aliases, " +
+                    "plus theme and gesture preferences. current settings are replaced.",
+            )
+            SheetRow("restore") {
+                store.applyBackup(preview)
+                importPreview = null
+                backupNote = "settings restored ✓"
+            }
+            SheetRow("cancel") { importPreview = null }
+        }
+    }
     }
 }
 
