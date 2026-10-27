@@ -44,6 +44,8 @@ fun SettingsScreen(store: LauncherStore, onClose: () -> Unit) {
     val ff = LocalFontFamily.current
     val tagStyle = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = 2.sp, fontFamily = ff)
 
+    var showAiGuide by remember { mutableStateOf(false) }
+
     // Backup: user-controlled file via the system picker (no server, no account).
     var backupNote by remember { mutableStateOf<String?>(null) }
     var importPreview by remember { mutableStateOf<LauncherStore.BackupSummary?>(null) }
@@ -114,37 +116,75 @@ fun SettingsScreen(store: LauncherStore, onClose: () -> Unit) {
         val scope = rememberCoroutineScope()
         SettingRow("on-device ai", if (store.aiEnabled) "on" else "off") { store.toggleAi() }
         if (store.aiEnabled) {
+            // Capability first: know whether nano exists before offering it.
+            var nanoReady by remember { mutableStateOf<Boolean?>(null) }
+            LaunchedEffect(Unit) {
+                nanoReady = aiSupported() && AiIntentEngine(context).prepare() == AiStatus.READY
+            }
             SettingRow("brain", store.activeBackend.name.lowercase()) {
                 store.setBackend(if (store.activeBackend == Backend.NANO) Backend.GEMMA else Backend.NANO)
             }
             when (store.activeBackend) {
-                Backend.NANO -> {
-                    var nanoStatus by remember { mutableStateOf("checking…") }
-                    LaunchedEffect(Unit) {
-                        nanoStatus = when {
-                            !aiSupported() -> "needs android 12+"
-                            AiIntentEngine(context).prepare() == AiStatus.READY -> "gemini-nano · ready"
-                            else -> "gemini-nano · not available"
+                Backend.NANO -> when (nanoReady) {
+                    null -> ModelNote("checking for gemini nano…")
+                    true -> ModelNote("gemini-nano · ready")
+                    false -> {
+                        // Lead the user to the backend that can work here,
+                        // with the reason stated — never a dead toggle.
+                        ModelNote(
+                            if (!aiSupported()) "nano needs android 12+ — this device can't run it"
+                            else "this device has no aicore, so nano can't run here",
+                        )
+                        Box(Modifier.padding(vertical = 10.dp)) {
+                            ActionButton("set up gemma instead") { store.setBackend(Backend.GEMMA) }
                         }
                     }
-                    ModelNote(nanoStatus)
                 }
                 Backend.GEMMA -> when {
-                    store.modelDownloaded() -> ModelNote("gemma · installed")
+                    store.modelDownloaded() -> {
+                        ModelNote(
+                            when {
+                                store.isSelfTesting -> "gemma · installed — testing…"
+                                store.selfTestResult != null -> "gemma · installed — ${store.selfTestResult}"
+                                else -> "gemma · installed"
+                            },
+                        )
+                        if (!store.isSelfTesting) {
+                            Box(Modifier.padding(vertical = 8.dp)) {
+                                ActionButton("test model") { scope.launch { store.selfTestModel() } }
+                            }
+                        }
+                    }
                     store.isDownloading -> {
                         val pct = if (store.totalBytes > 0L) store.downloadedBytes * 100 / store.totalBytes else 0
                         ModelNote("downloading… $pct%  (${mb(store.downloadedBytes)} / ${mb(store.totalBytes)})")
                     }
                     else -> {
+                        // Step 1: pick a model. The recommended preset needs no
+                        // token and no decisions; custom is for the adventurous.
+                        SettingRow(
+                            "model",
+                            if (store.usingPresetModel) "gemma 3 1b · ~555 mb" else "custom url",
+                        ) {
+                            if (store.usingPresetModel) store.setModelUrl("") else store.usePresetModel()
+                        }
+                        if (store.usingPresetModel) {
+                            ModelNote("recommended · no token or account needed")
+                        } else {
+                            ModelNote("paste a direct link to a mediapipe .task file")
+                            ModelUrlField(store)
+                            ModelTokenField(store)
+                        }
+                        // Step 2: download (storage is pre-checked), then a
+                        // self-test proves the model answers.
                         Box(Modifier.padding(vertical = 10.dp)) {
-                            ActionButton("download gemma") { scope.launch { store.downloadModel() } }
+                            ActionButton("download & set up") { scope.launch { store.downloadModel() } }
                         }
                         store.downloadError?.let { ModelNote("error: $it") }
-                        ModelUrlField(store)
-                        ModelTokenField(store)
                     }
                 }
             }
+            SettingRow("how the ai works", "guide") { showAiGuide = true }
         }
 
         ChoiceLabel("gestures")
@@ -256,6 +296,10 @@ fun SettingsScreen(store: LauncherStore, onClose: () -> Unit) {
             }
             SheetRow("cancel") { importPreview = null }
         }
+    }
+
+    if (showAiGuide) {
+        AiGuideScreen(onClose = { showAiGuide = false })
     }
     }
 }

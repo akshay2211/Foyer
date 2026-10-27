@@ -202,7 +202,36 @@ class LauncherStore(private val context: Context) {
     var downloadError by mutableStateOf<String?>(null)
         private set
 
+    /** null = never run, otherwise the human-readable self-test outcome. */
+    var selfTestResult by mutableStateOf<String?>(null)
+        private set
+    var isSelfTesting by mutableStateOf(false)
+        private set
+
     fun modelDownloaded(): Boolean = gemmaModelFile(context).exists()
+
+    /** True while the default (recommended) model URL is selected. */
+    val usingPresetModel: Boolean get() = gemmaModelUrl == DEFAULT_GEMMA_URL
+
+    fun usePresetModel() = setModelUrl(DEFAULT_GEMMA_URL)
+
+    /**
+     * Loads the downloaded model and runs a one-word prompt so setup ends with
+     * proof the model actually answers, not just that a file arrived (#2).
+     */
+    suspend fun selfTestModel() {
+        if (isSelfTesting || !modelDownloaded()) return
+        isSelfTesting = true
+        selfTestResult = null
+        val engine = GemmaEngine(context, gemmaModelFile(context).path)
+        selfTestResult = runCatching {
+            if (!engine.prepare()) return@runCatching "model failed to load"
+            val reply = engine.generate("Reply with the single word: ready")
+            if (reply.isNullOrBlank()) "model loaded but gave no answer" else "model working ✓"
+        }.getOrElse { "self-test failed: ${it.message}" }
+        engine.close()
+        isSelfTesting = false
+    }
 
     fun setBackend(backend: Backend) {
         activeBackend = backend
@@ -221,8 +250,17 @@ class LauncherStore(private val context: Context) {
 
     suspend fun downloadModel() {
         if (isDownloading) return
+        // Storage pre-check: the recommended model is ~555 MB; demand headroom
+        // so the download can't wedge the phone into a low-storage state.
+        val free = android.os.StatFs(context.filesDir.path).availableBytes
+        val needed = 700L * 1024 * 1024
+        if (free < needed) {
+            downloadError = "not enough storage — needs ~700 mb free, you have ${free / 1_000_000} mb"
+            return
+        }
         isDownloading = true
         downloadError = null
+        selfTestResult = null
         downloadedBytes = 0L
         totalBytes = 0L
         val result = ModelDownloader.download(gemmaModelUrl, gemmaModelFile(context), token = hfToken.ifBlank { null }) { d, t ->
@@ -231,7 +269,10 @@ class LauncherStore(private val context: Context) {
         }
         isDownloading = false
         result
-            .onSuccess { setBackend(Backend.GEMMA) }
+            .onSuccess {
+                setBackend(Backend.GEMMA)
+                selfTestModel() // prove it answers before calling setup done
+            }
             .onFailure { downloadError = it.message ?: "download failed" }
     }
 
