@@ -119,8 +119,10 @@ fun UsageSummaryScreen(
                 modifier = Modifier.padding(top = 16.dp),
                 style = TextStyle(color = palette.text, fontSize = 56.sp, fontWeight = FontWeight.Thin, fontFamily = ff),
             )
+            val bypasses = store.bypassesToday()
             BasicText(
-                text = "today · ${s.unlocks} unlocks",
+                text = "today · ${s.unlocks} unlocks" +
+                    if (bypasses > 0) " · $bypasses limit bypass${if (bypasses == 1) "" else "es"}" else "",
                 modifier = Modifier.padding(top = 2.dp, bottom = 26.dp),
                 style = TextStyle(color = palette.muted, fontSize = 14.sp, letterSpacing = 1.sp, fontFamily = ff),
             )

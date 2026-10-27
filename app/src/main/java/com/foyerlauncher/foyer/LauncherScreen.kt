@@ -210,10 +210,14 @@ fun LauncherScreen(store: LauncherStore) {
         showUsage = false
     }
 
-    // Launch, but pause on time-sinks that are already over today's limit.
+    // Launch, but pause on apps that are over their daily budget (a custom
+    // per-app limit, or the global default for distracting-marked apps) —
+    // unless a conscious five-minute bypass is still running.
     val requestLaunch: (AppEntry) -> Unit = { app ->
-        val overLimit = UsageTracker.hasAccess(context) && store.isDistracting(app) &&
-            UsageTracker.usageTodayMs(context, app.packageName) >= DISTRACTION_THRESHOLD_MS
+        val limit = store.limitFor(app.packageName)
+        val overLimit = limit != null && UsageTracker.hasAccess(context) &&
+            UsageTracker.usageTodayMs(context, app.packageName) >= limit &&
+            !store.bypassActive(app.packageName)
         if (overLimit) {
             guardApp = app
         } else {
@@ -282,6 +286,8 @@ fun LauncherScreen(store: LauncherStore) {
                 aliases = store.aliases.filterValues { it == app.key }.keys.sorted(),
                 onAddAlias = { menuApp = null; aliasApp = app },
                 onRemoveAlias = { store.removeAlias(it) },
+                limitMs = store.appLimits[app.packageName],
+                onCycleLimit = { store.cycleLimit(app.packageName) },
                 onDismiss = { menuApp = null },
             )
         }
@@ -324,7 +330,13 @@ fun LauncherScreen(store: LauncherStore) {
             DistractionNudge(
                 app = app,
                 usedMs = UsageTracker.usageTodayMs(context, app.packageName),
-                onOpen = { store.recordLaunch(app); launchApp(context, app); guardApp = null },
+                limitMs = store.limitFor(app.packageName) ?: DISTRACTION_THRESHOLD_MS,
+                onOpen = {
+                    store.recordBypass(app.packageName)
+                    store.recordLaunch(app)
+                    launchApp(context, app)
+                    guardApp = null
+                },
                 onDismiss = { guardApp = null },
             )
         }
@@ -344,6 +356,7 @@ fun LauncherScreen(store: LauncherStore) {
 private fun DistractionNudge(
     app: AppEntry,
     usedMs: Long,
+    limitMs: Long,
     onOpen: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -351,12 +364,12 @@ private fun DistractionNudge(
     val ff = LocalFontFamily.current
     FoyerSheet(title = "${app.label.lowercase()} · ${formatDuration(usedMs)} today", onDismiss = onDismiss) {
         BasicText(
-            text = "you've already spent a while here today. open anyway?",
+            text = "that's past your ${formatDuration(limitMs)} budget for today. open anyway?",
             modifier = Modifier.padding(top = 6.dp, bottom = 10.dp),
             style = TextStyle(color = palette.text, fontSize = 20.sp, fontFamily = ff),
         )
         SheetRow("not now", onClick = onDismiss)
-        SheetRow("open anyway", onClick = onOpen)
+        SheetRow("5 more minutes", onClick = onOpen)
     }
 }
 
@@ -1111,6 +1124,8 @@ private fun AppActionMenu(
     aliases: List<String>,
     onAddAlias: () -> Unit,
     onRemoveAlias: (String) -> Unit,
+    limitMs: Long?,
+    onCycleLimit: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     FoyerSheet(title = app.label.lowercase(), onDismiss = onDismiss) {
@@ -1124,6 +1139,11 @@ private fun AppActionMenu(
             if (isDistracting) "unmark distracting" else "mark distracting",
             active = isDistracting,
             onClick = onToggleDistracting,
+        )
+        SheetRow(
+            "daily limit · ${limitMs?.let { formatDuration(it) } ?: if (isDistracting) "${formatDuration(DISTRACTION_THRESHOLD_MS)} default" else "none"}",
+            active = limitMs != null,
+            onClick = onCycleLimit,
         )
         // Taught nicknames: tap one to forget it, or teach a new one.
         aliases.forEach { alias ->

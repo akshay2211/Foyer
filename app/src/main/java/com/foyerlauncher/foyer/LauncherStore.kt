@@ -57,6 +57,8 @@ private val DEFAULT_DISTRACTING = setOf(
 )
 private const val KEY_ONBOARDED = "onboarded"
 private const val KEY_ALIASES = "aliases"
+private const val KEY_LIMITS = "app_limits"
+private const val KEY_BYPASSES = "bypasses_today"
 private const val KEY_SWIPE_UP = "gesture_swipe_up"
 private const val KEY_SWIPE_DOWN = "gesture_swipe_down"
 private const val KEY_DOUBLE_TAP = "gesture_double_tap"
@@ -402,6 +404,58 @@ class LauncherStore(private val context: Context) {
 
     fun isDistracting(app: AppEntry): Boolean = distracting.contains(app.packageName)
 
+    // ---- Per-app daily timers (#13) ----------------------------------------
+
+    /** Custom daily budgets, package → ms. Apps without one fall back to the
+     *  global [DISTRACTION_THRESHOLD_MS] if they're marked distracting. */
+    val appLimits: SnapshotStateMap<String, Long> = mutableStateMapOf<String, Long>().apply {
+        (prefs.getString(KEY_LIMITS, "") ?: "")
+            .split(REC_SEP)
+            .forEach { rec ->
+                val p = rec.split(UNIT_SEP)
+                if (p.size == 2) p[1].toLongOrNull()?.let { put(p[0], it) }
+            }
+    }
+
+    fun limitFor(packageName: String): Long? =
+        appLimits[packageName] ?: DISTRACTION_THRESHOLD_MS.takeIf { distracting.contains(packageName) }
+
+    /** Cycles none → 15m → 30m → 1h → 2h → none, like the other setting rows. */
+    fun cycleLimit(packageName: String) {
+        val steps = listOf(15L, 30L, 60L, 120L).map { it * 60_000 }
+        val current = appLimits[packageName]
+        val next = when (current) {
+            null -> steps.first()
+            steps.last() -> null
+            else -> steps.getOrNull(steps.indexOf(current) + 1)
+        }
+        if (next == null) appLimits.remove(packageName) else appLimits[packageName] = next
+        prefs.edit {
+            putString(KEY_LIMITS, appLimits.entries.joinToString(REC_SEP) { "${it.key}$UNIT_SEP${it.value}" })
+        }
+    }
+
+    // A conscious bypass buys exactly five more minutes (in-memory — the
+    // launcher process lives as long as the home screen does).
+    private val bypassUntil = HashMap<String, Long>()
+
+    fun bypassActive(packageName: String): Boolean =
+        (bypassUntil[packageName] ?: 0L) > System.currentTimeMillis()
+
+    fun recordBypass(packageName: String) {
+        bypassUntil[packageName] = System.currentTimeMillis() + 5 * 60_000L
+        val today = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(java.util.Date())
+        val rec = (prefs.getString(KEY_BYPASSES, "") ?: "").split(UNIT_SEP)
+        val count = if (rec.size == 2 && rec[0] == today) (rec[1].toIntOrNull() ?: 0) + 1 else 1
+        prefs.edit { putString(KEY_BYPASSES, "$today$UNIT_SEP$count") }
+    }
+
+    fun bypassesToday(): Int {
+        val today = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(java.util.Date())
+        val rec = (prefs.getString(KEY_BYPASSES, "") ?: "").split(UNIT_SEP)
+        return if (rec.size == 2 && rec[0] == today) rec[1].toIntOrNull() ?: 0 else 0
+    }
+
     fun toggleDistracting(app: AppEntry) {
         if (!distracting.remove(app.packageName)) distracting.add(app.packageName)
         prefs.edit { putString(KEY_DISTRACTING, distracting.joinToString(REC_SEP)) }
@@ -460,6 +514,7 @@ class LauncherStore(private val context: Context) {
         put("hidden", JSONArray(hidden.toList()))
         put("distracting", JSONArray(distracting.toList()))
         put("aliases", JSONObject(aliases.toMap() as Map<*, *>))
+        put("appLimits", JSONObject(appLimits.toMap() as Map<*, *>))
         put("showClock", showClock)
         put("theme", themeMode.name)
         put("accent", accent.name)
@@ -520,6 +575,13 @@ class LauncherStore(private val context: Context) {
             obj.keys().forEach { k -> aliases[k] = obj.optString(k) }
             persistAliases()
         }
+        o.optJSONObject("appLimits")?.let { obj ->
+            appLimits.clear()
+            obj.keys().forEach { k -> obj.optLong(k).takeIf { it > 0 }?.let { appLimits[k] = it } }
+            prefs.edit {
+                putString(KEY_LIMITS, appLimits.entries.joinToString(REC_SEP) { "${it.key}$UNIT_SEP${it.value}" })
+            }
+        }
         if (o.has("showClock")) {
             showClock = o.optBoolean("showClock", true)
             prefs.edit { putBoolean(KEY_CLOCK, showClock) }
@@ -579,6 +641,11 @@ class LauncherStore(private val context: Context) {
         if (staleAliases.isNotEmpty()) {
             staleAliases.forEach { aliases.remove(it) }
             persistAliases()
+        }
+        if (userSerial == 0L && appLimits.remove(packageName) != null) {
+            prefs.edit {
+                putString(KEY_LIMITS, appLimits.entries.joinToString(REC_SEP) { "${it.key}$UNIT_SEP${it.value}" })
+            }
         }
         if (leftShortcut?.packageName == packageName && leftShortcut?.userSerial == userSerial) {
             leftShortcut = resolveAsLauncher(context, Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA), "camera")
