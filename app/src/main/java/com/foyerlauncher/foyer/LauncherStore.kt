@@ -76,6 +76,13 @@ private const val KEY_HF_TOKEN = "hf_token"
 const val SUGGESTED_GEMMA_URL =
     "https://huggingface.co/litert-community/Gemma3-1B-IT/resolve/main/gemma3-1b-it-int4.task"
 
+// Qwen repos are UNGATED (Apache 2.0): verified to download with no token,
+// no account, no license click — the true zero-friction suggestions.
+const val SUGGESTED_QWEN_SMALL_URL =
+    "https://huggingface.co/litert-community/Qwen2.5-0.5B-Instruct/resolve/main/Qwen2.5-0.5B-Instruct_multi-prefill-seq_q8_ekv1280.task"
+const val SUGGESTED_QWEN_BALANCED_URL =
+    "https://huggingface.co/litert-community/Qwen2.5-1.5B-Instruct/resolve/main/Qwen2.5-1.5B-Instruct_multi-prefill-seq_q8_ekv4096.task"
+
 /**
  * Stable identity for an app across sessions. Personal-profile apps keep the
  * historical two-part form so pre-existing prefs stay valid; other profiles

@@ -173,10 +173,25 @@ fun SettingsScreen(store: LauncherStore, onClose: () -> Unit) {
                         ModelUrlField(store)
                         ModelTokenField(store)
                         if (store.gemmaModelUrl.isBlank()) {
-                            Box(Modifier.padding(top = 10.dp)) {
-                                ActionButton("suggest: gemma 3 1b · ~555 mb") { store.setModelUrl(SUGGESTED_GEMMA_URL) }
+                            ModelNote("suggestions — tap to fill:")
+                            Column(
+                                Modifier.padding(top = 8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                ActionButton("light · qwen 2.5 0.5b · ~550 mb · no token") {
+                                    store.setModelUrl(SUGGESTED_QWEN_SMALL_URL)
+                                }
+                                ActionButton("balanced · qwen 2.5 1.5b · ~1.6 gb · no token") {
+                                    store.setModelUrl(SUGGESTED_QWEN_BALANCED_URL)
+                                }
+                                ActionButton("gemma 3 1b · ~555 mb · hf token needed") {
+                                    store.setModelUrl(SUGGESTED_GEMMA_URL)
+                                }
                             }
-                            ModelNote("gated model — accept its license on hugging face and set a classic read token")
+                            ModelNote(
+                                "qwen downloads with no account at all. gemma is gated: " +
+                                    "accept its license on hugging face + a classic read token.",
+                            )
                         }
                         // Download (storage is pre-checked), then a self-test
                         // proves the model answers.

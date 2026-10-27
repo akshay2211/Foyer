@@ -68,6 +68,17 @@ object ModelDownloader {
             }
 
             val total = connection.contentLengthLong
+            // Abort before streaming if the file can't fit: need the model
+            // itself plus ~150 MB of headroom so we never wedge the device.
+            if (total > 0) {
+                val free = android.os.StatFs(dest.parentFile!!.path).availableBytes
+                if (free < total + 150L * 1024 * 1024) {
+                    connection.disconnect()
+                    throw IOException(
+                        "not enough storage — model is ${total / 1_000_000} mb, only ${free / 1_000_000} mb free",
+                    )
+                }
+            }
             connection.inputStream.use { input ->
                 part.outputStream().use { output ->
                     val buffer = ByteArray(1 shl 16)
