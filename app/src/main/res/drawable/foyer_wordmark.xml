@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FOYER wordmark: original hand-drawn letterforms (no font). Recolor with android:tint. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="224dp"
+    android:height="60dp"
+    android:viewportWidth="1188"
+    android:viewportHeight="318">
+    <!-- F -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="14"
+        android:pathData="M38,52 L196,52" />
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="14"
+        android:pathData="M196,158 L45,158 L45,264" />
+    <!-- O -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="14"
+        android:pathData="M236,158 a106,106 0 1 0 212,0 a106,106 0 1 0 -212,0" />
+    <!-- Y -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="14"
+        android:pathData="M505,52 L568,115" />
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="14"
+        android:pathData="M670,52 L585,158 L585,264" />
+    <!-- E -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="14"
+        android:pathData="M735,52 L895,52" />
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="14"
+        android:pathData="M895,158 L742,158 L742,264 L895,264" />
+    <!-- R -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="14"
+        android:pathData="M965,52 L1068,52 A53,53 0 0 1 1068,158 L972,158 L972,264" />
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="14"
+        android:pathData="M1028,158 L1138,264" />
+</vector>
