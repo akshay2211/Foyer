@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -75,6 +76,9 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -398,7 +402,7 @@ private fun HomePage(
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(start = 28.dp, top = 56.dp)
-                    .clickable { openClockApp(context) },
+                    .clickable(onClickLabel = "open clock app") { openClockApp(context) },
             )
         }
 
@@ -437,9 +441,12 @@ private fun HomePage(
                     BasicText(
                         text = app.label.lowercase(),
                         modifier = Modifier
+                            .defaultMinSize(minHeight = 48.dp)
                             .combinedClickable(
                                 onClick = { onLaunchFavorite(app) },
+                                onClickLabel = "open",
                                 onLongClick = { onLongPressFavorite(app) },
+                                onLongClickLabel = "app options",
                             )
                             .padding(vertical = 9.dp),
                         style = TextStyle(color = palette.text, fontSize = 22.sp, fontFamily = ff),
@@ -679,6 +686,7 @@ private fun DrawerPage(
                         modifier = Modifier
                             .fillMaxWidth()
                             .focusRequester(focusRequester)
+                            .semantics { contentDescription = "search apps or ask the assistant" }
                             .padding(vertical = 8.dp),
                         decorationBox = { inner ->
                             if (query.isEmpty()) {
@@ -695,12 +703,14 @@ private fun DrawerPage(
                     BasicText(
                         text = "×",
                         modifier = Modifier
+                            .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+                            .semantics { contentDescription = "clear search" }
                             .clickable {
                                 query = ""
                                 focusManager.clearFocus()
                             }
                             .padding(start = 8.dp, end = 2.dp, top = 2.dp, bottom = 2.dp),
-                        style = TextStyle(color = palette.muted, fontSize = 26.sp),
+                        style = TextStyle(color = palette.muted, fontSize = 26.sp, textAlign = TextAlign.Center),
                     )
                 }
             }
@@ -844,9 +854,12 @@ private fun AppRow(
         },
         modifier = Modifier
             .fillMaxWidth()
+            .defaultMinSize(minHeight = 48.dp)
             .combinedClickable(
                 onClick = { onLaunch(app) },
+                onClickLabel = "open",
                 onLongClick = { onLongPress(app) },
+                onLongClickLabel = "app options",
             )
             .padding(vertical = 11.dp),
         style = TextStyle(color = palette.text, fontSize = 19.sp, fontFamily = ff),
@@ -1011,6 +1024,10 @@ private fun AlphabetScroller(
                 }
                 .pointerInput(apps) {
                     detectTapGestures { offset -> updateFromY(offset.y) }
+                }
+                .semantics {
+                    contentDescription = "fast scroll, A to Z"
+                    currentSection?.let { stateDescription = "section $it" }
                 },
             verticalArrangement = Arrangement.SpaceBetween,
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -1056,39 +1073,6 @@ private fun Scrim(onDismiss: () -> Unit, content: @Composable BoxScope.() -> Uni
                 indication = null,
             ) { onDismiss() },
         content = content,
-    )
-}
-
-@Composable
-private fun BoxScope.MenuCard(content: @Composable ColumnScope.() -> Unit) {
-    val palette = LocalPalette.current
-    Column(
-        modifier = Modifier
-            .align(Alignment.Center)
-            .fillMaxWidth(0.82f)
-            .clip(RoundedCornerShape(22.dp))
-            .border(1.dp, palette.muted.copy(alpha = 0.6f), RoundedCornerShape(22.dp))
-            .background(palette.background)
-            // Swallow taps so touching the card doesn't dismiss via the scrim.
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-            ) {}
-            .padding(horizontal = 22.dp, vertical = 18.dp),
-        content = content,
-    )
-}
-
-@Composable
-private fun MenuRow(text: String, onClick: () -> Unit) {
-    val palette = LocalPalette.current
-    BasicText(
-        text = text,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(vertical = 14.dp),
-        style = TextStyle(color = palette.text, fontSize = 18.sp),
     )
 }
 

@@ -27,6 +27,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -309,7 +315,12 @@ private fun SettingRow(label: String, value: String, onClick: () -> Unit) {
     val palette = LocalPalette.current
     val ff = LocalFontFamily.current
     Row(
-        Modifier.fillMaxWidth().clickable { onClick() }.padding(vertical = 12.dp),
+        Modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = 48.dp)
+            .semantics { role = Role.Button }
+            .clickable { onClick() }
+            .padding(vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -339,7 +350,14 @@ private fun OptionText(
 ) {
     BasicText(
         text = label,
-        modifier = Modifier.clickable { onClick() }.padding(vertical = 4.dp),
+        modifier = Modifier
+            .defaultMinSize(minHeight = 48.dp)
+            .semantics {
+                role = Role.RadioButton
+                this.selected = selected
+            }
+            .clickable { onClick() }
+            .padding(vertical = 4.dp),
         style = TextStyle(
             color = color,
             fontSize = 16.sp,
@@ -375,7 +393,10 @@ private fun ModelUrlField(store: LauncherStore) {
             singleLine = true,
             textStyle = TextStyle(color = palette.text, fontSize = 13.sp, fontFamily = ff),
             cursorBrush = SolidColor(palette.accent),
-            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .semantics { contentDescription = "model url" }
+                .padding(vertical = 6.dp),
         )
         Box(
             Modifier
@@ -403,7 +424,10 @@ private fun ModelTokenField(store: LauncherStore) {
             visualTransformation = PasswordVisualTransformation(),
             textStyle = TextStyle(color = palette.text, fontSize = 13.sp, fontFamily = ff),
             cursorBrush = SolidColor(palette.accent),
-            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .semantics { contentDescription = "hugging face token, only for gated models" }
+                .padding(vertical = 6.dp),
             decorationBox = { inner ->
                 if (token.isEmpty()) {
                     BasicText(
