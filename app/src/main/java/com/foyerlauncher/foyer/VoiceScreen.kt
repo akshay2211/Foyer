@@ -63,7 +63,9 @@ fun VoiceScreen(store: LauncherStore, onClose: () -> Unit) {
     val sttAvailable = remember { SpeechRecognizer.isRecognitionAvailable(context) }
     val assistant = rememberAssistant(store)
     val apps by produceState(initialValue = emptyList<AppEntry>()) {
-        value = withContext(Dispatchers.IO) { loadLaunchableApps(context) }
+        // Focus-filtered: while focus is on, distracting apps are invisible to
+        // voice resolution too (deterministic layer, not the model's choice).
+        value = withContext(Dispatchers.IO) { store.focusFiltered(loadLaunchableApps(context)) }
     }
 
     var status by remember {

@@ -196,9 +196,12 @@ fun LauncherScreen(store: LauncherStore) {
     var guardApp by remember { mutableStateOf<AppEntry?>(null) }
     var aliasApp by remember { mutableStateOf<AppEntry?>(null) }
     var showUsage by remember { mutableStateOf(false) }
+    var showFocusPicker by remember { mutableStateOf(false) }
+    var focusBlockedApp by remember { mutableStateOf<AppEntry?>(null) }
 
     val overlayOpen = menuApp != null || pickerTarget != null || showHomeMenu ||
-        showSettings || showVoice || guardApp != null || aliasApp != null || showUsage
+        showSettings || showVoice || guardApp != null || aliasApp != null || showUsage ||
+        showFocusPicker || focusBlockedApp != null
     BackHandler(enabled = overlayOpen) {
         menuApp = null
         pickerTarget = null
@@ -208,6 +211,8 @@ fun LauncherScreen(store: LauncherStore) {
         guardApp = null
         aliasApp = null
         showUsage = false
+        showFocusPicker = false
+        focusBlockedApp = null
     }
 
     // Launch, but pause on apps that are over their daily budget (a custom
@@ -218,11 +223,13 @@ fun LauncherScreen(store: LauncherStore) {
         val overLimit = limit != null && UsageTracker.hasAccess(context) &&
             UsageTracker.usageTodayMs(context, app.packageName) >= limit &&
             !store.bypassActive(app.packageName)
-        if (overLimit) {
-            guardApp = app
-        } else {
-            store.recordLaunch(app)
-            launchApp(context, app)
+        when {
+            store.isFocusActive() && store.isDistracting(app) -> focusBlockedApp = app
+            overLimit -> guardApp = app
+            else -> {
+                store.recordLaunch(app)
+                launchApp(context, app)
+            }
         }
     }
 
@@ -234,7 +241,7 @@ fun LauncherScreen(store: LauncherStore) {
         HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
             when (page) {
                 0 -> DrawerPage(
-                    apps = apps,
+                    apps = store.focusFiltered(apps),
                     store = store,
                     themeMode = store.themeMode,
                     onCycleTheme = { store.cycleTheme() },
@@ -312,10 +319,41 @@ fun LauncherScreen(store: LauncherStore) {
         if (showHomeMenu) {
             HomeMenu(
                 showClock = store.showClock,
+                focusActive = store.isFocusActive(),
                 onToggleClock = { store.toggleClock(); showHomeMenu = false },
+                onFocus = {
+                    showHomeMenu = false
+                    if (store.isFocusActive()) store.endFocus() else showFocusPicker = true
+                },
                 onOpenSettings = { showHomeMenu = false; showSettings = true },
                 onDismiss = { showHomeMenu = false },
             )
+        }
+
+        if (showFocusPicker) {
+            FoyerSheet(title = "focus — hide distracting apps", onDismiss = { showFocusPicker = false }) {
+                SheetRow("30 minutes") { store.startFocus(30 * 60_000L); showFocusPicker = false }
+                SheetRow("1 hour") { store.startFocus(60 * 60_000L); showFocusPicker = false }
+                SheetRow("2 hours") { store.startFocus(120 * 60_000L); showFocusPicker = false }
+                SheetRow("until i turn it off") { store.startFocus(null); showFocusPicker = false }
+            }
+        }
+
+        focusBlockedApp?.let { app ->
+            FoyerSheet(title = app.label.lowercase(), onDismiss = { focusBlockedApp = null }) {
+                BasicText(
+                    text = "${app.label.lowercase()} is paused — ${focusLabel(store.focusUntil)}",
+                    modifier = Modifier.padding(top = 6.dp, bottom = 10.dp),
+                    style = TextStyle(color = LocalPalette.current.text, fontSize = 20.sp),
+                )
+                SheetRow("keep focusing") { focusBlockedApp = null }
+                SheetRow("end focus") {
+                    store.endFocus()
+                    store.recordLaunch(app)
+                    launchApp(context, app)
+                    focusBlockedApp = null
+                }
+            }
         }
 
         if (showSettings) {
@@ -447,6 +485,25 @@ private fun HomePage(
             style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = 1.sp, fontFamily = ff),
         )
 
+        // Focus countdown — the minute tick also re-evaluates the focus filters
+        // so distracting favorites reappear on their own when focus expires.
+        var focusTick by remember { mutableIntStateOf(0) }
+        LaunchedEffect(store.focusUntil) {
+            while (store.isFocusActive()) {
+                delay(30_000)
+                focusTick++
+            }
+        }
+        if (store.isFocusActive() && focusTick >= 0) {
+            BasicText(
+                text = focusLabel(store.focusUntil),
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = 28.dp, top = 178.dp),
+                style = TextStyle(color = palette.accent, fontSize = 13.sp, letterSpacing = 1.sp, fontFamily = ff),
+            )
+        }
+
         // Favorites, vertically centered on the left.
         Column(
             modifier = Modifier
@@ -460,7 +517,7 @@ private fun HomePage(
                     style = TextStyle(color = palette.muted, fontSize = 15.sp, fontFamily = ff),
                 )
             } else {
-                store.favorites.forEach { app ->
+                store.focusFiltered(store.favorites).forEach { app ->
                     BasicText(
                         text = app.label.lowercase(),
                         modifier = Modifier
@@ -1232,15 +1289,27 @@ private fun AliasPrompt(
 @Composable
 private fun HomeMenu(
     showClock: Boolean,
+    focusActive: Boolean,
     onToggleClock: () -> Unit,
+    onFocus: () -> Unit,
     onOpenSettings: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     FoyerSheet(title = "home", onDismiss = onDismiss) {
         SheetRow(if (showClock) "hide clock" else "show clock", active = showClock, onClick = onToggleClock)
+        SheetRow(if (focusActive) "end focus" else "focus", active = focusActive, onClick = onFocus)
         SheetRow("settings", onClick = onOpenSettings)
     }
 }
+
+/** "focus is on until 3:40 pm" / "focus is on until you turn it off". */
+fun focusLabel(focusUntil: Long): String =
+    if (focusUntil == Long.MAX_VALUE) {
+        "focus is on until you turn it off"
+    } else {
+        val fmt = SimpleDateFormat("h:mm a", Locale.getDefault())
+        "focus is on until ${fmt.format(Date(focusUntil)).lowercase()}"
+    }
 
 @Composable
 private fun AppPicker(

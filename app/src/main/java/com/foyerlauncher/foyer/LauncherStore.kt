@@ -58,6 +58,7 @@ private val DEFAULT_DISTRACTING = setOf(
 private const val KEY_ONBOARDED = "onboarded"
 private const val KEY_ALIASES = "aliases"
 private const val KEY_LIMITS = "app_limits"
+private const val KEY_FOCUS_UNTIL = "focus_until"
 private const val KEY_BYPASSES = "bypasses_today"
 private const val KEY_SWIPE_UP = "gesture_swipe_up"
 private const val KEY_SWIPE_DOWN = "gesture_swipe_down"
@@ -403,6 +404,30 @@ class LauncherStore(private val context: Context) {
     }
 
     fun isDistracting(app: AppEntry): Boolean = distracting.contains(app.packageName)
+
+    // ---- Focus mode (#14) ---------------------------------------------------
+
+    /** Epoch ms when focus ends; 0 = off, [Long.MAX_VALUE] = until turned off.
+     *  Persisted, so focus survives a launcher process restart. */
+    var focusUntil by mutableLongStateOf(prefs.getLong(KEY_FOCUS_UNTIL, 0L))
+        private set
+
+    fun isFocusActive(): Boolean = focusUntil > System.currentTimeMillis()
+
+    /** [durationMs] null = until manually ended. */
+    fun startFocus(durationMs: Long?) {
+        focusUntil = durationMs?.let { System.currentTimeMillis() + it } ?: Long.MAX_VALUE
+        prefs.edit { putLong(KEY_FOCUS_UNTIL, focusUntil) }
+    }
+
+    fun endFocus() {
+        focusUntil = 0L
+        prefs.edit { putLong(KEY_FOCUS_UNTIL, 0L) }
+    }
+
+    /** The app list as focus allows it: distracting apps vanish while active. */
+    fun focusFiltered(apps: List<AppEntry>): List<AppEntry> =
+        if (!isFocusActive()) apps else apps.filterNot { distracting.contains(it.packageName) }
 
     // ---- Per-app daily timers (#13) ----------------------------------------
 
