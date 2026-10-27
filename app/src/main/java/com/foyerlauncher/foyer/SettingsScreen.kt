@@ -3,7 +3,10 @@ package com.foyerlauncher.foyer
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -241,6 +244,48 @@ fun SettingsScreen(store: LauncherStore, onClose: () -> Unit) {
             } else {
                 ModelNote("lock screen service · enabled")
             }
+        }
+
+        ChoiceLabel("background")
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            BackgroundTone.entries.forEach { tone ->
+                val selected = store.backgroundTone == tone
+                val swatch = toneBase(tone)?.first?.background ?: palette.background
+                Box(
+                    Modifier
+                        .size(26.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(swatch)
+                        .border(
+                            width = if (selected) 2.dp else 1.dp,
+                            color = if (selected) palette.accent else palette.muted.copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(8.dp),
+                        )
+                        .semantics {
+                            role = Role.RadioButton
+                            this.selected = selected
+                            contentDescription = "background ${tone.label}"
+                        }
+                        .clickable { store.chooseTone(tone) },
+                )
+            }
+            BasicText(
+                text = store.backgroundTone.label,
+                modifier = Modifier.padding(start = 6.dp),
+                style = TextStyle(color = palette.muted, fontSize = 14.sp, fontFamily = ff),
+            )
+        }
+        SettingRow("wallpaper", if (store.showWallpaper) "on · behind a scrim" else "off") {
+            store.toggleWallpaper()
+        }
+        if (store.showWallpaper) {
+            SettingRow("wallpaper dim", "${(store.wallpaperScrim * 100).toInt()}%") {
+                store.cycleWallpaperScrim()
+            }
+            ModelNote("shows your system wallpaper (set it from android settings). live wallpapers work too.")
         }
 
         ChoiceLabel("accent color")

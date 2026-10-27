@@ -35,6 +35,49 @@ enum class FontChoice(val label: String, val family: FontFamily) {
     SERIF("serif", FontFamily.Serif),
 }
 
+/**
+ * Curated home background tones (#16). Each non-default tone is a complete
+ * background/text/muted pairing, so contrast is guaranteed — never a free
+ * color picker. DEFAULT follows the light/dark theme as before.
+ */
+enum class BackgroundTone(val label: String) {
+    DEFAULT("theme"),
+    TRUE_BLACK("black"),
+    WARM_DARK("warm dark"),
+    PAPER("paper"),
+    CREAM("cream"),
+}
+
+/** The tone's palette and whether it's a dark surface (for status bar icons). */
+internal fun toneBase(tone: BackgroundTone): Pair<Palette, Boolean>? = when (tone) {
+    BackgroundTone.DEFAULT -> null
+    // AMOLED true black: battery + night reading.
+    BackgroundTone.TRUE_BLACK -> Palette(
+        background = Color(0xFF000000),
+        text = Color(0xFFEDEDED),
+        muted = Color(0xFF757575),
+        accent = Color(0xFFEDEDED),
+    ) to true
+    BackgroundTone.WARM_DARK -> Palette(
+        background = Color(0xFF151008),
+        text = Color(0xFFF0E7DB),
+        muted = Color(0xFF93876F),
+        accent = Color(0xFFF0E7DB),
+    ) to true
+    BackgroundTone.PAPER -> Palette(
+        background = Color(0xFFFAF7F1),
+        text = Color(0xFF191613),
+        muted = Color(0xFF8D857A),
+        accent = Color(0xFF191613),
+    ) to false
+    BackgroundTone.CREAM -> Palette(
+        background = Color(0xFFF6EDD9),
+        text = Color(0xFF2B2314),
+        muted = Color(0xFF9A8C6E),
+        accent = Color(0xFF2B2314),
+    ) to false
+}
+
 /** Minimal, monochrome palette with a single (possibly colored) accent. */
 data class Palette(
     val background: Color,
@@ -75,14 +118,18 @@ fun LauncherTheme(
     mode: ThemeMode,
     accent: AccentChoice,
     font: FontChoice,
+    tone: BackgroundTone = BackgroundTone.DEFAULT,
     content: @Composable () -> Unit,
 ) {
-    val dark = when (mode) {
+    val systemDark = when (mode) {
         ThemeMode.SYSTEM -> isSystemInDarkTheme()
         ThemeMode.LIGHT -> false
         ThemeMode.DARK -> true
     }
-    val base = if (dark) DarkBase else LightBase
+    // A curated tone supersedes the light/dark base — it *is* the surface.
+    val toned = toneBase(tone)
+    val base = toned?.first ?: if (systemDark) DarkBase else LightBase
+    val dark = toned?.second ?: systemDark
     val palette = base.copy(accent = accentColor(accent, base.text))
 
     val view = LocalView.current

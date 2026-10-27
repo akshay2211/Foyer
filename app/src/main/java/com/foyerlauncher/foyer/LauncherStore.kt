@@ -39,6 +39,9 @@ private const val KEY_RIGHT = "shortcut_right"
 private const val KEY_CLOCK = "show_clock"
 private const val KEY_CLOCK_STYLE = "clock_style"
 private const val KEY_FAST_SCROLL = "fast_scroll_style"
+private const val KEY_TONE = "background_tone"
+private const val KEY_WALLPAPER = "show_wallpaper"
+private const val KEY_SCRIM = "wallpaper_scrim"
 private const val KEY_HIDDEN = "hidden"
 private const val KEY_USAGE = "usage"
 private const val KEY_DISTRACTING = "distracting"
@@ -163,6 +166,37 @@ class LauncherStore(private val context: Context) {
     fun cycleFastScroll() {
         fastScrollStyle = fastScrollStyle.next()
         prefs.edit { putString(KEY_FAST_SCROLL, fastScrollStyle.name) }
+    }
+
+    /** Curated background tone (#16); DEFAULT follows the theme. */
+    var backgroundTone by mutableStateOf(enumFromPrefs(KEY_TONE, BackgroundTone.DEFAULT))
+        private set
+
+    fun chooseTone(tone: BackgroundTone) {
+        backgroundTone = tone
+        prefs.edit { putString(KEY_TONE, tone.name) }
+    }
+
+    /** System wallpaper behind the home screen, always under a scrim (#17). Off by default. */
+    var showWallpaper by mutableStateOf(prefs.getBoolean(KEY_WALLPAPER, false))
+        private set
+
+    /** Scrim opacity over the wallpaper; cycles 0.4 / 0.6 / 0.8. */
+    var wallpaperScrim by mutableStateOf(prefs.getFloat(KEY_SCRIM, 0.6f))
+        private set
+
+    fun toggleWallpaper() {
+        showWallpaper = !showWallpaper
+        prefs.edit { putBoolean(KEY_WALLPAPER, showWallpaper) }
+    }
+
+    fun cycleWallpaperScrim() {
+        wallpaperScrim = when {
+            wallpaperScrim < 0.5f -> 0.6f
+            wallpaperScrim < 0.7f -> 0.8f
+            else -> 0.4f
+        }
+        prefs.edit { putFloat(KEY_SCRIM, wallpaperScrim) }
     }
 
     /** First-run onboarding (pitch + default-launcher prompt) shown exactly once. */
@@ -557,6 +591,9 @@ class LauncherStore(private val context: Context) {
         put("appLimits", JSONObject(appLimits.toMap() as Map<*, *>))
         put("clockStyle", clockStyle.name)
         put("fastScroll", fastScrollStyle.name)
+        put("backgroundTone", backgroundTone.name)
+        put("showWallpaper", showWallpaper)
+        put("wallpaperScrim", wallpaperScrim.toDouble())
         put("theme", themeMode.name)
         put("accent", accent.name)
         put("font", font.name)
@@ -631,6 +668,14 @@ class LauncherStore(private val context: Context) {
         prefs.edit { putString(KEY_CLOCK_STYLE, clockStyle.name) }
         fastScrollStyle = enumOrCurrent(o.optString("fastScroll"), fastScrollStyle)
         prefs.edit { putString(KEY_FAST_SCROLL, fastScrollStyle.name) }
+        backgroundTone = enumOrCurrent(o.optString("backgroundTone"), backgroundTone)
+        if (o.has("showWallpaper")) showWallpaper = o.optBoolean("showWallpaper", false)
+        if (o.has("wallpaperScrim")) wallpaperScrim = o.optDouble("wallpaperScrim", 0.6).toFloat().coerceIn(0.4f, 0.8f)
+        prefs.edit {
+            putString(KEY_TONE, backgroundTone.name)
+            putBoolean(KEY_WALLPAPER, showWallpaper)
+            putFloat(KEY_SCRIM, wallpaperScrim)
+        }
         themeMode = enumOrCurrent(o.optString("theme"), themeMode)
         accent = enumOrCurrent(o.optString("accent"), accent)
         font = enumOrCurrent(o.optString("font"), font)

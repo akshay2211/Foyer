@@ -68,10 +68,31 @@ fun VoiceScreen(store: LauncherStore, onClose: () -> Unit) {
         value = withContext(Dispatchers.IO) { store.focusFiltered(loadLaunchableApps(context)) }
     }
 
-    var status by remember {
-        mutableStateOf(if (sttAvailable) "listening…" else "voice unavailable on this device")
+    // Explain the mic (and contacts) *before* any system dialog (#5).
+    var showMicIntro by remember {
+        mutableStateOf(
+            sttAvailable && ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED,
+        )
     }
-    var glyphState by remember { mutableStateOf(if (sttAvailable) GlyphState.LISTENING else GlyphState.ERROR) }
+    var status by remember {
+        mutableStateOf(
+            when {
+                !sttAvailable -> "voice unavailable on this device"
+                showMicIntro -> ""
+                else -> "listening…"
+            },
+        )
+    }
+    var glyphState by remember {
+        mutableStateOf(
+            when {
+                !sttAvailable -> GlyphState.ERROR
+                showMicIntro -> GlyphState.IDLE
+                else -> GlyphState.LISTENING
+            },
+        )
+    }
     var micAmp by remember { mutableFloatStateOf(0f) }
     var heard by remember { mutableStateOf<String?>(null) }
     var replyLabel by remember { mutableStateOf<String?>(null) }
@@ -181,10 +202,23 @@ fun VoiceScreen(store: LauncherStore, onClose: () -> Unit) {
         runCatching { r.startListening(intent) }.onFailure { status = "voice unavailable" }
     }
 
-    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) startListening() else status = "microphone permission needed"
-    }
     val contactsPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            showMicIntro = false
+            status = "listening…"
+            // Contacts was explained on the same card; ask while context is fresh.
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS)
+                != PackageManager.PERMISSION_GRANTED
+            ) {
+                contactsPermission.launch(Manifest.permission.READ_CONTACTS)
+            }
+            startListening()
+        } else {
+            status = "microphone permission needed"
+            glyphState = GlyphState.ERROR
+        }
+    }
 
     fun hasMic() =
         ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -193,8 +227,9 @@ fun VoiceScreen(store: LauncherStore, onClose: () -> Unit) {
         // Tapping empty space starts a new turn — keeps the conversation going.
         when {
             !sttAvailable -> onClose()
+            showMicIntro -> Unit // the intro card's buttons decide
             hasMic() -> startListening()
-            else -> micPermission.launch(Manifest.permission.RECORD_AUDIO)
+            else -> showMicIntro = true
         }
     }
 
@@ -204,15 +239,11 @@ fun VoiceScreen(store: LauncherStore, onClose: () -> Unit) {
         if (relistenTick > 0 && sttAvailable && hasMic()) startListening(keepUi = true)
     }
 
+    // Point-of-use (#5): with the mic already granted just start listening;
+    // otherwise the explanation card below is the screen — no system dialog
+    // appears until the user has read why and tapped allow.
     LaunchedEffect(Unit) {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS)
-            != PackageManager.PERMISSION_GRANTED
-        ) {
-            contactsPermission.launch(Manifest.permission.READ_CONTACTS)
-        }
-        if (sttAvailable) {
-            if (hasMic()) startListening() else micPermission.launch(Manifest.permission.RECORD_AUDIO)
-        }
+        if (sttAvailable && hasMic()) startListening()
     }
 
     val tagStyle = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = 2.sp, fontFamily = ff)
@@ -240,6 +271,30 @@ fun VoiceScreen(store: LauncherStore, onClose: () -> Unit) {
         )
 
         Column(Modifier.align(Alignment.CenterStart)) {
+            if (showMicIntro) {
+                BasicText(
+                    text = "ask with your voice",
+                    modifier = Modifier.padding(bottom = 12.dp),
+                    style = TextStyle(color = palette.text, fontSize = 26.sp, fontFamily = ff),
+                )
+                BasicText(
+                    text = "foyer listens on this device only — your speech never leaves the phone, " +
+                        "and the mic is live only while this screen is open.\n\n" +
+                        "contacts are optional: they let you say “message priya”. " +
+                        "both can be changed anytime in android settings.",
+                    modifier = Modifier.padding(bottom = 20.dp),
+                    style = TextStyle(color = palette.muted, fontSize = 16.sp, lineHeight = 24.sp, fontFamily = ff),
+                )
+                ActionButton("allow microphone") { micPermission.launch(Manifest.permission.RECORD_AUDIO) }
+                BasicText(
+                    text = "not now",
+                    modifier = Modifier
+                        .padding(top = 18.dp)
+                        .clickable { onClose() }
+                        .padding(4.dp),
+                    style = TextStyle(color = palette.muted, fontSize = 15.sp, letterSpacing = 1.sp, fontFamily = ff),
+                )
+            }
             heard?.let {
                 BasicText(
                     text = "“$it”",

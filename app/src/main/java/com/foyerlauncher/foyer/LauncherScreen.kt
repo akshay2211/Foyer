@@ -237,7 +237,15 @@ fun LauncherScreen(store: LauncherStore) {
     Box(
         Modifier
             .fillMaxSize()
-            .background(LocalPalette.current.background),
+            .background(
+                // Wallpaper mode: a scrim instead of an opaque fill, so the
+                // system wallpaper shows through but text stays readable.
+                if (store.showWallpaper) {
+                    LocalPalette.current.background.copy(alpha = store.wallpaperScrim)
+                } else {
+                    LocalPalette.current.background
+                },
+            ),
     ) {
         HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
             when (page) {
