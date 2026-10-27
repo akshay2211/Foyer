@@ -115,6 +115,35 @@ fun SettingsScreen(store: LauncherStore, onClose: () -> Unit) {
             }
         }
 
+        ChoiceLabel("gestures")
+        SettingRow("swipe up", store.swipeUpAction.label) { store.cycleSwipeUp() }
+        SettingRow("swipe down", store.swipeDownAction.label) { store.cycleSwipeDown() }
+        SettingRow("double tap", store.doubleTapAction.label) { store.cycleDoubleTap() }
+        if (store.swipeUpAction == GestureAction.LOCK_SCREEN ||
+            store.swipeDownAction == GestureAction.LOCK_SCREEN ||
+            store.doubleTapAction == GestureAction.LOCK_SCREEN
+        ) {
+            if (!LockService.isEnabled()) {
+                ModelNote("lock screen needs foyer's accessibility service — tap to enable")
+                BasicText(
+                    text = "enable in accessibility settings ↗",
+                    modifier = Modifier
+                        .padding(top = 6.dp, bottom = 4.dp)
+                        .clickable {
+                            runCatching {
+                                context.startActivity(
+                                    android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+                                )
+                            }
+                        },
+                    style = TextStyle(color = palette.accent, fontSize = 14.sp, fontFamily = ff),
+                )
+            } else {
+                ModelNote("lock screen service · enabled")
+            }
+        }
+
         ChoiceLabel("accent color")
         Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
             AccentChoice.entries.forEach { choice ->

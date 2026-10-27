@@ -52,6 +52,9 @@ private val DEFAULT_DISTRACTING = setOf(
 )
 private const val KEY_ONBOARDED = "onboarded"
 private const val KEY_ALIASES = "aliases"
+private const val KEY_SWIPE_UP = "gesture_swipe_up"
+private const val KEY_SWIPE_DOWN = "gesture_swipe_down"
+private const val KEY_DOUBLE_TAP = "gesture_double_tap"
 private const val KEY_THEME = "theme_mode"
 private const val KEY_ACCENT = "accent"
 private const val KEY_FONT = "font"
@@ -142,6 +145,30 @@ class LauncherStore(private val context: Context) {
         private set
     var font by mutableStateOf(enumFromPrefs(KEY_FONT, FontChoice.INTER))
         private set
+
+    // Home gestures. Defaults preserve pre-gesture behavior: swipe up opened
+    // the browser, swipe down the notification shade; double-tap did nothing.
+    var swipeUpAction by mutableStateOf(enumFromPrefs(KEY_SWIPE_UP, GestureAction.BROWSER))
+        private set
+    var swipeDownAction by mutableStateOf(enumFromPrefs(KEY_SWIPE_DOWN, GestureAction.NOTIFICATIONS))
+        private set
+    var doubleTapAction by mutableStateOf(enumFromPrefs(KEY_DOUBLE_TAP, GestureAction.NONE))
+        private set
+
+    fun cycleSwipeUp() {
+        swipeUpAction = swipeUpAction.next()
+        prefs.edit { putString(KEY_SWIPE_UP, swipeUpAction.name) }
+    }
+
+    fun cycleSwipeDown() {
+        swipeDownAction = swipeDownAction.next()
+        prefs.edit { putString(KEY_SWIPE_DOWN, swipeDownAction.name) }
+    }
+
+    fun cycleDoubleTap() {
+        doubleTapAction = doubleTapAction.next()
+        prefs.edit { putString(KEY_DOUBLE_TAP, doubleTapAction.name) }
+    }
 
     /** Route "ask me" (voice) through the on-device model. On by default. */
     var aiEnabled by mutableStateOf(prefs.getBoolean(KEY_AI, true))

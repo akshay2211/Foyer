@@ -236,16 +236,25 @@ fun LauncherScreen(store: LauncherStore) {
                     onNavigateHome = { scope.launch { pagerState.animateScrollToPage(1) } },
                 )
 
-                else -> HomePage(
-                    store = store,
-                    onLaunchFavorite = requestLaunch,
-                    onLongPressFavorite = { menuApp = it },
-                    onLongPressShortcut = { pickerTarget = it },
-                    onLongPressBackground = { showHomeMenu = true },
-                    onOpenVoice = { showVoice = true },
-                    onSwipeUp = { openBrowser(context) },
-                    onSwipeDown = { expandNotifications(context) },
-                )
+                else -> {
+                    val gestureUi = remember {
+                        GestureUi(
+                            openDrawer = { scope.launch { pagerState.animateScrollToPage(0) } },
+                            openVoice = { showVoice = true },
+                        )
+                    }
+                    HomePage(
+                        store = store,
+                        onLaunchFavorite = requestLaunch,
+                        onLongPressFavorite = { menuApp = it },
+                        onLongPressShortcut = { pickerTarget = it },
+                        onLongPressBackground = { showHomeMenu = true },
+                        onOpenVoice = { showVoice = true },
+                        onSwipeUp = { runGestureAction(context, store.swipeUpAction, gestureUi) },
+                        onSwipeDown = { runGestureAction(context, store.swipeDownAction, gestureUi) },
+                        onDoubleTap = { runGestureAction(context, store.doubleTapAction, gestureUi) },
+                    )
+                }
             }
         }
 
@@ -353,6 +362,7 @@ private fun HomePage(
     onOpenVoice: () -> Unit,
     onSwipeUp: () -> Unit,
     onSwipeDown: () -> Unit,
+    onDoubleTap: () -> Unit,
 ) {
     val context = LocalContext.current
     val palette = LocalPalette.current
@@ -376,7 +386,10 @@ private fun HomePage(
                 )
             }
             .pointerInput(Unit) {
-                detectTapGestures(onLongPress = { onLongPressBackground() })
+                detectTapGestures(
+                    onLongPress = { onLongPressBackground() },
+                    onDoubleTap = { onDoubleTap() },
+                )
             }
             .windowInsetsPadding(WindowInsets.systemBars),
     ) {
