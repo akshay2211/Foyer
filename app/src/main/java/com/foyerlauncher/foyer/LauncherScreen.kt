@@ -735,11 +735,19 @@ private fun DrawerPage(
                 if (searching) {
                     if (aiThinking) {
                         item(key = "ai-thinking") {
-                            BasicText(
-                                text = "thinking…",
+                            Row(
                                 modifier = Modifier.padding(vertical = 11.dp),
-                                style = TextStyle(color = palette.muted, fontSize = 18.sp, fontFamily = ff),
-                            )
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                FoyerGlyph(
+                                    state = GlyphState.THINKING,
+                                    modifier = Modifier.padding(end = 12.dp).size(width = 64.dp, height = 24.dp),
+                                )
+                                BasicText(
+                                    text = "thinking…",
+                                    style = TextStyle(color = palette.muted, fontSize = 18.sp, fontFamily = ff),
+                                )
+                            }
                         }
                     } else {
                         aiResult?.let { cmd ->

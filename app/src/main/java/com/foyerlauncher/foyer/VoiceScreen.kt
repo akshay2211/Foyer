@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.text.BasicText
@@ -25,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -67,6 +69,8 @@ fun VoiceScreen(store: LauncherStore, onClose: () -> Unit) {
     var status by remember {
         mutableStateOf(if (sttAvailable) "listening…" else "voice unavailable on this device")
     }
+    var glyphState by remember { mutableStateOf(if (sttAvailable) GlyphState.LISTENING else GlyphState.ERROR) }
+    var micAmp by remember { mutableFloatStateOf(0f) }
     var heard by remember { mutableStateOf<String?>(null) }
     var replyLabel by remember { mutableStateOf<String?>(null) }
     var actionCommand by remember { mutableStateOf<Command?>(null) }
@@ -86,9 +90,11 @@ fun VoiceScreen(store: LauncherStore, onClose: () -> Unit) {
             return
         }
         status = "thinking…"
+        glyphState = GlyphState.THINKING
         scope.launch {
             Log.d(AI_TAG, "voice heard='$text' apps=${apps.size}")
             val turn = assistant?.converse(text, apps) ?: AgentTurn.Do(listOf(AiIntent.Web(text)))
+            glyphState = GlyphState.DONE
             when (turn) {
                 is AgentTurn.Do -> {
                     val command = turn.plan.toCommand(context)
@@ -133,18 +139,27 @@ fun VoiceScreen(store: LauncherStore, onClose: () -> Unit) {
     fun startListening(keepUi: Boolean = false) {
         val r = recognizer ?: return
         status = "listening…"
+        glyphState = GlyphState.LISTENING
         // When re-opening the mic to hear a yes/no answer, keep the question and
         // its buttons on screen instead of clearing them.
         if (!keepUi) { heard = null; replyLabel = null; actionCommand = null }
         r.setRecognitionListener(object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) {}
             override fun onBeginningOfSpeech() {}
-            override fun onRmsChanged(rms: Float) {}
+            override fun onRmsChanged(rms: Float) {
+                // rms arrives roughly in -2..10 dB; normalize so the glyph's
+                // strokes track the real mic and flatline when it closes.
+                micAmp = ((rms + 2f) / 12f).coerceIn(0f, 1f)
+            }
             override fun onBufferReceived(buffer: ByteArray?) {}
-            override fun onEndOfSpeech() {}
+            override fun onEndOfSpeech() {
+                micAmp = 0f
+            }
             override fun onError(error: Int) {
                 Log.w(AI_TAG, "stt onError code=$error")
                 status = "didn't catch that — tap to retry"
+                glyphState = GlyphState.ERROR
+                micAmp = 0f
             }
             override fun onEvent(eventType: Int, params: Bundle?) {}
             override fun onPartialResults(partial: Bundle?) {
@@ -212,7 +227,7 @@ fun VoiceScreen(store: LauncherStore, onClose: () -> Unit) {
             .padding(horizontal = 28.dp),
     ) {
         BasicText(
-            text = "un",
+            text = "foyer",
             modifier = Modifier.align(Alignment.TopStart).padding(top = 40.dp),
             style = TextStyle(color = palette.text, fontSize = 48.sp, fontWeight = FontWeight.Thin, fontFamily = ff),
         )
@@ -270,6 +285,11 @@ fun VoiceScreen(store: LauncherStore, onClose: () -> Unit) {
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            FoyerGlyph(
+                state = glyphState,
+                amplitude = { micAmp },
+                modifier = Modifier.padding(bottom = 14.dp).size(width = 108.dp, height = 40.dp),
+            )
             BasicText(
                 text = status,
                 modifier = Modifier.padding(bottom = 10.dp),

@@ -33,6 +33,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -163,6 +164,12 @@ fun SettingsScreen(store: LauncherStore, onClose: () -> Unit) {
                     }
                     store.isDownloading -> {
                         val pct = if (store.totalBytes > 0L) store.downloadedBytes * 100 / store.totalBytes else 0
+                        FoyerGlyph(
+                            state = GlyphState.THINKING,
+                            modifier = Modifier
+                                .padding(top = 8.dp, bottom = 4.dp)
+                                .size(width = 84.dp, height = 30.dp),
+                        )
                         ModelNote("downloading… $pct%  (${mb(store.downloadedBytes)} / ${mb(store.totalBytes)})")
                     }
                     else -> {
