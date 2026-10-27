@@ -318,9 +318,9 @@ fun LauncherScreen(store: LauncherStore) {
 
         if (showHomeMenu) {
             HomeMenu(
-                showClock = store.showClock,
+                clockStyle = store.clockStyle,
                 focusActive = store.isFocusActive(),
-                onToggleClock = { store.toggleClock(); showHomeMenu = false },
+                onCycleClock = { store.cycleClockStyle() },
                 onFocus = {
                     showHomeMenu = false
                     if (store.isFocusActive()) store.endFocus() else showFocusPicker = true
@@ -456,13 +456,20 @@ private fun HomePage(
             }
             .windowInsetsPadding(WindowInsets.systemBars),
     ) {
-        if (store.showClock) {
-            ClockWidget(
+        when (store.clockStyle) {
+            ClockStyle.DIGITAL -> ClockWidget(
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(start = 28.dp, top = 56.dp)
                     .clickable(onClickLabel = "open clock app") { openClockApp(context) },
             )
+            ClockStyle.ANALOGUE -> AnalogueClockWidget(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = 28.dp, top = 56.dp)
+                    .clickable(onClickLabel = "open clock app") { openClockApp(context) },
+            )
+            ClockStyle.OFF -> Unit
         }
 
         // Today's screen time (the minimalist nudge). Taps to grant access.
@@ -1288,15 +1295,15 @@ private fun AliasPrompt(
 
 @Composable
 private fun HomeMenu(
-    showClock: Boolean,
+    clockStyle: ClockStyle,
     focusActive: Boolean,
-    onToggleClock: () -> Unit,
+    onCycleClock: () -> Unit,
     onFocus: () -> Unit,
     onOpenSettings: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     FoyerSheet(title = "home", onDismiss = onDismiss) {
-        SheetRow(if (showClock) "hide clock" else "show clock", active = showClock, onClick = onToggleClock)
+        SheetRow("clock · ${clockStyle.label}", active = clockStyle != ClockStyle.OFF, onClick = onCycleClock)
         SheetRow(if (focusActive) "end focus" else "focus", active = focusActive, onClick = onFocus)
         SheetRow("settings", onClick = onOpenSettings)
     }

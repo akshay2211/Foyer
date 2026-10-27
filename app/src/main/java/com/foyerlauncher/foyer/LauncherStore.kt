@@ -37,6 +37,7 @@ private const val KEY_FAVS = "favorites"
 private const val KEY_LEFT = "shortcut_left"
 private const val KEY_RIGHT = "shortcut_right"
 private const val KEY_CLOCK = "show_clock"
+private const val KEY_CLOCK_STYLE = "clock_style"
 private const val KEY_HIDDEN = "hidden"
 private const val KEY_USAGE = "usage"
 private const val KEY_DISTRACTING = "distracting"
@@ -142,8 +143,18 @@ class LauncherStore(private val context: Context) {
             .let { addAll(it) }
     }
 
-    var showClock by mutableStateOf(prefs.getBoolean(KEY_CLOCK, true))
+    /** Clock style; migrates the old show/hide boolean (hidden → OFF). */
+    var clockStyle by mutableStateOf(
+        prefs.getString(KEY_CLOCK_STYLE, null)
+            ?.let { raw -> runCatching { ClockStyle.valueOf(raw) }.getOrNull() }
+            ?: if (prefs.getBoolean(KEY_CLOCK, true)) ClockStyle.DIGITAL else ClockStyle.OFF,
+    )
         private set
+
+    fun cycleClockStyle() {
+        clockStyle = clockStyle.next()
+        prefs.edit { putString(KEY_CLOCK_STYLE, clockStyle.name) }
+    }
 
     /** First-run onboarding (pitch + default-launcher prompt) shown exactly once. */
     var onboarded by mutableStateOf(prefs.getBoolean(KEY_ONBOARDED, false))
@@ -312,7 +323,7 @@ class LauncherStore(private val context: Context) {
         hidden.clear()
         usage.clear()
         aliases.clear()
-        showClock = true
+        clockStyle = ClockStyle.DIGITAL
         themeMode = ThemeMode.SYSTEM
         accent = AccentChoice.MONO
         font = FontChoice.INTER
@@ -507,11 +518,6 @@ class LauncherStore(private val context: Context) {
         persistFavorites()
     }
 
-    fun toggleClock() {
-        showClock = !showClock
-        prefs.edit { putBoolean(KEY_CLOCK, showClock) }
-    }
-
     fun setShortcut(side: ShortcutSide, app: AppEntry) {
         when (side) {
             ShortcutSide.LEFT -> {
@@ -540,7 +546,7 @@ class LauncherStore(private val context: Context) {
         put("distracting", JSONArray(distracting.toList()))
         put("aliases", JSONObject(aliases.toMap() as Map<*, *>))
         put("appLimits", JSONObject(appLimits.toMap() as Map<*, *>))
-        put("showClock", showClock)
+        put("clockStyle", clockStyle.name)
         put("theme", themeMode.name)
         put("accent", accent.name)
         put("font", font.name)
@@ -607,10 +613,12 @@ class LauncherStore(private val context: Context) {
                 putString(KEY_LIMITS, appLimits.entries.joinToString(REC_SEP) { "${it.key}$UNIT_SEP${it.value}" })
             }
         }
-        if (o.has("showClock")) {
-            showClock = o.optBoolean("showClock", true)
-            prefs.edit { putBoolean(KEY_CLOCK, showClock) }
+        // Current backups carry clockStyle; v1 backups carried a boolean.
+        clockStyle = enumOrCurrent(o.optString("clockStyle"), clockStyle)
+        if (o.has("showClock") && !o.has("clockStyle")) {
+            clockStyle = if (o.optBoolean("showClock", true)) ClockStyle.DIGITAL else ClockStyle.OFF
         }
+        prefs.edit { putString(KEY_CLOCK_STYLE, clockStyle.name) }
         themeMode = enumOrCurrent(o.optString("theme"), themeMode)
         accent = enumOrCurrent(o.optString("accent"), accent)
         font = enumOrCurrent(o.optString("font"), font)
