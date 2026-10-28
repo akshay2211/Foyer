@@ -22,14 +22,21 @@ import org.junit.Test
  * These are pure Kotlin — no Android runtime, no LLM.
  */
 class ResolverTest {
+    private fun app(
+        label: String,
+        pkg: String = label.lowercase().replace(" ", "."),
+    ) = AppEntry(label = label, packageName = "com.$pkg", activityName = "Main")
 
-    private fun app(label: String, pkg: String = label.lowercase().replace(" ", ".")) =
-        AppEntry(label = label, packageName = "com.$pkg", activityName = "Main")
-
-    private val apps = listOf(
-        app("Spotify"), app("WhatsApp"), app("Blinkit"),
-        app("Google Maps"), app("Google Drive"), app("Camera"), app("Instagram"),
-    )
+    private val apps =
+        listOf(
+            app("Spotify"),
+            app("WhatsApp"),
+            app("Blinkit"),
+            app("Google Maps"),
+            app("Google Drive"),
+            app("Camera"),
+            app("Instagram"),
+        )
     private val index = AppIndex.of(apps)
 
     // ---- §5.2 Normalization ----
@@ -47,17 +54,20 @@ class ResolverTest {
 
     @Test fun exact_match_is_confident() {
         val r = index.lookup("spotify")
-        assertEquals("Spotify", r.app?.label); assertTrue(r.confident)
+        assertEquals("Spotify", r.app?.label)
+        assertTrue(r.confident)
     }
 
     @Test fun typo_resolves_via_subsequence() {
         val r = index.lookup("spotfy")
-        assertEquals("Spotify", r.app?.label); assertTrue(r.confident)
+        assertEquals("Spotify", r.app?.label)
+        assertTrue(r.confident)
     }
 
     @Test fun spaced_name_resolves() {
         val r = index.lookup("whats app")
-        assertEquals("WhatsApp", r.app?.label); assertTrue(r.confident)
+        assertEquals("WhatsApp", r.app?.label)
+        assertTrue(r.confident)
     }
 
     @Test fun blanket_offers_blinkit_but_not_confident() {
@@ -87,20 +97,21 @@ class ResolverTest {
 
     @Test fun alias_music_maps_to_spotify() {
         val r = index.lookup("music")
-        assertEquals("Spotify", r.app?.label); assertTrue(r.confident)
+        assertEquals("Spotify", r.app?.label)
+        assertTrue(r.confident)
     }
 
     // ---- §15 Confidence bands (numeric, centralized) ----
 
     @Test fun confidence_scores_land_in_expected_bands() {
         val cfg = ResolverConfig.DEFAULT
-        assertTrue(index.lookup("spotify").score >= cfg.autoThreshold)      // execute
+        assertTrue(index.lookup("spotify").score >= cfg.autoThreshold) // execute
         val blanket = index.lookup("blanket")
         assertTrue(blanket.score >= cfg.confirmThreshold && blanket.score < cfg.autoThreshold) // confirm
-        assertEquals(1, blanket.candidates.size)                            // single "did you mean"
+        assertEquals(1, blanket.candidates.size) // single "did you mean"
         val google = index.lookup("google")
         assertTrue(google.score in cfg.candidateThreshold..cfg.confirmThreshold) // candidates band
-        assertTrue(index.lookup("netflix").score < cfg.candidateThreshold)  // no match
+        assertTrue(index.lookup("netflix").score < cfg.candidateThreshold) // no match
     }
 
     @Test fun thresholds_are_tunable() {
@@ -134,8 +145,10 @@ class ResolverTest {
 
     @Test fun route_open_app_confident() {
         val plan = fastRoute("open spotify", index)!!
-        assertEquals(AiIntent.OpenApp(app("Spotify"), true).let { it.app.label to it.confident },
-            (plan[0] as AiIntent.OpenApp).let { it.app.label to it.confident })
+        assertEquals(
+            AiIntent.OpenApp(app("Spotify"), true).let { it.app.label to it.confident },
+            (plan[0] as AiIntent.OpenApp).let { it.app.label to it.confident },
+        )
     }
 
     @Test fun route_open_open_developer_options_hits_settings() {
