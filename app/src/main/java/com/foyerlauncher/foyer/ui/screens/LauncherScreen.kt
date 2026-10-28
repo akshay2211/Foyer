@@ -53,6 +53,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -133,7 +134,6 @@ import com.foyerlauncher.foyer.ui.components.runGestureAction
 import com.foyerlauncher.foyer.ui.theme.FoyerMaterialTheme
 import com.foyerlauncher.foyer.ui.theme.LocalFontFamily
 import com.foyerlauncher.foyer.ui.theme.LocalPalette
-import com.foyerlauncher.foyer.ui.theme.ThemeMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -279,8 +279,6 @@ fun LauncherScreen(store: LauncherStore) {
                     DrawerPage(
                         apps = store.focusFiltered(apps),
                         store = store,
-                        themeMode = store.themeMode,
-                        onCycleTheme = { store.cycleTheme() },
                         onLaunchApp = requestLaunch,
                         onLongPressApp = { menuApp = it },
                         onOpenSettings = { showSettings = true },
@@ -742,8 +740,6 @@ private fun ClockWidget(modifier: Modifier = Modifier) {
 private fun DrawerPage(
     apps: List<AppEntry>,
     store: LauncherStore,
-    themeMode: ThemeMode,
-    onCycleTheme: () -> Unit,
     onLaunchApp: (AppEntry) -> Unit,
     onLongPressApp: (AppEntry) -> Unit,
     onOpenSettings: () -> Unit,
@@ -847,15 +843,8 @@ private fun DrawerPage(
                 Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.End,
             ) {
-                TextButton(onClick = onCycleTheme) {
-                    Text(
-                        themeMode.label,
-                        style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 2.sp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
                 TextButton(onClick = onOpenSettings) {
                     Text(
                         "settings",
@@ -1023,10 +1012,15 @@ private fun DrawerPage(
                     } else {
                         if (frequent.isNotEmpty()) {
                             item(key = "freq-header") { SectionHeader("frequently used") }
-                            items(frequent.withIndex().toList(), key = { "f/" + it.value.key }) { (i, app) ->
-                                FrequentAppRow(app, drawerGroupShape(i, frequent.size), onLaunch, onLongPressApp)
+                            items(frequent, key = { "f/" + it.key }) { app ->
+                                AppRow(app, onLaunch, onLongPressApp)
                             }
-                            item(key = "freq-divider") { Box(Modifier.height(14.dp)) }
+                            item(key = "freq-divider") {
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(top = 10.dp, bottom = 8.dp, end = 8.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant,
+                                )
+                            }
                         }
                         items(browse, key = { "a/" + it.key }) { app ->
                             AppRow(app, onLaunch, onLongPressApp)
@@ -1048,52 +1042,6 @@ private fun DrawerPage(
                 }
             }
         }
-    }
-}
-
-/** Corner treatment for rows of the frequent-apps card group. */
-private fun drawerGroupShape(
-    index: Int,
-    count: Int,
-): RoundedCornerShape {
-    val outer = 20.dp
-    val inner = 5.dp
-    return when {
-        count == 1 -> RoundedCornerShape(outer)
-        index == 0 -> RoundedCornerShape(outer, outer, inner, inner)
-        index == count - 1 -> RoundedCornerShape(inner, inner, outer, outer)
-        else -> RoundedCornerShape(inner)
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun FrequentAppRow(
-    app: AppEntry,
-    shape: RoundedCornerShape,
-    onLaunch: (AppEntry) -> Unit,
-    onLongPress: (AppEntry) -> Unit,
-) {
-    val ff = LocalFontFamily.current
-    androidx.compose.material3.Surface(
-        shape = shape,
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp),
-    ) {
-        BasicText(
-            text = app.label.lowercase(),
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .defaultMinSize(minHeight = 52.dp)
-                    .combinedClickable(
-                        onClick = { onLaunch(app) },
-                        onClickLabel = "open",
-                        onLongClick = { onLongPress(app) },
-                        onLongClickLabel = "app options",
-                    ).padding(horizontal = 16.dp, vertical = 14.dp),
-            style = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 19.sp, fontFamily = ff),
-        )
     }
 }
 

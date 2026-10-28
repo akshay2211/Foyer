@@ -359,11 +359,6 @@ class LauncherStore(
         return runCatching { enumValueOf<T>(raw) }.getOrDefault(default)
     }
 
-    fun cycleTheme() {
-        themeMode = themeMode.next()
-        prefs.edit { putString(KEY_THEME, themeMode.name) }
-    }
-
     fun chooseTheme(mode: ThemeMode) {
         themeMode = mode
         prefs.edit { putString(KEY_THEME, mode.name) }
