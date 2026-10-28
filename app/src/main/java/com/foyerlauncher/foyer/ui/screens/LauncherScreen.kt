@@ -227,6 +227,16 @@ fun LauncherScreen(store: LauncherStore) {
             showUsage ||
             showFocusPicker ||
             focusBlockedApp != null
+
+    // Whenever the first overlay opens, drop the keyboard — a sheet must never
+    // sit under the IME. Fires only on the closed→open edge, so sheet-to-sheet
+    // transitions (app menu → alias dialog, which focuses its own field) keep
+    // their focus.
+    val overlayFocusManager = LocalFocusManager.current
+    LaunchedEffect(overlayOpen) {
+        if (overlayOpen) overlayFocusManager.clearFocus()
+    }
+
     BackHandler(enabled = overlayOpen) {
         menuApp = null
         pickerTarget = null
