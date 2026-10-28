@@ -49,6 +49,15 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -121,6 +130,7 @@ import com.foyerlauncher.foyer.ui.components.GlyphState
 import com.foyerlauncher.foyer.ui.components.SheetNote
 import com.foyerlauncher.foyer.ui.components.SheetRow
 import com.foyerlauncher.foyer.ui.components.runGestureAction
+import com.foyerlauncher.foyer.ui.theme.FoyerMaterialTheme
 import com.foyerlauncher.foyer.ui.theme.LocalFontFamily
 import com.foyerlauncher.foyer.ui.theme.LocalPalette
 import com.foyerlauncher.foyer.ui.theme.ThemeMode
@@ -825,215 +835,265 @@ private fun DrawerPage(
         }
     }
 
-    val actionStyle = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = 2.sp, fontFamily = ff)
-
-    Column(
-        Modifier
-            .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.systemBars),
-    ) {
-        Row(
+    // M3 Expressive surfaces, themed from the Foyer palette (reverted easily:
+    // this wrapper + the pill search + the frequent card block are the change).
+    FoyerMaterialTheme {
+        Column(
             Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.systemBars),
         ) {
-            BasicText(
-                text = themeMode.label,
-                modifier = Modifier.clickable { onCycleTheme() }.padding(6.dp),
-                style = actionStyle,
-            )
-            BasicText(
-                text = "settings",
-                modifier = Modifier.clickable { onOpenSettings() }.padding(6.dp),
-                style = actionStyle,
-            )
-        }
-
-        // Minimal search field with a text-only clear (×) affordance.
-        Column(Modifier.padding(horizontal = 24.dp, vertical = 4.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.weight(1f)) {
-                    BasicTextField(
-                        value = query,
-                        onValueChange = { query = it },
-                        singleLine = true,
-                        textStyle = TextStyle(color = palette.text, fontSize = 18.sp, fontFamily = ff),
-                        cursorBrush = SolidColor(palette.accent),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-                        keyboardActions =
-                            KeyboardActions(
-                                onGo = {
-                                    val app = searchResults.firstOrNull()
-                                    if (app != null) {
-                                        focusManager.clearFocus()
-                                        onLaunch(app)
-                                    } else if (q.isNotEmpty()) {
-                                        focusManager.clearFocus()
-                                        askAi(q)
-                                    }
-                                },
-                            ),
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .focusRequester(focusRequester)
-                                .semantics { contentDescription = "search apps or ask the assistant" }
-                                .padding(vertical = 8.dp),
-                        decorationBox = { inner ->
-                            if (query.isEmpty()) {
-                                BasicText(
-                                    text = "search",
-                                    style = TextStyle(color = palette.muted, fontSize = 18.sp, fontFamily = ff),
-                                )
-                            }
-                            inner()
-                        },
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                TextButton(onClick = onCycleTheme) {
+                    Text(
+                        themeMode.label,
+                        style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 2.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                if (query.isNotEmpty()) {
-                    BasicText(
-                        text = "×",
-                        modifier =
-                            Modifier
-                                .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
-                                .semantics { contentDescription = "clear search" }
-                                .clickable {
-                                    query = ""
-                                    focusManager.clearFocus()
-                                }.padding(start = 8.dp, end = 2.dp, top = 2.dp, bottom = 2.dp),
-                        style = TextStyle(color = palette.muted, fontSize = 26.sp, textAlign = TextAlign.Center),
+                TextButton(onClick = onOpenSettings) {
+                    Text(
+                        "settings",
+                        style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 2.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
+
+            // Expressive pill search bar; still a plain BasicTextField inside so
+            // focus/IME behavior is unchanged.
+            androidx.compose.material3.Surface(
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+            ) {
+                Row(
+                    Modifier.padding(start = 18.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Filled.Search,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(end = 12.dp),
+                    )
+                    Box(Modifier.weight(1f)) {
+                        BasicTextField(
+                            value = query,
+                            onValueChange = { query = it },
+                            singleLine = true,
+                            textStyle = TextStyle(color = palette.text, fontSize = 18.sp, fontFamily = ff),
+                            cursorBrush = SolidColor(palette.accent),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                            keyboardActions =
+                                KeyboardActions(
+                                    onGo = {
+                                        val app = searchResults.firstOrNull()
+                                        if (app != null) {
+                                            focusManager.clearFocus()
+                                            onLaunch(app)
+                                        } else if (q.isNotEmpty()) {
+                                            focusManager.clearFocus()
+                                            askAi(q)
+                                        }
+                                    },
+                                ),
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .focusRequester(focusRequester)
+                                    .semantics { contentDescription = "search apps or ask the assistant" }
+                                    .padding(vertical = 8.dp),
+                            decorationBox = { inner ->
+                                if (query.isEmpty()) {
+                                    BasicText(
+                                        text = "search",
+                                        style = TextStyle(color = palette.muted, fontSize = 18.sp, fontFamily = ff),
+                                    )
+                                }
+                                inner()
+                            },
+                        )
+                    }
+                    if (query.isNotEmpty()) {
+                        IconButton(onClick = {
+                            query = ""
+                            focusManager.clearFocus()
+                        }) {
+                            Icon(
+                                Icons.Filled.Close,
+                                contentDescription = "clear search",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+
             Box(
                 Modifier
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .background(palette.muted.copy(alpha = 0.25f)),
-            )
-        }
-
-        Box(
-            Modifier
-                .weight(1f)
-                .fillMaxWidth(),
-        ) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 24.dp, end = 44.dp, top = 4.dp, bottom = 32.dp),
+                    .weight(1f)
+                    .fillMaxWidth(),
             ) {
-                if (searching) {
-                    if (aiThinking) {
-                        item(key = "ai-thinking") {
-                            Row(
-                                modifier = Modifier.padding(vertical = 11.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                FoyerGlyph(
-                                    state = GlyphState.THINKING,
-                                    modifier = Modifier.padding(end = 12.dp).size(width = 64.dp, height = 24.dp),
-                                )
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 24.dp, end = 44.dp, top = 4.dp, bottom = 32.dp),
+                ) {
+                    if (searching) {
+                        if (aiThinking) {
+                            item(key = "ai-thinking") {
+                                Row(
+                                    modifier = Modifier.padding(vertical = 11.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    FoyerGlyph(
+                                        state = GlyphState.THINKING,
+                                        modifier = Modifier.padding(end = 12.dp).size(width = 64.dp, height = 24.dp),
+                                    )
+                                    BasicText(
+                                        text = "thinking…",
+                                        style = TextStyle(color = palette.muted, fontSize = 18.sp, fontFamily = ff),
+                                    )
+                                }
+                            }
+                        } else {
+                            aiResult?.let { cmd ->
+                                item(key = "ai-result") {
+                                    when {
+                                        cmd.options.isNotEmpty() ->
+                                            Column(Modifier.padding(vertical = 6.dp)) {
+                                                // Disambiguation: the question, then one button per candidate.
+                                                BasicText(
+                                                    text = cmd.title,
+                                                    modifier = Modifier.padding(vertical = 6.dp),
+                                                    style = TextStyle(color = palette.muted, fontSize = 15.sp, fontFamily = ff),
+                                                )
+                                                cmd.options.forEach { opt ->
+                                                    Box(Modifier.padding(vertical = 2.dp)) {
+                                                        FilledTonalButton(onClick = {
+                                                            focusManager.clearFocus()
+                                                            opt.run()
+                                                        }) {
+                                                            Text("${opt.title}${opt.subtitle?.let { "  ·  $it" } ?: ""}")
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        cmd.kind == CommandKind.ACTION ->
+                                            Box(Modifier.padding(vertical = 8.dp)) {
+                                                FilledTonalButton(onClick = {
+                                                    focusManager.clearFocus()
+                                                    cmd.run()
+                                                }) {
+                                                    Text(if (cmd.confirm) "did you mean: ${cmd.title}?" else cmd.title)
+                                                }
+                                            }
+                                        else -> CommandRow(cmd) { focusManager.clearFocus() }
+                                    }
+                                }
+                            }
+                        }
+                        items(searchResults, key = { "s/" + it.key }) { app ->
+                            AppRow(app, onLaunch, onLongPressApp)
+                        }
+                        item(key = "web") {
+                            FallbackRow("search web for “$q”") {
+                                focusManager.clearFocus()
+                                webSearch(context, q)
+                            }
+                        }
+                        item(key = "play") {
+                            FallbackRow("find “$q” in Play Store") { playSearch(context, q) }
+                        }
+                        if (aiThinking || aiResult != null) {
+                            item(key = "ai-tag") {
                                 BasicText(
-                                    text = "thinking…",
-                                    style = TextStyle(color = palette.muted, fontSize = 18.sp, fontFamily = ff),
+                                    text = "on-device · private",
+                                    modifier = Modifier.padding(top = 16.dp),
+                                    style = TextStyle(color = palette.muted, fontSize = 11.sp, letterSpacing = 1.sp, fontFamily = ff),
                                 )
                             }
                         }
                     } else {
-                        aiResult?.let { cmd ->
-                            item(key = "ai-result") {
-                                when {
-                                    cmd.options.isNotEmpty() ->
-                                        Column(Modifier.padding(vertical = 6.dp)) {
-                                            // Disambiguation: the question, then one button per candidate.
-                                            BasicText(
-                                                text = cmd.title,
-                                                modifier = Modifier.padding(vertical = 6.dp),
-                                                style = TextStyle(color = palette.muted, fontSize = 15.sp, fontFamily = ff),
-                                            )
-                                            cmd.options.forEach { opt ->
-                                                Box(Modifier.padding(vertical = 6.dp)) {
-                                                    ActionButton(
-                                                        label = "${opt.title}${opt.subtitle?.let { "  ·  $it" } ?: ""}",
-                                                    ) {
-                                                        focusManager.clearFocus()
-                                                        opt.run()
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    cmd.kind == CommandKind.ACTION ->
-                                        Box(Modifier.padding(vertical = 10.dp)) {
-                                            ActionButton(
-                                                label = if (cmd.confirm) "did you mean: ${cmd.title}?" else cmd.title,
-                                            ) {
-                                                focusManager.clearFocus()
-                                                cmd.run()
-                                            }
-                                        }
-                                    else -> CommandRow(cmd) { focusManager.clearFocus() }
-                                }
+                        if (frequent.isNotEmpty()) {
+                            item(key = "freq-header") { SectionHeader("frequently used") }
+                            items(frequent.withIndex().toList(), key = { "f/" + it.value.key }) { (i, app) ->
+                                FrequentAppRow(app, drawerGroupShape(i, frequent.size), onLaunch, onLongPressApp)
                             }
+                            item(key = "freq-divider") { Box(Modifier.height(14.dp)) }
                         }
-                    }
-                    items(searchResults, key = { "s/" + it.key }) { app ->
-                        AppRow(app, onLaunch, onLongPressApp)
-                    }
-                    item(key = "web") {
-                        FallbackRow("search web for “$q”") {
-                            focusManager.clearFocus()
-                            webSearch(context, q)
-                        }
-                    }
-                    item(key = "play") {
-                        FallbackRow("find “$q” in Play Store") { playSearch(context, q) }
-                    }
-                    if (aiThinking || aiResult != null) {
-                        item(key = "ai-tag") {
-                            BasicText(
-                                text = "on-device · private",
-                                modifier = Modifier.padding(top = 16.dp),
-                                style = TextStyle(color = palette.muted, fontSize = 11.sp, letterSpacing = 1.sp, fontFamily = ff),
-                            )
-                        }
-                    }
-                } else {
-                    if (frequent.isNotEmpty()) {
-                        item(key = "freq-header") { SectionHeader("frequently used") }
-                        items(frequent, key = { "f/" + it.key }) { app ->
+                        items(browse, key = { "a/" + it.key }) { app ->
                             AppRow(app, onLaunch, onLongPressApp)
                         }
-                        item(key = "freq-divider") {
-                            Box(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 8.dp)
-                                    .height(1.dp)
-                                    .background(palette.muted.copy(alpha = 0.2f)),
-                            )
-                        }
-                    }
-                    items(browse, key = { "a/" + it.key }) { app ->
-                        AppRow(app, onLaunch, onLongPressApp)
                     }
                 }
-            }
 
-            if (!searching && browse.isNotEmpty()) {
-                AlphabetScroller(
-                    apps = browse,
-                    listState = listState,
-                    leadingItemCount = leadingCount,
-                    style = store.fastScrollStyle,
-                    modifier =
-                        Modifier
-                            .align(Alignment.CenterEnd)
-                            .fillMaxHeight(),
-                )
+                if (!searching && browse.isNotEmpty()) {
+                    AlphabetScroller(
+                        apps = browse,
+                        listState = listState,
+                        leadingItemCount = leadingCount,
+                        style = store.fastScrollStyle,
+                        modifier =
+                            Modifier
+                                .align(Alignment.CenterEnd)
+                                .fillMaxHeight(),
+                    )
+                }
             }
         }
+    }
+}
+
+/** Corner treatment for rows of the frequent-apps card group. */
+private fun drawerGroupShape(
+    index: Int,
+    count: Int,
+): RoundedCornerShape {
+    val outer = 20.dp
+    val inner = 5.dp
+    return when {
+        count == 1 -> RoundedCornerShape(outer)
+        index == 0 -> RoundedCornerShape(outer, outer, inner, inner)
+        index == count - 1 -> RoundedCornerShape(inner, inner, outer, outer)
+        else -> RoundedCornerShape(inner)
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun FrequentAppRow(
+    app: AppEntry,
+    shape: RoundedCornerShape,
+    onLaunch: (AppEntry) -> Unit,
+    onLongPress: (AppEntry) -> Unit,
+) {
+    val ff = LocalFontFamily.current
+    androidx.compose.material3.Surface(
+        shape = shape,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp),
+    ) {
+        BasicText(
+            text = app.label.lowercase(),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .defaultMinSize(minHeight = 52.dp)
+                    .combinedClickable(
+                        onClick = { onLaunch(app) },
+                        onClickLabel = "open",
+                        onLongClick = { onLongPress(app) },
+                        onLongClickLabel = "app options",
+                    ).padding(horizontal = 16.dp, vertical = 14.dp),
+            style = TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 19.sp, fontFamily = ff),
+        )
     }
 }
 
