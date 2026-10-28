@@ -95,7 +95,10 @@ fun AiGuideScreen(onClose: () -> Unit) {
 }
 
 @Composable
-private fun Section(title: String, body: String) {
+private fun Section(
+    title: String,
+    body: String,
+) {
     val palette = LocalPalette.current
     val ff = LocalFontFamily.current
     BasicText(

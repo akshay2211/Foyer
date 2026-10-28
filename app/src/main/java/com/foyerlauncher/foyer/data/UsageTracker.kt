@@ -16,15 +16,16 @@ import java.util.Calendar
  * minimalist phone: see where the time goes and add friction to the time-sinks.
  */
 object UsageTracker {
-
     fun hasAccess(context: Context): Boolean {
         val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+
         @Suppress("DEPRECATION")
-        val mode = appOps.checkOpNoThrow(
-            AppOpsManager.OPSTR_GET_USAGE_STATS,
-            Process.myUid(),
-            context.packageName,
-        )
+        val mode =
+            appOps.checkOpNoThrow(
+                AppOpsManager.OPSTR_GET_USAGE_STATS,
+                Process.myUid(),
+                context.packageName,
+            )
         return mode == AppOpsManager.MODE_ALLOWED
     }
 
@@ -37,12 +38,13 @@ object UsageTracker {
     }
 
     /** Total foreground time across all apps since midnight (≈ screen time). */
-    fun screenTimeTodayMs(context: Context): Long =
-        todayStats(context).values.sumOf { it }
+    fun screenTimeTodayMs(context: Context): Long = todayStats(context).values.sumOf { it }
 
     /** Foreground time for one package since midnight. */
-    fun usageTodayMs(context: Context, packageName: String): Long =
-        todayStats(context)[packageName] ?: 0L
+    fun usageTodayMs(
+        context: Context,
+        packageName: String,
+    ): Long = todayStats(context)[packageName] ?: 0L
 
     private fun todayStats(context: Context): Map<String, Long> {
         if (!hasAccess(context)) return emptyMap()
@@ -50,7 +52,8 @@ object UsageTracker {
         val start = startOfToday()
         val now = System.currentTimeMillis()
         return runCatching {
-            usm.queryAndAggregateUsageStats(start, now)
+            usm
+                .queryAndAggregateUsageStats(start, now)
                 .mapValues { it.value.totalTimeInForeground }
         }.getOrDefault(emptyMap())
     }
@@ -83,35 +86,43 @@ object UsageTracker {
      * Total screen time per day for the last [days] days, oldest first; each
      * entry is (day-start millis, total ms). Powers the week-trend rows.
      */
-    fun dailyTotals(context: Context, days: Int): List<Pair<Long, Long>> {
+    fun dailyTotals(
+        context: Context,
+        days: Int,
+    ): List<Pair<Long, Long>> {
         if (!hasAccess(context)) return emptyList()
         val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val out = ArrayList<Pair<Long, Long>>(days)
-        val cal = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-            add(Calendar.DAY_OF_YEAR, -(days - 1))
-        }
+        val cal =
+            Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+                add(Calendar.DAY_OF_YEAR, -(days - 1))
+            }
         repeat(days) {
             val start = cal.timeInMillis
             cal.add(Calendar.DAY_OF_YEAR, 1)
             val end = minOf(cal.timeInMillis, System.currentTimeMillis())
-            val total = runCatching {
-                usm.queryAndAggregateUsageStats(start, end).values.sumOf { s -> s.totalTimeInForeground }
-            }.getOrDefault(0L)
+            val total =
+                runCatching {
+                    usm.queryAndAggregateUsageStats(start, end).values.sumOf { s -> s.totalTimeInForeground }
+                }.getOrDefault(0L)
             out.add(start to total)
         }
         return out
     }
 
-    private fun startOfToday(): Long = Calendar.getInstance().apply {
-        set(Calendar.HOUR_OF_DAY, 0)
-        set(Calendar.MINUTE, 0)
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-    }.timeInMillis
+    private fun startOfToday(): Long =
+        Calendar
+            .getInstance()
+            .apply {
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
 }
 
 /** "2h 15m", "45m", or "3m". */

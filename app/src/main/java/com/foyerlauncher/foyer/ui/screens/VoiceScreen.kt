@@ -59,9 +59,19 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private val loneVerbs = setOf(
-    "open", "launch", "start", "run", "call", "set", "go", "play", "search", "dial",
-)
+private val loneVerbs =
+    setOf(
+        "open",
+        "launch",
+        "start",
+        "run",
+        "call",
+        "set",
+        "go",
+        "play",
+        "search",
+        "dial",
+    )
 
 /**
  * Conversational entry point. Android on-device speech-to-text captures the
@@ -69,7 +79,10 @@ private val loneVerbs = setOf(
  * only executes the model's choice. Fully on-device.
  */
 @Composable
-fun VoiceScreen(store: LauncherStore, onClose: () -> Unit) {
+fun VoiceScreen(
+    store: LauncherStore,
+    onClose: () -> Unit,
+) {
     val context = LocalContext.current
     val palette = LocalPalette.current
     val ff = LocalFontFamily.current
@@ -86,7 +99,8 @@ fun VoiceScreen(store: LauncherStore, onClose: () -> Unit) {
     // Explain the mic (and contacts) *before* any system dialog (#5).
     var showMicIntro by remember {
         mutableStateOf(
-            sttAvailable && ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
+            sttAvailable &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED,
         )
     }
@@ -158,15 +172,17 @@ fun VoiceScreen(store: LauncherStore, onClose: () -> Unit) {
                 is AgentTurn.Ask -> {
                     // Disambiguation: show the question + a button per candidate, and
                     // re-open the mic so the user can just say "yes"/"no".
-                    actionCommand = Command(
-                        title = turn.text,
-                        subtitle = null,
-                        kind = CommandKind.ACTION,
-                        confirm = true,
-                        options = turn.candidates.map { app ->
-                            Command("open ${app.label.lowercase()}", null, CommandKind.ACTION) { launchApp(context, app) }
-                        },
-                    ) {}
+                    actionCommand =
+                        Command(
+                            title = turn.text,
+                            subtitle = null,
+                            kind = CommandKind.ACTION,
+                            confirm = true,
+                            options =
+                                turn.candidates.map { app ->
+                                    Command("open ${app.label.lowercase()}", null, CommandKind.ACTION) { launchApp(context, app) }
+                                },
+                        ) {}
                     status = "say “yes” or “no” — or tap"
                     relistenTick++
                 }
@@ -180,63 +196,87 @@ fun VoiceScreen(store: LauncherStore, onClose: () -> Unit) {
         glyphState = GlyphState.LISTENING
         // When re-opening the mic to hear a yes/no answer, keep the question and
         // its buttons on screen instead of clearing them.
-        if (!keepUi) { heard = null; replyLabel = null; actionCommand = null }
-        r.setRecognitionListener(object : RecognitionListener {
-            override fun onReadyForSpeech(params: Bundle?) {}
-            override fun onBeginningOfSpeech() {}
-            override fun onRmsChanged(rms: Float) {
-                // rms arrives roughly in -2..10 dB; normalize so the glyph's
-                // strokes track the real mic and flatline when it closes.
-                micAmp = ((rms + 2f) / 12f).coerceIn(0f, 1f)
-            }
-            override fun onBufferReceived(buffer: ByteArray?) {}
-            override fun onEndOfSpeech() {
-                micAmp = 0f
-            }
-            override fun onError(error: Int) {
-                Log.w(AI_TAG, "stt onError code=$error")
-                status = "didn't catch that — tap to retry"
-                glyphState = GlyphState.ERROR
-                micAmp = 0f
-            }
-            override fun onEvent(eventType: Int, params: Bundle?) {}
-            override fun onPartialResults(partial: Bundle?) {
-                partial?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    ?.firstOrNull()?.let { heard = it }
-            }
-            override fun onResults(results: Bundle?) {
-                val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    ?.firstOrNull()?.trim().orEmpty()
-                if (text.isEmpty()) status = "didn't catch that — tap to retry" else resolve(text)
-            }
-        })
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-            .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-            .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+        if (!keepUi) {
+            heard = null
+            replyLabel = null
+            actionCommand = null
+        }
+        r.setRecognitionListener(
+            object : RecognitionListener {
+                override fun onReadyForSpeech(params: Bundle?) {}
+
+                override fun onBeginningOfSpeech() {}
+
+                override fun onRmsChanged(rms: Float) {
+                    // rms arrives roughly in -2..10 dB; normalize so the glyph's
+                    // strokes track the real mic and flatline when it closes.
+                    micAmp = ((rms + 2f) / 12f).coerceIn(0f, 1f)
+                }
+
+                override fun onBufferReceived(buffer: ByteArray?) {}
+
+                override fun onEndOfSpeech() {
+                    micAmp = 0f
+                }
+
+                override fun onError(error: Int) {
+                    Log.w(AI_TAG, "stt onError code=$error")
+                    status = "didn't catch that — tap to retry"
+                    glyphState = GlyphState.ERROR
+                    micAmp = 0f
+                }
+
+                override fun onEvent(
+                    eventType: Int,
+                    params: Bundle?,
+                ) {}
+
+                override fun onPartialResults(partial: Bundle?) {
+                    partial
+                        ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                        ?.firstOrNull()
+                        ?.let { heard = it }
+                }
+
+                override fun onResults(results: Bundle?) {
+                    val text =
+                        results
+                            ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                            ?.firstOrNull()
+                            ?.trim()
+                            .orEmpty()
+                    if (text.isEmpty()) status = "didn't catch that — tap to retry" else resolve(text)
+                }
+            },
+        )
+        val intent =
+            Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+                .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
         runCatching { r.startListening(intent) }.onFailure { status = "voice unavailable" }
     }
 
     val contactsPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
-    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) {
-            showMicIntro = false
-            status = "listening…"
-            // Contacts was explained on the same card; ask while context is fresh.
-            if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS)
-                != PackageManager.PERMISSION_GRANTED
-            ) {
-                contactsPermission.launch(Manifest.permission.READ_CONTACTS)
+    val micPermission =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) {
+                showMicIntro = false
+                status = "listening…"
+                // Contacts was explained on the same card; ask while context is fresh.
+                if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS)
+                    != PackageManager.PERMISSION_GRANTED
+                ) {
+                    contactsPermission.launch(Manifest.permission.READ_CONTACTS)
+                }
+                startListening()
+            } else {
+                status = "microphone permission needed"
+                glyphState = GlyphState.ERROR
             }
-            startListening()
-        } else {
-            status = "microphone permission needed"
-            glyphState = GlyphState.ERROR
         }
-    }
 
-    fun hasMic() =
-        ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+    fun hasMic() = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
     fun onTap() {
         // Tapping empty space starts a new turn — keeps the conversation going.
@@ -293,20 +333,22 @@ fun VoiceScreen(store: LauncherStore, onClose: () -> Unit) {
                     style = TextStyle(color = palette.text, fontSize = 26.sp, fontFamily = ff),
                 )
                 BasicText(
-                    text = "foyer listens on this device only — your speech never leaves the phone, " +
-                        "and the mic is live only while this screen is open.\n\n" +
-                        "contacts are optional: they let you say “message priya”. " +
-                        "both can be changed anytime in android settings.",
+                    text =
+                        "foyer listens on this device only — your speech never leaves the phone, " +
+                            "and the mic is live only while this screen is open.\n\n" +
+                            "contacts are optional: they let you say “message priya”. " +
+                            "both can be changed anytime in android settings.",
                     modifier = Modifier.padding(bottom = 20.dp),
                     style = TextStyle(color = palette.muted, fontSize = 16.sp, lineHeight = 24.sp, fontFamily = ff),
                 )
                 ActionButton("allow microphone") { micPermission.launch(Manifest.permission.RECORD_AUDIO) }
                 BasicText(
                     text = "not now",
-                    modifier = Modifier
-                        .padding(top = 18.dp)
-                        .clickable { onClose() }
-                        .padding(4.dp),
+                    modifier =
+                        Modifier
+                            .padding(top = 18.dp)
+                            .clickable { onClose() }
+                            .padding(4.dp),
                     style = TextStyle(color = palette.muted, fontSize = 15.sp, letterSpacing = 1.sp, fontFamily = ff),
                 )
             }
@@ -334,14 +376,18 @@ fun VoiceScreen(store: LauncherStore, onClose: () -> Unit) {
                     cmd.options.forEach { opt ->
                         Box(Modifier.padding(bottom = 10.dp)) {
                             ActionButton(label = "${opt.title}${opt.subtitle?.let { "  ·  $it" } ?: ""}") {
-                                opt.run(); onClose()
+                                opt.run()
+                                onClose()
                             }
                         }
                     }
                 } else {
                     ActionButton(
                         label = if (cmd.confirm) "did you mean:  ${cmd.title}?" else cmd.title,
-                    ) { cmd.run(); onClose() }
+                    ) {
+                        cmd.run()
+                        onClose()
+                    }
                     cmd.subtitle?.let { sub ->
                         BasicText(
                             text = sub,

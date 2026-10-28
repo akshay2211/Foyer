@@ -23,14 +23,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.foyerlauncher.foyer.ui.theme.LocalFontFamily
 import com.foyerlauncher.foyer.ui.theme.LocalPalette
+import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-import kotlinx.coroutines.delay
 
 /** Which clock the home screen shows (#15). Cycled in settings / home menu. */
-enum class ClockStyle(val label: String) {
+enum class ClockStyle(
+    val label: String,
+) {
     DIGITAL("digital"),
     ANALOGUE("analogue"),
     OFF("off"),
@@ -81,9 +83,13 @@ fun AnalogueClockWidget(modifier: Modifier = Modifier) {
 
             // Four ticks, the only face furniture.
             for (q in 0 until 4) {
-                val dir = when (q) {
-                    0 -> Offset(0f, -1f); 1 -> Offset(1f, 0f); 2 -> Offset(0f, 1f); else -> Offset(-1f, 0f)
-                }
+                val dir =
+                    when (q) {
+                        0 -> Offset(0f, -1f)
+                        1 -> Offset(1f, 0f)
+                        2 -> Offset(0f, 1f)
+                        else -> Offset(-1f, 0f)
+                    }
                 drawLine(
                     color = palette.muted.copy(alpha = 0.55f),
                     start = c + dir * (r * 0.90f),
@@ -93,7 +99,11 @@ fun AnalogueClockWidget(modifier: Modifier = Modifier) {
                 )
             }
 
-            fun hand(frac: Float, length: Float, color: Color) {
+            fun hand(
+                frac: Float,
+                length: Float,
+                color: Color,
+            ) {
                 val a = Math.toRadians(frac * 360.0 - 90.0)
                 val dir = Offset(kotlin.math.cos(a).toFloat(), kotlin.math.sin(a).toFloat())
                 val from = c + dir * (r * 0.14f) // deconstructed: no hub, a gap
@@ -115,4 +125,3 @@ fun AnalogueClockWidget(modifier: Modifier = Modifier) {
         )
     }
 }
-

@@ -24,15 +24,20 @@ import java.io.File
  *    preamble. Falls back to the one-shot path on any failure, so it can never
  *    regress correctness; flip [PREFIX_CACHE] off to disable entirely.
  */
-class LlmEngine(context: Context, private val modelPath: String) {
+class LlmEngine(
+    context: Context,
+    private val modelPath: String,
+) {
     private val appContext = context.applicationContext
 
     private val llm: LlmInference by lazy {
-        val options = LlmInferenceOptions.builder()
-            .setModelPath(modelPath)
-            .setMaxTopK(64)
-            .setMaxTokens(2048)
-            .build()
+        val options =
+            LlmInferenceOptions
+                .builder()
+                .setModelPath(modelPath)
+                .setMaxTopK(64)
+                .setMaxTokens(2048)
+                .build()
         LlmInference.createFromOptions(appContext, options)
     }
 
@@ -43,12 +48,19 @@ class LlmEngine(context: Context, private val modelPath: String) {
     fun modelExists(): Boolean = File(modelPath).exists()
 
     /** Warms up the model (loads weights); returns whether it's usable. */
-    suspend fun prepare(): Boolean = withContext(Dispatchers.IO) {
-        runCatching { llm }.fold(
-            { Log.d(AI_TAG, "llm: loaded $modelPath"); true },
-            { Log.w(AI_TAG, "llm load FAILED: ${it.message}", it); false },
-        )
-    }
+    suspend fun prepare(): Boolean =
+        withContext(Dispatchers.IO) {
+            runCatching { llm }.fold(
+                {
+                    Log.d(AI_TAG, "llm: loaded $modelPath")
+                    true
+                },
+                {
+                    Log.w(AI_TAG, "llm load FAILED: ${it.message}", it)
+                    false
+                },
+            )
+        }
 
     /** One-shot generation over a full prompt. */
     suspend fun generate(prompt: String): String? = withContext(Dispatchers.IO) { generateOneShot(prompt) }
@@ -58,24 +70,32 @@ class LlmEngine(context: Context, private val modelPath: String) {
      * and reused), [suffix] is the per-turn variable part. Falls back to one-shot
      * over `prefix + suffix` if the session path throws.
      */
-    suspend fun generate(prefix: String, suffix: String): String? = withContext(Dispatchers.IO) {
-        if (PREFIX_CACHE) {
-            runCatching { generateCached(prefix, suffix) }
-                .onFailure { Log.w(AI_TAG, "llm prefix-cache failed → one-shot fallback: ${it.message}") }
-                .getOrNull()
-                ?: generateOneShot(prefix + suffix)
-        } else {
-            generateOneShot(prefix + suffix)
+    suspend fun generate(
+        prefix: String,
+        suffix: String,
+    ): String? =
+        withContext(Dispatchers.IO) {
+            if (PREFIX_CACHE) {
+                runCatching { generateCached(prefix, suffix) }
+                    .onFailure { Log.w(AI_TAG, "llm prefix-cache failed → one-shot fallback: ${it.message}") }
+                    .getOrNull()
+                    ?: generateOneShot(prefix + suffix)
+            } else {
+                generateOneShot(prefix + suffix)
+            }
         }
-    }
 
-    private fun generateCached(prefix: String, suffix: String): String? {
+    private fun generateCached(
+        prefix: String,
+        suffix: String,
+    ): String? {
         val wrappedPrefix = "<start_of_turn>user\n$prefix"
         if (cachedPrefix != wrappedPrefix || baseSession == null) {
             baseSession?.let { runCatching { it.close() } }
-            baseSession = LlmInferenceSession.createFromOptions(llm, sessionOptions()).apply {
-                addQueryChunk(wrappedPrefix) // prefill the preamble once
-            }
+            baseSession =
+                LlmInferenceSession.createFromOptions(llm, sessionOptions()).apply {
+                    addQueryChunk(wrappedPrefix) // prefill the preamble once
+                }
             cachedPrefix = wrappedPrefix
             Log.d(AI_TAG, "llm: prefilled preamble (${prefix.length} chars) into base session")
         }
@@ -97,7 +117,8 @@ class LlmEngine(context: Context, private val modelPath: String) {
     }
 
     private fun sessionOptions(): LlmInferenceSessionOptions =
-        LlmInferenceSessionOptions.builder()
+        LlmInferenceSessionOptions
+            .builder()
             .setTopK(64)
             .setTemperature(0.2f)
             .build()

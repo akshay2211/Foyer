@@ -17,7 +17,6 @@ import com.foyerlauncher.foyer.ai.router.fewShotBlock
 import com.foyerlauncher.foyer.ai.router.parsePlan
 import com.foyerlauncher.foyer.data.AppEntry
 import com.foyerlauncher.foyer.data.LauncherStore
-import com.foyerlauncher.foyer.data.key
 
 const val AI_TAG = "FoyerAI"
 
@@ -34,11 +33,12 @@ suspend fun decideIntent(
     index: AppIndex,
 ): Plan {
     // Variable, query-dependent tail; the stable preamble is [DECIDE_PREFIX].
-    val suffix = buildString {
-        settingsBlock(query)?.let { appendLine(it) }
-        groundingLine(index, query)?.let { appendLine(it) }
-        append("\"$query\" -> ")
-    }
+    val suffix =
+        buildString {
+            settingsBlock(query)?.let { appendLine(it) }
+            groundingLine(index, query)?.let { appendLine(it) }
+            append("\"$query\" -> ")
+        }
 
     Log.d(AI_TAG, "decide: query='$query' promptChars=${DECIDE_PREFIX.length + suffix.length}")
     val reply = timedGenerate(generate, DECIDE_PREFIX, suffix)
@@ -49,10 +49,16 @@ suspend fun decideIntent(
 }
 
 /** Grounds the prompt with installed apps relevant to [query], or null if none. */
-private fun groundingLine(index: AppIndex, query: String): String? {
+private fun groundingLine(
+    index: AppIndex,
+    query: String,
+): String? {
     val cands = index.candidates(query, 8)
-    return if (cands.isEmpty()) null
-    else "Installed apps you can open (use the exact name): " + cands.joinToString(", ") { it.label }
+    return if (cands.isEmpty()) {
+        null
+    } else {
+        "Installed apps you can open (use the exact name): " + cands.joinToString(", ") { it.label }
+    }
 }
 
 // The instruction/catalog/few-shot preamble is identical every turn — build the
@@ -99,12 +105,35 @@ private val CONVERSE_PREFIX: String by lazy {
     }
 }
 
-private val SETTINGS_HINTS = setOf(
-    "setting", "settings", "wifi", "wi-fi", "bluetooth", "developer", "usb", "debugging",
-    "brightness", "display", "screen", "volume", "sound", "audio", "notification", "notifications",
-    "location", "gps", "accessibility", "airplane", "flight", "battery", "data", "mobile",
-    "enable", "disable",
-)
+private val SETTINGS_HINTS =
+    setOf(
+        "setting",
+        "settings",
+        "wifi",
+        "wi-fi",
+        "bluetooth",
+        "developer",
+        "usb",
+        "debugging",
+        "brightness",
+        "display",
+        "screen",
+        "volume",
+        "sound",
+        "audio",
+        "notification",
+        "notifications",
+        "location",
+        "gps",
+        "accessibility",
+        "airplane",
+        "flight",
+        "battery",
+        "data",
+        "mobile",
+        "enable",
+        "disable",
+    )
 
 /**
  * The settings-key reference — included only when the request looks settings-related
@@ -138,9 +167,18 @@ private suspend fun timedGenerate(
  *    so the user can just say "yes"/"no"; the answer resolves against pending state.
  */
 sealed interface AgentTurn {
-    data class Say(val text: String) : AgentTurn
-    data class Do(val plan: Plan) : AgentTurn
-    data class Ask(val text: String, val candidates: List<AppEntry>) : AgentTurn
+    data class Say(
+        val text: String,
+    ) : AgentTurn
+
+    data class Do(
+        val plan: Plan,
+    ) : AgentTurn
+
+    data class Ask(
+        val text: String,
+        val candidates: List<AppEntry>,
+    ) : AgentTurn
 }
 
 class Assistant(
@@ -185,7 +223,10 @@ class Assistant(
     }
 
     /** One-shot command classification (used by the typed bar). */
-    suspend fun decide(query: String, apps: List<AppEntry>): Plan {
+    suspend fun decide(
+        query: String,
+        apps: List<AppEntry>,
+    ): Plan {
         AiMetrics.recordRequest()
         val index = indexFor(apps)
         val text = Normalizer.normalize(query)
@@ -203,14 +244,20 @@ class Assistant(
     }
 
     /** Multi-turn conversation: the model can chat, answer, ask, or emit a plan. */
-    suspend fun converse(userText: String, apps: List<AppEntry>): AgentTurn {
+    suspend fun converse(
+        userText: String,
+        apps: List<AppEntry>,
+    ): AgentTurn {
         AiMetrics.recordRequest()
         val index = indexFor(apps)
         val text = Normalizer.normalize(userText)
         Log.d(AI_TAG, "assistant input=\"$userText\" normalized=\"$text\" pending=${pendingCandidates.size}")
 
         // 0. If we asked "did you mean…?", interpret a yes/no/next before anything else.
-        resolvePending(text)?.let { Log.d(AI_TAG, "route=CONFIRMATION llm=false"); return it }
+        resolvePending(text)?.let {
+            Log.d(AI_TAG, "route=CONFIRMATION llm=false")
+            return it
+        }
 
         // 1. Tier-0 resolver — no model call. Inventory questions are answered locally here.
         fastRoute(text, index)?.let {
@@ -234,17 +281,21 @@ class Assistant(
         if (plan.isNotEmpty()) return turnFromPlan(text, plan)
 
         val clean = sanitizeReply(reply)
-        val answer = when {
-            clean.isBlank() -> "sorry, i didn't catch that"
-            clean.trimStart().startsWith("{") || clean.trimStart().startsWith("[") -> "i can't do that one yet"
-            else -> clean
-        }
+        val answer =
+            when {
+                clean.isBlank() -> "sorry, i didn't catch that"
+                clean.trimStart().startsWith("{") || clean.trimStart().startsWith("[") -> "i can't do that one yet"
+                else -> clean
+            }
         remember(text, answer)
         return AgentTurn.Say(answer)
     }
 
     /** Turns a plan into a turn, converting an ambiguous app-open into a spoken question. */
-    private fun turnFromPlan(userText: String, plan: Plan): AgentTurn {
+    private fun turnFromPlan(
+        userText: String,
+        plan: Plan,
+    ): AgentTurn {
         val open = plan.singleOrNull() as? AiIntent.OpenApp
         if (open != null && !open.confident) {
             val candidates = open.alternatives.ifEmpty { listOf(open.app) }
@@ -266,7 +317,10 @@ class Assistant(
     private fun resolvePending(userText: String): AgentTurn? {
         if (pendingCandidates.isEmpty()) return null
         // Stale pending: a late confirmation is ignored; treat as a fresh request.
-        if (System.currentTimeMillis() > pendingExpiresAt) { clearPending(); return null }
+        if (System.currentTimeMillis() > pendingExpiresAt) {
+            clearPending()
+            return null
+        }
         val t = userText.trim().lowercase()
         return when {
             isAffirmative(t) -> {
@@ -288,12 +342,18 @@ class Assistant(
                     AgentTurn.Ask(q, rest)
                 }
             }
-            else -> { clearPending(); null } // fresh request
+            else -> {
+                clearPending()
+                null
+            } // fresh request
         }
     }
 
     /** The per-turn variable tail for a conversation; the preamble is [CONVERSE_PREFIX]. */
-    private fun buildConverseSuffix(index: AppIndex, userText: String): String {
+    private fun buildConverseSuffix(
+        index: AppIndex,
+        userText: String,
+    ): String {
         val convo = history.joinToString("\n")
         return buildString {
             settingsBlock(userText)?.let { appendLine(it) }
@@ -308,11 +368,16 @@ class Assistant(
     }
 
     /** Answers "how many/list X apps" locally from the app list, so the model never guesses inventory. */
-    private fun resolveInventory(plan: Plan, apps: List<AppEntry>): Plan =
-        plan.map { if (it is AiIntent.FindApps) AiIntent.Answer(AppCatalog.describe(apps, it.query)) else it }
+    private fun resolveInventory(
+        plan: Plan,
+        apps: List<AppEntry>,
+    ): Plan = plan.map { if (it is AiIntent.FindApps) AiIntent.Answer(AppCatalog.describe(apps, it.query)) else it }
 
     /** Records one exchange in the neutral `"input" -> reply` form used by the prompt. */
-    private fun remember(userText: String, reply: String) {
+    private fun remember(
+        userText: String,
+        reply: String,
+    ) {
         history.addLast("\"$userText\" -> $reply")
         while (history.size > 6) history.removeFirst()
     }
@@ -335,13 +400,29 @@ private fun askText(candidates: List<AppEntry>): String {
     }
 }
 
-private val AFFIRMATIVE = setOf(
-    "yes", "yeah", "yep", "yup", "sure", "ok", "okay", "correct", "right", "confirm",
-    "do it", "open it", "that one", "yes please", "haan", "ha",
-)
+private val AFFIRMATIVE =
+    setOf(
+        "yes",
+        "yeah",
+        "yep",
+        "yup",
+        "sure",
+        "ok",
+        "okay",
+        "correct",
+        "right",
+        "confirm",
+        "do it",
+        "open it",
+        "that one",
+        "yes please",
+        "haan",
+        "ha",
+    )
 private val NEGATIVE = setOf("no", "nope", "nah", "not that", "wrong", "nahi")
 
 private fun isAffirmative(t: String): Boolean = t in AFFIRMATIVE || t.startsWith("yes")
+
 private fun isNegative(t: String): Boolean = t in NEGATIVE || t.startsWith("no ") || t == "no"
 
 /**
@@ -350,7 +431,12 @@ private fun isNegative(t: String): Boolean = t in NEGATIVE || t.startsWith("no "
  * ("User:", "Assistant:", or a fresh `"..." ->` line) onward.
  */
 private fun sanitizeReply(raw: String): String {
-    var s = raw.replace("<end_of_turn>", "").replace("<start_of_turn>", "").replace("<eos>", "").trim()
+    var s =
+        raw
+            .replace("<end_of_turn>", "")
+            .replace("<start_of_turn>", "")
+            .replace("<eos>", "")
+            .trim()
     Regex("(?im)(^|\\n)\\s*(user|assistant)\\s*:").find(s)?.let { s = s.substring(0, it.range.first) }
     Regex("\\n\\s*\"[^\"]*\"\\s*->").find(s)?.let { s = s.substring(0, it.range.first) }
     return s.trim().removePrefix("->").trim()

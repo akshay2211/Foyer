@@ -1,9 +1,7 @@
 package com.foyerlauncher.foyer.ui.screens
 
 import android.content.Context
-import android.content.Intent
 import android.content.pm.LauncherApps
-import android.os.Build
 import android.os.Process
 import android.os.UserHandle
 import android.os.UserManager
@@ -23,7 +21,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -44,7 +41,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
@@ -125,14 +121,14 @@ import com.foyerlauncher.foyer.ui.components.runGestureAction
 import com.foyerlauncher.foyer.ui.theme.LocalFontFamily
 import com.foyerlauncher.foyer.ui.theme.LocalPalette
 import com.foyerlauncher.foyer.ui.theme.ThemeMode
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import kotlin.math.roundToInt
 
 private fun sectionOf(label: String): Char {
     val c = label.firstOrNull()?.uppercaseChar() ?: '#'
@@ -154,17 +150,39 @@ fun LauncherScreen(store: LauncherStore) {
         reload()
         val la = context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as LauncherApps
         val um = context.getSystemService(Context.USER_SERVICE) as UserManager
-        val callback = object : LauncherApps.Callback() {
-            override fun onPackageRemoved(packageName: String, user: UserHandle) {
-                val serial = if (user == Process.myUserHandle()) 0L else um.getSerialNumberForUser(user)
-                store.pruneApp(packageName, serial)
-                reload()
+        val callback =
+            object : LauncherApps.Callback() {
+                override fun onPackageRemoved(
+                    packageName: String,
+                    user: UserHandle,
+                ) {
+                    val serial = if (user == Process.myUserHandle()) 0L else um.getSerialNumberForUser(user)
+                    store.pruneApp(packageName, serial)
+                    reload()
+                }
+
+                override fun onPackageAdded(
+                    packageName: String,
+                    user: UserHandle,
+                ) = reload()
+
+                override fun onPackageChanged(
+                    packageName: String,
+                    user: UserHandle,
+                ) = reload()
+
+                override fun onPackagesAvailable(
+                    packageNames: Array<out String>,
+                    user: UserHandle,
+                    replacing: Boolean,
+                ) = reload()
+
+                override fun onPackagesUnavailable(
+                    packageNames: Array<out String>,
+                    user: UserHandle,
+                    replacing: Boolean,
+                ) = reload()
             }
-            override fun onPackageAdded(packageName: String, user: UserHandle) = reload()
-            override fun onPackageChanged(packageName: String, user: UserHandle) = reload()
-            override fun onPackagesAvailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) = reload()
-            override fun onPackagesUnavailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) = reload()
-        }
         la.registerCallback(callback)
         onDispose { la.unregisterCallback(callback) }
     }
@@ -185,9 +203,17 @@ fun LauncherScreen(store: LauncherStore) {
     var showFocusPicker by remember { mutableStateOf(false) }
     var focusBlockedApp by remember { mutableStateOf<AppEntry?>(null) }
 
-    val overlayOpen = menuApp != null || pickerTarget != null || showHomeMenu ||
-        showSettings || showVoice || guardApp != null || aliasApp != null || showUsage ||
-        showFocusPicker || focusBlockedApp != null
+    val overlayOpen =
+        menuApp != null ||
+            pickerTarget != null ||
+            showHomeMenu ||
+            showSettings ||
+            showVoice ||
+            guardApp != null ||
+            aliasApp != null ||
+            showUsage ||
+            showFocusPicker ||
+            focusBlockedApp != null
     BackHandler(enabled = overlayOpen) {
         menuApp = null
         pickerTarget = null
@@ -206,9 +232,11 @@ fun LauncherScreen(store: LauncherStore) {
     // unless a conscious five-minute bypass is still running.
     val requestLaunch: (AppEntry) -> Unit = { app ->
         val limit = store.limitFor(app.packageName)
-        val overLimit = limit != null && UsageTracker.hasAccess(context) &&
-            UsageTracker.usageTodayMs(context, app.packageName) >= limit &&
-            !store.bypassActive(app.packageName)
+        val overLimit =
+            limit != null &&
+                UsageTracker.hasAccess(context) &&
+                UsageTracker.usageTodayMs(context, app.packageName) >= limit &&
+                !store.bypassActive(app.packageName)
         when {
             store.isFocusActive() && store.isDistracting(app) -> focusBlockedApp = app
             overLimit -> guardApp = app
@@ -234,26 +262,28 @@ fun LauncherScreen(store: LauncherStore) {
     ) {
         HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
             when (page) {
-                0 -> DrawerPage(
-                    apps = store.focusFiltered(apps),
-                    store = store,
-                    themeMode = store.themeMode,
-                    onCycleTheme = { store.cycleTheme() },
-                    onLaunchApp = requestLaunch,
-                    onLongPressApp = { menuApp = it },
-                    onOpenSettings = { showSettings = true },
-                    active = onDrawer,
-                    backEnabled = onDrawer && !overlayOpen,
-                    onNavigateHome = { scope.launch { pagerState.animateScrollToPage(1) } },
-                )
+                0 ->
+                    DrawerPage(
+                        apps = store.focusFiltered(apps),
+                        store = store,
+                        themeMode = store.themeMode,
+                        onCycleTheme = { store.cycleTheme() },
+                        onLaunchApp = requestLaunch,
+                        onLongPressApp = { menuApp = it },
+                        onOpenSettings = { showSettings = true },
+                        active = onDrawer,
+                        backEnabled = onDrawer && !overlayOpen,
+                        onNavigateHome = { scope.launch { pagerState.animateScrollToPage(1) } },
+                    )
 
                 else -> {
-                    val gestureUi = remember {
-                        GestureUi(
-                            openDrawer = { scope.launch { pagerState.animateScrollToPage(0) } },
-                            openVoice = { showVoice = true },
-                        )
-                    }
+                    val gestureUi =
+                        remember {
+                            GestureUi(
+                                openDrawer = { scope.launch { pagerState.animateScrollToPage(0) } },
+                                openVoice = { showVoice = true },
+                            )
+                        }
                     HomePage(
                         store = store,
                         onLaunchFavorite = requestLaunch,
@@ -278,14 +308,39 @@ fun LauncherScreen(store: LauncherStore) {
                 isHidden = store.isHidden(app),
                 isDistracting = store.isDistracting(app),
                 canUninstall = remember(app) { canUninstall(context, app) },
-                onAdd = { store.addFavorite(app); menuApp = null },
-                onRemove = { store.removeFavorite(app); menuApp = null },
-                onToggleHide = { store.toggleHidden(app); menuApp = null },
-                onToggleDistracting = { store.toggleDistracting(app); menuApp = null },
-                onAppInfo = { openAppInfo(context, app.packageName); menuApp = null },
-                onUninstall = { requestUninstall(context, app); menuApp = null },
-                aliases = store.aliases.filterValues { it == app.key }.keys.sorted(),
-                onAddAlias = { menuApp = null; aliasApp = app },
+                onAdd = {
+                    store.addFavorite(app)
+                    menuApp = null
+                },
+                onRemove = {
+                    store.removeFavorite(app)
+                    menuApp = null
+                },
+                onToggleHide = {
+                    store.toggleHidden(app)
+                    menuApp = null
+                },
+                onToggleDistracting = {
+                    store.toggleDistracting(app)
+                    menuApp = null
+                },
+                onAppInfo = {
+                    openAppInfo(context, app.packageName)
+                    menuApp = null
+                },
+                onUninstall = {
+                    requestUninstall(context, app)
+                    menuApp = null
+                },
+                aliases =
+                    store.aliases
+                        .filterValues { it == app.key }
+                        .keys
+                        .sorted(),
+                onAddAlias = {
+                    menuApp = null
+                    aliasApp = app
+                },
                 onRemoveAlias = { store.removeAlias(it) },
                 limitMs = store.appLimits[app.packageName],
                 onCycleLimit = { store.cycleLimit(app.packageName) },
@@ -296,7 +351,10 @@ fun LauncherScreen(store: LauncherStore) {
         aliasApp?.let { app ->
             AliasPrompt(
                 app = app,
-                onSave = { alias -> store.addAlias(alias, app); aliasApp = null },
+                onSave = { alias ->
+                    store.addAlias(alias, app)
+                    aliasApp = null
+                },
                 onDismiss = { aliasApp = null },
             )
         }
@@ -305,7 +363,10 @@ fun LauncherScreen(store: LauncherStore) {
             AppPicker(
                 apps = apps,
                 side = side,
-                onPick = { store.setShortcut(side, it); pickerTarget = null },
+                onPick = {
+                    store.setShortcut(side, it)
+                    pickerTarget = null
+                },
                 onDismiss = { pickerTarget = null },
             )
         }
@@ -319,17 +380,32 @@ fun LauncherScreen(store: LauncherStore) {
                     showHomeMenu = false
                     if (store.isFocusActive()) store.endFocus() else showFocusPicker = true
                 },
-                onOpenSettings = { showHomeMenu = false; showSettings = true },
+                onOpenSettings = {
+                    showHomeMenu = false
+                    showSettings = true
+                },
                 onDismiss = { showHomeMenu = false },
             )
         }
 
         if (showFocusPicker) {
             FoyerSheet(title = "focus — hide distracting apps", onDismiss = { showFocusPicker = false }) {
-                SheetRow("30 minutes") { store.startFocus(30 * 60_000L); showFocusPicker = false }
-                SheetRow("1 hour") { store.startFocus(60 * 60_000L); showFocusPicker = false }
-                SheetRow("2 hours") { store.startFocus(120 * 60_000L); showFocusPicker = false }
-                SheetRow("until i turn it off") { store.startFocus(null); showFocusPicker = false }
+                SheetRow("30 minutes") {
+                    store.startFocus(30 * 60_000L)
+                    showFocusPicker = false
+                }
+                SheetRow("1 hour") {
+                    store.startFocus(60 * 60_000L)
+                    showFocusPicker = false
+                }
+                SheetRow("2 hours") {
+                    store.startFocus(120 * 60_000L)
+                    showFocusPicker = false
+                }
+                SheetRow("until i turn it off") {
+                    store.startFocus(null)
+                    showFocusPicker = false
+                }
             }
         }
 
@@ -434,35 +510,43 @@ private fun HomePage(
                 var dy = 0f
                 detectVerticalDragGestures(
                     onDragStart = { dy = 0f },
-                    onVerticalDrag = { change, delta -> dy += delta; change.consume() },
+                    onVerticalDrag = { change, delta ->
+                        dy += delta
+                        change.consume()
+                    },
                     onDragEnd = {
-                        if (dy < -swipeThresholdPx) onSwipeUp()
-                        else if (dy > swipeThresholdPx) onSwipeDown()
+                        if (dy < -swipeThresholdPx) {
+                            onSwipeUp()
+                        } else if (dy > swipeThresholdPx) {
+                            onSwipeDown()
+                        }
                     },
                     onDragCancel = { dy = 0f },
                 )
-            }
-            .pointerInput(Unit) {
+            }.pointerInput(Unit) {
                 detectTapGestures(
                     onLongPress = { onLongPressBackground() },
                     onDoubleTap = { onDoubleTap() },
                 )
-            }
-            .windowInsetsPadding(WindowInsets.systemBars),
+            }.windowInsetsPadding(WindowInsets.systemBars),
     ) {
         when (store.clockStyle) {
-            ClockStyle.DIGITAL -> ClockWidget(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(start = 28.dp, top = 56.dp)
-                    .clickable(onClickLabel = "open clock app") { openClockApp(context) },
-            )
-            ClockStyle.ANALOGUE -> AnalogueClockWidget(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(start = 28.dp, top = 56.dp)
-                    .clickable(onClickLabel = "open clock app") { openClockApp(context) },
-            )
+            ClockStyle.DIGITAL ->
+                ClockWidget(
+                    modifier =
+                        Modifier
+                            .align(Alignment.TopStart)
+                            .padding(start = 28.dp, top = 56.dp)
+                            .clickable(onClickLabel = "open clock app") { openClockApp(context) },
+                )
+            ClockStyle.ANALOGUE ->
+                AnalogueClockWidget(
+                    modifier =
+                        Modifier
+                            .align(Alignment.TopStart)
+                            .padding(start = 28.dp, top = 56.dp)
+                            .clickable(onClickLabel = "open clock app") { openClockApp(context) },
+                )
             ClockStyle.OFF -> Unit
         }
 
@@ -477,12 +561,13 @@ private fun HomePage(
         }
         BasicText(
             text = if (hasUsage) "${formatDuration(screenMs)} today" else "track screen time",
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 28.dp, top = 152.dp)
-                .clickable(onClickLabel = if (hasUsage) "open screen time summary" else "grant usage access") {
-                    if (hasUsage) onOpenUsage() else UsageTracker.openAccessSettings(context)
-                },
+            modifier =
+                Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = 28.dp, top = 152.dp)
+                    .clickable(onClickLabel = if (hasUsage) "open screen time summary" else "grant usage access") {
+                        if (hasUsage) onOpenUsage() else UsageTracker.openAccessSettings(context)
+                    },
             style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = 1.sp, fontFamily = ff),
         )
 
@@ -498,18 +583,20 @@ private fun HomePage(
         if (store.isFocusActive() && focusTick >= 0) {
             BasicText(
                 text = focusLabel(store.focusUntil),
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(start = 28.dp, top = 178.dp),
+                modifier =
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = 28.dp, top = 178.dp),
                 style = TextStyle(color = palette.accent, fontSize = 13.sp, letterSpacing = 1.sp, fontFamily = ff),
             )
         }
 
         // Favorites, vertically centered on the left.
         Column(
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .padding(start = 28.dp, end = 24.dp),
+            modifier =
+                Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(start = 28.dp, end = 24.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             if (store.favorites.isEmpty()) {
@@ -521,15 +608,15 @@ private fun HomePage(
                 store.focusFiltered(store.favorites).forEach { app ->
                     BasicText(
                         text = app.label.lowercase(),
-                        modifier = Modifier
-                            .defaultMinSize(minHeight = 48.dp)
-                            .combinedClickable(
-                                onClick = { onLaunchFavorite(app) },
-                                onClickLabel = "open",
-                                onLongClick = { onLongPressFavorite(app) },
-                                onLongClickLabel = "app options",
-                            )
-                            .padding(vertical = 9.dp),
+                        modifier =
+                            Modifier
+                                .defaultMinSize(minHeight = 48.dp)
+                                .combinedClickable(
+                                    onClick = { onLaunchFavorite(app) },
+                                    onClickLabel = "open",
+                                    onLongClick = { onLongPressFavorite(app) },
+                                    onLongClickLabel = "app options",
+                                ).padding(vertical = 9.dp),
                         style = TextStyle(color = palette.text, fontSize = 22.sp, fontFamily = ff),
                     )
                 }
@@ -539,18 +626,20 @@ private fun HomePage(
         // Voice / command entry, bottom-center.
         BasicText(
             text = "ask me",
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 20.dp)
-                .clickable { onOpenVoice() }
-                .padding(8.dp),
-            style = TextStyle(
-                color = palette.text,
-                fontSize = 17.sp,
-                letterSpacing = 1.sp,
-                fontWeight = FontWeight.Medium,
-                fontFamily = ff,
-            ),
+            modifier =
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 20.dp)
+                    .clickable { onOpenVoice() }
+                    .padding(8.dp),
+            style =
+                TextStyle(
+                    color = palette.text,
+                    fontSize = 17.sp,
+                    letterSpacing = 1.sp,
+                    fontWeight = FontWeight.Medium,
+                    fontFamily = ff,
+                ),
         )
 
         // Bottom-corner shortcuts, rotated as vertical edge labels.
@@ -582,20 +671,21 @@ private fun EdgeShortcut(
     val ff = LocalFontFamily.current
     BasicText(
         text = (app?.label ?: "set").lowercase(),
-        modifier = modifier
-            .padding(vertical = 18.dp)
-            .rotate(rotation)
-            .combinedClickable(
-                onClick = { app?.let { launchApp(context, it) } ?: onLongPress() },
-                onLongClick = onLongPress,
-            )
-            .padding(8.dp),
-        style = TextStyle(
-            color = if (app == null) palette.muted else palette.text,
-            fontSize = 15.sp,
-            letterSpacing = 1.sp,
-            fontFamily = ff,
-        ),
+        modifier =
+            modifier
+                .padding(vertical = 18.dp)
+                .rotate(rotation)
+                .combinedClickable(
+                    onClick = { app?.let { launchApp(context, it) } ?: onLongPress() },
+                    onLongClick = onLongPress,
+                ).padding(8.dp),
+        style =
+            TextStyle(
+                color = if (app == null) palette.muted else palette.text,
+                fontSize = 15.sp,
+                letterSpacing = 1.sp,
+                fontFamily = ff,
+            ),
     )
 }
 
@@ -656,23 +746,27 @@ private fun DrawerPage(
 
     // Browse list excludes hidden apps; search reveals everything (incl. hidden).
     val browse = apps.filterNot { store.isHidden(it) }
-    val searchResults = if (searching) {
-        // User-taught aliases rank first, then label prefixes.
-        val aliased = store.aliases
-            .filterKeys { it.startsWith(q, ignoreCase = true) }
-            .values
-            .mapNotNull { key -> apps.firstOrNull { it.key == key } }
-        (aliased + apps.filter { it.label.startsWith(q, ignoreCase = true) }).distinct()
-    } else {
-        emptyList()
-    }
-    val frequent = if (!searching) {
-        browse.filter { store.usageCount(it) > 0 }
-            .sortedByDescending { store.usageCount(it) }
-            .take(5)
-    } else {
-        emptyList()
-    }
+    val searchResults =
+        if (searching) {
+            // User-taught aliases rank first, then label prefixes.
+            val aliased =
+                store.aliases
+                    .filterKeys { it.startsWith(q, ignoreCase = true) }
+                    .values
+                    .mapNotNull { key -> apps.firstOrNull { it.key == key } }
+            (aliased + apps.filter { it.label.startsWith(q, ignoreCase = true) }).distinct()
+        } else {
+            emptyList()
+        }
+    val frequent =
+        if (!searching) {
+            browse
+                .filter { store.usageCount(it) > 0 }
+                .sortedByDescending { store.usageCount(it) }
+                .take(5)
+        } else {
+            emptyList()
+        }
     // Leading rows before the alphabetical list ("frequently used" header +
     // block + divider), so the A–Z rail can offset its scroll targets.
     val leadingCount = if (frequent.isNotEmpty()) frequent.size + 2 else 0
@@ -684,7 +778,10 @@ private fun DrawerPage(
     var aiResult by remember { mutableStateOf<Command?>(null) }
 
     // Any edit to the query invalidates a previous AI answer.
-    LaunchedEffect(q) { aiThinking = false; aiResult = null }
+    LaunchedEffect(q) {
+        aiThinking = false
+        aiResult = null
+    }
 
     fun askAi(text: String) {
         scope.launch {
@@ -694,7 +791,7 @@ private fun DrawerPage(
             val command = plan.toCommand(context)
             aiThinking = false
             if (command.kind == CommandKind.ACTION && !command.confirm) {
-                command.run()      // confident action → just do it
+                command.run() // confident action → just do it
                 aiResult = null
             } else {
                 aiResult = command // fuzzy action (button) or answer (text)
@@ -754,21 +851,25 @@ private fun DrawerPage(
                         textStyle = TextStyle(color = palette.text, fontSize = 18.sp, fontFamily = ff),
                         cursorBrush = SolidColor(palette.accent),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-                        keyboardActions = KeyboardActions(
-                            onGo = {
-                                val app = searchResults.firstOrNull()
-                                if (app != null) {
-                                    focusManager.clearFocus(); onLaunch(app)
-                                } else if (q.isNotEmpty()) {
-                                    focusManager.clearFocus(); askAi(q)
-                                }
-                            },
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .focusRequester(focusRequester)
-                            .semantics { contentDescription = "search apps or ask the assistant" }
-                            .padding(vertical = 8.dp),
+                        keyboardActions =
+                            KeyboardActions(
+                                onGo = {
+                                    val app = searchResults.firstOrNull()
+                                    if (app != null) {
+                                        focusManager.clearFocus()
+                                        onLaunch(app)
+                                    } else if (q.isNotEmpty()) {
+                                        focusManager.clearFocus()
+                                        askAi(q)
+                                    }
+                                },
+                            ),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .focusRequester(focusRequester)
+                                .semantics { contentDescription = "search apps or ask the assistant" }
+                                .padding(vertical = 8.dp),
                         decorationBox = { inner ->
                             if (query.isEmpty()) {
                                 BasicText(
@@ -783,14 +884,14 @@ private fun DrawerPage(
                 if (query.isNotEmpty()) {
                     BasicText(
                         text = "×",
-                        modifier = Modifier
-                            .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
-                            .semantics { contentDescription = "clear search" }
-                            .clickable {
-                                query = ""
-                                focusManager.clearFocus()
-                            }
-                            .padding(start = 8.dp, end = 2.dp, top = 2.dp, bottom = 2.dp),
+                        modifier =
+                            Modifier
+                                .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+                                .semantics { contentDescription = "clear search" }
+                                .clickable {
+                                    query = ""
+                                    focusManager.clearFocus()
+                                }.padding(start = 8.dp, end = 2.dp, top = 2.dp, bottom = 2.dp),
                         style = TextStyle(color = palette.muted, fontSize = 26.sp, textAlign = TextAlign.Center),
                     )
                 }
@@ -834,26 +935,34 @@ private fun DrawerPage(
                         aiResult?.let { cmd ->
                             item(key = "ai-result") {
                                 when {
-                                    cmd.options.isNotEmpty() -> Column(Modifier.padding(vertical = 6.dp)) {
-                                        // Disambiguation: the question, then one button per candidate.
-                                        BasicText(
-                                            text = cmd.title,
-                                            modifier = Modifier.padding(vertical = 6.dp),
-                                            style = TextStyle(color = palette.muted, fontSize = 15.sp, fontFamily = ff),
-                                        )
-                                        cmd.options.forEach { opt ->
-                                            Box(Modifier.padding(vertical = 6.dp)) {
-                                                ActionButton(
-                                                    label = "${opt.title}${opt.subtitle?.let { "  ·  $it" } ?: ""}",
-                                                ) { focusManager.clearFocus(); opt.run() }
+                                    cmd.options.isNotEmpty() ->
+                                        Column(Modifier.padding(vertical = 6.dp)) {
+                                            // Disambiguation: the question, then one button per candidate.
+                                            BasicText(
+                                                text = cmd.title,
+                                                modifier = Modifier.padding(vertical = 6.dp),
+                                                style = TextStyle(color = palette.muted, fontSize = 15.sp, fontFamily = ff),
+                                            )
+                                            cmd.options.forEach { opt ->
+                                                Box(Modifier.padding(vertical = 6.dp)) {
+                                                    ActionButton(
+                                                        label = "${opt.title}${opt.subtitle?.let { "  ·  $it" } ?: ""}",
+                                                    ) {
+                                                        focusManager.clearFocus()
+                                                        opt.run()
+                                                    }
+                                                }
                                             }
                                         }
-                                    }
-                                    cmd.kind == CommandKind.ACTION -> Box(Modifier.padding(vertical = 10.dp)) {
-                                        ActionButton(
-                                            label = if (cmd.confirm) "did you mean: ${cmd.title}?" else cmd.title,
-                                        ) { focusManager.clearFocus(); cmd.run() }
-                                    }
+                                    cmd.kind == CommandKind.ACTION ->
+                                        Box(Modifier.padding(vertical = 10.dp)) {
+                                            ActionButton(
+                                                label = if (cmd.confirm) "did you mean: ${cmd.title}?" else cmd.title,
+                                            ) {
+                                                focusManager.clearFocus()
+                                                cmd.run()
+                                            }
+                                        }
                                     else -> CommandRow(cmd) { focusManager.clearFocus() }
                                 }
                             }
@@ -863,7 +972,10 @@ private fun DrawerPage(
                         AppRow(app, onLaunch, onLongPressApp)
                     }
                     item(key = "web") {
-                        FallbackRow("search web for “$q”") { focusManager.clearFocus(); webSearch(context, q) }
+                        FallbackRow("search web for “$q”") {
+                            focusManager.clearFocus()
+                            webSearch(context, q)
+                        }
                     }
                     item(key = "play") {
                         FallbackRow("find “$q” in Play Store") { playSearch(context, q) }
@@ -905,9 +1017,10 @@ private fun DrawerPage(
                     listState = listState,
                     leadingItemCount = leadingCount,
                     style = store.fastScrollStyle,
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .fillMaxHeight(),
+                    modifier =
+                        Modifier
+                            .align(Alignment.CenterEnd)
+                            .fillMaxHeight(),
                 )
             }
         }
@@ -935,66 +1048,80 @@ private fun AppRow(
     val palette = LocalPalette.current
     val ff = LocalFontFamily.current
     BasicText(
-        text = buildAnnotatedString {
-            append(app.label.lowercase())
-            // Same app can exist in two profiles; mark the work/private copy.
-            if (app.userSerial != 0L) {
-                withStyle(SpanStyle(color = palette.muted, fontSize = 13.sp)) { append("  · work") }
-            }
-        },
-        modifier = Modifier
-            .fillMaxWidth()
-            .defaultMinSize(minHeight = 48.dp)
-            .combinedClickable(
-                onClick = { onLaunch(app) },
-                onClickLabel = "open",
-                onLongClick = { onLongPress(app) },
-                onLongClickLabel = "app options",
-            )
-            .padding(vertical = 11.dp),
+        text =
+            buildAnnotatedString {
+                append(app.label.lowercase())
+                // Same app can exist in two profiles; mark the work/private copy.
+                if (app.userSerial != 0L) {
+                    withStyle(SpanStyle(color = palette.muted, fontSize = 13.sp)) { append("  · work") }
+                }
+            },
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .defaultMinSize(minHeight = 48.dp)
+                .combinedClickable(
+                    onClick = { onLaunch(app) },
+                    onClickLabel = "open",
+                    onLongClick = { onLongPress(app) },
+                    onLongClickLabel = "app options",
+                ).padding(vertical = 11.dp),
         style = TextStyle(color = palette.text, fontSize = 19.sp, fontFamily = ff),
     )
 }
 
 /** Outlined, tappable action chip used for AI-proposed actions. */
 @Composable
-fun ActionButton(label: String, onClick: () -> Unit) {
+fun ActionButton(
+    label: String,
+    onClick: () -> Unit,
+) {
     val palette = LocalPalette.current
     val ff = LocalFontFamily.current
     BasicText(
         text = label,
-        modifier = Modifier
-            .clip(RoundedCornerShape(24.dp))
-            .border(1.dp, palette.muted.copy(alpha = 0.6f), RoundedCornerShape(24.dp))
-            .clickable { onClick() }
-            .padding(horizontal = 18.dp, vertical = 12.dp),
+        modifier =
+            Modifier
+                .clip(RoundedCornerShape(24.dp))
+                .border(1.dp, palette.muted.copy(alpha = 0.6f), RoundedCornerShape(24.dp))
+                .clickable { onClick() }
+                .padding(horizontal = 18.dp, vertical = 12.dp),
         style = TextStyle(color = palette.text, fontSize = 17.sp, fontFamily = ff),
     )
 }
 
 @Composable
-private fun FallbackRow(text: String, onClick: () -> Unit) {
+private fun FallbackRow(
+    text: String,
+    onClick: () -> Unit,
+) {
     val palette = LocalPalette.current
     val ff = LocalFontFamily.current
     BasicText(
         text = text,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(vertical = 11.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable { onClick() }
+                .padding(vertical = 11.dp),
         style = TextStyle(color = palette.muted, fontSize = 18.sp, fontFamily = ff),
     )
 }
 
 @Composable
-private fun CommandRow(command: Command, onBeforeRun: () -> Unit) {
+private fun CommandRow(
+    command: Command,
+    onBeforeRun: () -> Unit,
+) {
     val palette = LocalPalette.current
     val ff = LocalFontFamily.current
     Column(
         Modifier
             .fillMaxWidth()
-            .clickable { onBeforeRun(); command.run() }
-            .padding(vertical = 10.dp),
+            .clickable {
+                onBeforeRun()
+                command.run()
+            }.padding(vertical = 10.dp),
     ) {
         BasicText(
             text = command.title,
@@ -1028,14 +1155,15 @@ private fun AlphabetScroller(
     val density = LocalDensity.current
 
     val letters = remember { ('A'..'Z').toList() + '#' }
-    val indexForLetter = remember(apps) {
-        val map = HashMap<Char, Int>()
-        apps.forEachIndexed { i, app ->
-            val key = sectionOf(app.label)
-            if (!map.containsKey(key)) map[key] = i
+    val indexForLetter =
+        remember(apps) {
+            val map = HashMap<Char, Int>()
+            apps.forEachIndexed { i, app ->
+                val key = sectionOf(app.label)
+                if (!map.containsKey(key)) map[key] = i
+            }
+            map
         }
-        map
-    }
 
     fun targetIndex(letter: Char): Int? {
         indexForLetter[letter]?.let { return it }
@@ -1071,10 +1199,14 @@ private fun AlphabetScroller(
     val ff = LocalFontFamily.current
 
     // What the finger is on right now: the landing app plus the two after it.
-    val previewApps = remember(activeLetter, isDragging, apps) {
-        if (!isDragging || activeLetter == null) emptyList()
-        else targetIndex(activeLetter!!)?.let { ti -> apps.drop(ti).take(3) } ?: emptyList()
-    }
+    val previewApps =
+        remember(activeLetter, isDragging, apps) {
+            if (!isDragging || activeLetter == null) {
+                emptyList()
+            } else {
+                targetIndex(activeLetter!!)?.let { ti -> apps.drop(ti).take(3) } ?: emptyList()
+            }
+        }
     // Icon of the landing app only — loaded lazily, cached, scrub-time only (#4).
     var previewIcon by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
     LaunchedEffect(previewApps.firstOrNull()?.key, style) {
@@ -1138,105 +1270,116 @@ private fun AlphabetScroller(
             }
         }
 
-        val railModifier = Modifier
-            .align(Alignment.CenterEnd)
-            .fillMaxHeight()
-            .width(30.dp)
-            .onSizeChanged { railHeight = it.height }
-            .pointerInput(apps) {
-                detectVerticalDragGestures(
-                    onDragStart = { offset -> isDragging = true; updateFromY(offset.y) },
-                    onDragEnd = { isDragging = false },
-                    onDragCancel = { isDragging = false },
-                    onVerticalDrag = { change, _ -> change.consume(); updateFromY(change.position.y) },
-                )
-            }
-            .pointerInput(apps) {
-                detectTapGestures { offset -> updateFromY(offset.y) }
-            }
-            .semantics {
-                contentDescription = "fast scroll, A to Z"
-                currentSection?.let { stateDescription = "section $it" }
-            }
+        val railModifier =
+            Modifier
+                .align(Alignment.CenterEnd)
+                .fillMaxHeight()
+                .width(30.dp)
+                .onSizeChanged { railHeight = it.height }
+                .pointerInput(apps) {
+                    detectVerticalDragGestures(
+                        onDragStart = { offset ->
+                            isDragging = true
+                            updateFromY(offset.y)
+                        },
+                        onDragEnd = { isDragging = false },
+                        onDragCancel = { isDragging = false },
+                        onVerticalDrag = { change, _ ->
+                            change.consume()
+                            updateFromY(change.position.y)
+                        },
+                    )
+                }.pointerInput(apps) {
+                    detectTapGestures { offset -> updateFromY(offset.y) }
+                }.semantics {
+                    contentDescription = "fast scroll, A to Z"
+                    currentSection?.let { stateDescription = "section $it" }
+                }
 
         when (style) {
-            FastScrollStyle.INTERACTIVE -> Column(
-                railModifier,
-                verticalArrangement = Arrangement.SpaceBetween,
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                letters.forEach { c ->
-                    val active = if (isDragging) c == activeLetter else c == currentSection
-                    val enabled = indexForLetter.containsKey(c)
-                    val targetColor = when {
-                        active -> palette.accent
-                        enabled -> palette.muted
-                        else -> palette.muted.copy(alpha = 0.35f)
+            FastScrollStyle.INTERACTIVE ->
+                Column(
+                    railModifier,
+                    verticalArrangement = Arrangement.SpaceBetween,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    letters.forEach { c ->
+                        val active = if (isDragging) c == activeLetter else c == currentSection
+                        val enabled = indexForLetter.containsKey(c)
+                        val targetColor =
+                            when {
+                                active -> palette.accent
+                                enabled -> palette.muted
+                                else -> palette.muted.copy(alpha = 0.35f)
+                            }
+                        val color by animateColorAsState(targetColor, label = "letterColor")
+                        val scale by animateFloatAsState(if (active) 1.5f else 1f, label = "letterScale")
+                        BasicText(
+                            text = c.toString(),
+                            modifier =
+                                Modifier.graphicsLayer {
+                                    scaleX = scale
+                                    scaleY = scale
+                                },
+                            style =
+                                TextStyle(
+                                    color = color,
+                                    fontSize = 10.sp,
+                                    fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+                                    textAlign = TextAlign.Center,
+                                ),
+                        )
                     }
-                    val color by animateColorAsState(targetColor, label = "letterColor")
-                    val scale by animateFloatAsState(if (active) 1.5f else 1f, label = "letterScale")
-                    BasicText(
-                        text = c.toString(),
-                        modifier = Modifier.graphicsLayer {
-                            scaleX = scale
-                            scaleY = scale
-                        },
-                        style = TextStyle(
-                            color = color,
-                            fontSize = 10.sp,
-                            fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
-                            textAlign = TextAlign.Center,
-                        ),
-                    )
                 }
-            }
 
-            FastScrollStyle.SIMPLE -> Box(railModifier) {
-                // A hairline with a small handle; the letter whispers beside it
-                // only while dragging. Zero visual noise otherwise.
-                Box(
-                    Modifier
-                        .align(Alignment.CenterEnd)
-                        .padding(end = 13.dp)
-                        .fillMaxHeight()
-                        .width(2.dp)
-                        .background(palette.muted.copy(alpha = 0.25f)),
-                )
-                val handleFrac = when {
-                    isDragging && railHeight > 0 -> pointerY / railHeight
-                    else -> {
-                        val section = currentSection
-                        if (section != null) letters.indexOf(section).toFloat() / letters.size else 0f
-                    }
-                }
-                Box(
-                    Modifier
-                        .align(Alignment.TopEnd)
-                        .offset {
-                            IntOffset(
-                                x = with(density) { (-9).dp.roundToPx() },
-                                y = ((railHeight - with(density) { 14.dp.roundToPx() }) * handleFrac.coerceIn(0f, 1f)).roundToInt(),
-                            )
+            FastScrollStyle.SIMPLE ->
+                Box(railModifier) {
+                    // A hairline with a small handle; the letter whispers beside it
+                    // only while dragging. Zero visual noise otherwise.
+                    Box(
+                        Modifier
+                            .align(Alignment.CenterEnd)
+                            .padding(end = 13.dp)
+                            .fillMaxHeight()
+                            .width(2.dp)
+                            .background(palette.muted.copy(alpha = 0.25f)),
+                    )
+                    val handleFrac =
+                        when {
+                            isDragging && railHeight > 0 -> pointerY / railHeight
+                            else -> {
+                                val section = currentSection
+                                if (section != null) letters.indexOf(section).toFloat() / letters.size else 0f
+                            }
                         }
-                        .size(width = 10.dp, height = 14.dp)
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(if (isDragging) palette.accent else palette.muted.copy(alpha = 0.6f)),
-                )
-                if (isDragging && activeLetter != null) {
-                    BasicText(
-                        text = activeLetter.toString(),
-                        modifier = Modifier
+                    Box(
+                        Modifier
                             .align(Alignment.TopEnd)
                             .offset {
                                 IntOffset(
-                                    x = with(density) { (-34).dp.roundToPx() },
-                                    y = (pointerY - with(density) { 10.dp.toPx() }).roundToInt().coerceAtLeast(0),
+                                    x = with(density) { (-9).dp.roundToPx() },
+                                    y = ((railHeight - with(density) { 14.dp.roundToPx() }) * handleFrac.coerceIn(0f, 1f)).roundToInt(),
                                 )
-                            },
-                        style = TextStyle(color = palette.muted, fontSize = 15.sp, fontWeight = FontWeight.Medium, fontFamily = ff),
+                            }.size(width = 10.dp, height = 14.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(if (isDragging) palette.accent else palette.muted.copy(alpha = 0.6f)),
                     )
+                    if (isDragging && activeLetter != null) {
+                        BasicText(
+                            text = activeLetter.toString(),
+                            modifier =
+                                Modifier
+                                    .align(Alignment.TopEnd)
+                                    .offset {
+                                        IntOffset(
+                                            x = with(density) { (-34).dp.roundToPx() },
+                                            y = (pointerY - with(density) { 10.dp.toPx() }).roundToInt().coerceAtLeast(0),
+                                        )
+                                    },
+                            style = TextStyle(color = palette.muted, fontSize = 15.sp, fontWeight = FontWeight.Medium, fontFamily = ff),
+                        )
+                    }
                 }
-            }
         }
     }
 }
@@ -1244,7 +1387,10 @@ private fun AlphabetScroller(
 // ---- Overlays -------------------------------------------------------------
 
 @Composable
-private fun Scrim(onDismiss: () -> Unit, content: @Composable BoxScope.() -> Unit) {
+private fun Scrim(
+    onDismiss: () -> Unit,
+    content: @Composable BoxScope.() -> Unit,
+) {
     Box(
         Modifier
             .fillMaxSize()
@@ -1350,10 +1496,11 @@ private fun AliasPrompt(
                 cursorBrush = SolidColor(palette.accent),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { if (text.isNotBlank()) onSave(text) }),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .focusRequester(focusRequester)
-                    .padding(vertical = 6.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .focusRequester(focusRequester)
+                        .padding(vertical = 6.dp),
                 decorationBox = { inner ->
                     if (text.isEmpty()) {
                         BasicText(
@@ -1417,10 +1564,11 @@ private fun AppPicker(
             items(apps, key = { it.key }) { app ->
                 BasicText(
                     text = app.label,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onPick(app) }
-                        .padding(vertical = 12.dp),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { onPick(app) }
+                            .padding(vertical = 12.dp),
                     style = TextStyle(color = palette.text, fontSize = 18.sp),
                 )
             }

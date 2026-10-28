@@ -8,9 +8,16 @@ package com.foyerlauncher.foyer.ai.router
  * routing keys off, and without changing meaning.
  */
 object Normalizer {
-    private val VERBS = setOf(
-        "open", "launch", "start", "run", "show", "go", "goto",
-    )
+    private val VERBS =
+        setOf(
+            "open",
+            "launch",
+            "start",
+            "run",
+            "show",
+            "go",
+            "goto",
+        )
 
     fun normalize(raw: String): String {
         val collapsed = raw.trim().replace(Regex("\\s+"), " ")

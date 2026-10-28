@@ -45,7 +45,6 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.foyerlauncher.foyer.LockService
-import com.foyerlauncher.foyer.ai.router.Capability
 import com.foyerlauncher.foyer.data.LauncherStore
 import com.foyerlauncher.foyer.data.SUGGESTED_GEMMA_URL
 import com.foyerlauncher.foyer.data.SUGGESTED_QWEN_BALANCED_URL
@@ -68,7 +67,10 @@ import com.foyerlauncher.foyer.ui.theme.toneBase
 import kotlinx.coroutines.launch
 
 @Composable
-fun SettingsScreen(store: LauncherStore, onClose: () -> Unit) {
+fun SettingsScreen(
+    store: LauncherStore,
+    onClose: () -> Unit,
+) {
     val context = LocalContext.current
     val palette = LocalPalette.current
     val ff = LocalFontFamily.current
@@ -79,300 +81,319 @@ fun SettingsScreen(store: LauncherStore, onClose: () -> Unit) {
     // Backup: user-controlled file via the system picker (no server, no account).
     var backupNote by remember { mutableStateOf<String?>(null) }
     var importPreview by remember { mutableStateOf<LauncherStore.BackupSummary?>(null) }
-    val exportLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/json"),
-    ) { uri ->
-        backupNote = if (uri == null) {
-            null
-        } else {
-            runCatching {
-                context.contentResolver.openOutputStream(uri)?.use { it.write(store.exportBackup().toByteArray()) }
-            }.fold({ "settings exported ✓" }, { "export failed: ${it.message}" })
+    val exportLauncher =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.CreateDocument("application/json"),
+        ) { uri ->
+            backupNote =
+                if (uri == null) {
+                    null
+                } else {
+                    runCatching {
+                        context.contentResolver.openOutputStream(uri)?.use { it.write(store.exportBackup().toByteArray()) }
+                    }.fold({ "settings exported ✓" }, { "export failed: ${it.message}" })
+                }
         }
-    }
-    val importLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument(),
-    ) { uri ->
-        if (uri != null) {
-            val raw = runCatching {
-                context.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }
-            }.getOrNull()
-            if (raw == null) {
-                backupNote = "couldn't read that file"
-            } else {
-                store.parseBackup(raw)
-                    .onSuccess { importPreview = it; backupNote = null }
-                    .onFailure { backupNote = it.message }
+    val importLauncher =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.OpenDocument(),
+        ) { uri ->
+            if (uri != null) {
+                val raw =
+                    runCatching {
+                        context.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }
+                    }.getOrNull()
+                if (raw == null) {
+                    backupNote = "couldn't read that file"
+                } else {
+                    store
+                        .parseBackup(raw)
+                        .onSuccess {
+                            importPreview = it
+                            backupNote = null
+                        }.onFailure { backupNote = it.message }
+                }
             }
         }
-    }
 
     Box(Modifier.fillMaxSize()) {
-    Column(
-        Modifier
-            .fillMaxSize()
-            .background(palette.background)
-            .windowInsetsPadding(WindowInsets.systemBars)
-            .padding(horizontal = 28.dp),
-    ) {
-        Row(
-            Modifier.fillMaxWidth().padding(vertical = 14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+        Column(
+            Modifier
+                .fillMaxSize()
+                .background(palette.background)
+                .windowInsetsPadding(WindowInsets.systemBars)
+                .padding(horizontal = 28.dp),
         ) {
-            BasicText("settings", style = tagStyle)
-            BasicText("close", modifier = Modifier.clickable { onClose() }, style = tagStyle)
-        }
-
-        BasicText(
-            text = "foyer",
-            modifier = Modifier.padding(top = 20.dp, bottom = 36.dp),
-            style = TextStyle(color = palette.text, fontSize = 64.sp, fontWeight = FontWeight.Thin, fontFamily = ff),
-        )
-
-        // Re-entry point for the onboarding prompt, visible only while another
-        // launcher is the default home.
-        var isDefault by remember { mutableStateOf(isDefaultLauncher(context)) }
-        val roleRequest = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-            isDefault = isDefaultLauncher(context)
-        }
-        if (!isDefault) {
-            SettingRow("default launcher", "set foyer") {
-                runCatching { roleRequest.launch(defaultLauncherIntent(context)) }
+            Row(
+                Modifier.fillMaxWidth().padding(vertical = 14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                BasicText("settings", style = tagStyle)
+                BasicText("close", modifier = Modifier.clickable { onClose() }, style = tagStyle)
             }
-        }
 
-        SettingRow("theme", store.themeMode.label) { store.cycleTheme() }
-        SettingRow("clock", store.clockStyle.label) { store.cycleClockStyle() }
-        SettingRow("fast scroll", store.fastScrollStyle.label) { store.cycleFastScroll() }
-
-        val scope = rememberCoroutineScope()
-        SettingRow("on-device ai", if (store.aiEnabled) "on" else "off") { store.toggleAi() }
-        if (store.aiEnabled) {
-            when {
-                store.modelDownloaded() -> {
-                    ModelNote(
-                        when {
-                            store.isSelfTesting -> "model · installed — testing…"
-                            store.selfTestResult != null -> "model · installed — ${store.selfTestResult}"
-                            else -> "model · installed"
-                        },
-                    )
-                    if (!store.isSelfTesting) {
-                        Box(Modifier.padding(vertical = 8.dp)) {
-                            ActionButton("test model") { scope.launch { store.selfTestModel() } }
-                        }
-                    }
-                }
-                store.isDownloading -> {
-                    val pct = if (store.totalBytes > 0L) store.downloadedBytes * 100 / store.totalBytes else 0
-                    FoyerGlyph(
-                        state = GlyphState.THINKING,
-                        modifier = Modifier
-                            .padding(top = 8.dp, bottom = 4.dp)
-                            .size(width = 84.dp, height = 30.dp),
-                    )
-                    ModelNote("downloading… $pct%  (${mb(store.downloadedBytes)} / ${mb(store.totalBytes)})")
-                }
-                else -> {
-                    // Foyer ships no model (user decision, 2026-10-28): the
-                    // user brings a third-party .task model; we only make
-                    // the setup easy — paste a URL, or one-tap a suggestion.
-                    ModelNote("foyer includes no model — bring your own: paste a direct link to a mediapipe .task file")
-                    ModelUrlField(store)
-                    ModelTokenField(store)
-                    if (store.modelUrl.isBlank()) {
-                        ModelNote("suggestions — tap to fill:")
-                        Column(
-                            Modifier.padding(top = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            ActionButton("light · qwen 2.5 0.5b · ~550 mb · no token") {
-                                store.updateModelUrl(SUGGESTED_QWEN_SMALL_URL)
-                            }
-                            ActionButton("balanced · qwen 2.5 1.5b · ~1.6 gb · no token") {
-                                store.updateModelUrl(SUGGESTED_QWEN_BALANCED_URL)
-                            }
-                            ActionButton("gemma 3 1b · ~555 mb · hf token needed") {
-                                store.updateModelUrl(SUGGESTED_GEMMA_URL)
-                            }
-                        }
-                        ModelNote(
-                            "qwen downloads with no account at all. gemma is gated: " +
-                                "accept its license on hugging face + a classic read token.",
-                        )
-                    }
-                    // Download (storage is pre-checked), then a self-test
-                    // proves the model answers.
-                    Box(Modifier.padding(vertical = 10.dp)) {
-                        ActionButton("download & set up") { scope.launch { store.downloadModel() } }
-                    }
-                    store.downloadError?.let { ModelNote("error: $it") }
-                }
-            }
-            SettingRow("how the ai works", "guide") { showAiGuide = true }
-        }
-
-        ChoiceLabel("gestures")
-        SettingRow("swipe up", store.swipeUpAction.label) { store.cycleSwipeUp() }
-        SettingRow("swipe down", store.swipeDownAction.label) { store.cycleSwipeDown() }
-        SettingRow("double tap", store.doubleTapAction.label) { store.cycleDoubleTap() }
-        if (store.swipeUpAction == GestureAction.LOCK_SCREEN ||
-            store.swipeDownAction == GestureAction.LOCK_SCREEN ||
-            store.doubleTapAction == GestureAction.LOCK_SCREEN
-        ) {
-            if (!LockService.isEnabled()) {
-                ModelNote("lock screen needs foyer's accessibility service — tap to enable")
-                BasicText(
-                    text = "enable in accessibility settings ↗",
-                    modifier = Modifier
-                        .padding(top = 6.dp, bottom = 4.dp)
-                        .clickable {
-                            runCatching {
-                                context.startActivity(
-                                    android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
-                                )
-                            }
-                        },
-                    style = TextStyle(color = palette.accent, fontSize = 14.sp, fontFamily = ff),
-                )
-            } else {
-                ModelNote("lock screen service · enabled")
-            }
-        }
-
-        ChoiceLabel("background")
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            BackgroundTone.entries.forEach { tone ->
-                val selected = store.backgroundTone == tone
-                val swatch = toneBase(tone)?.first?.background ?: palette.background
-                Box(
-                    Modifier
-                        .size(26.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(swatch)
-                        .border(
-                            width = if (selected) 2.dp else 1.dp,
-                            color = if (selected) palette.accent else palette.muted.copy(alpha = 0.5f),
-                            shape = RoundedCornerShape(8.dp),
-                        )
-                        .semantics {
-                            role = Role.RadioButton
-                            this.selected = selected
-                            contentDescription = "background ${tone.label}"
-                        }
-                        .clickable { store.chooseTone(tone) },
-                )
-            }
             BasicText(
-                text = store.backgroundTone.label,
-                modifier = Modifier.padding(start = 6.dp),
-                style = TextStyle(color = palette.muted, fontSize = 14.sp, fontFamily = ff),
+                text = "foyer",
+                modifier = Modifier.padding(top = 20.dp, bottom = 36.dp),
+                style = TextStyle(color = palette.text, fontSize = 64.sp, fontWeight = FontWeight.Thin, fontFamily = ff),
             )
-        }
-        SettingRow("wallpaper", if (store.showWallpaper) "on · behind a scrim" else "off") {
-            store.toggleWallpaper()
-        }
-        if (store.showWallpaper) {
-            SettingRow("wallpaper dim", "${(store.wallpaperScrim * 100).toInt()}%") {
-                store.cycleWallpaperScrim()
-            }
-            ModelNote("shows your system wallpaper (set it from android settings). live wallpapers work too.")
-        }
 
-        ChoiceLabel("accent color")
-        Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
-            AccentChoice.entries.forEach { choice ->
-                val selected = store.accent == choice
-                // The currently selected accent is exactly palette.accent.
-                OptionText(
-                    label = choice.label,
-                    selected = selected,
-                    color = if (selected) palette.accent else palette.muted,
-                    family = ff,
-                ) { store.chooseAccent(choice) }
-            }
-        }
-
-        if (store.aliases.isNotEmpty()) {
-            ChoiceLabel("aliases")
-            store.aliases.entries.sortedBy { it.key }.forEach { (alias, key) ->
-                SettingRow("“$alias” → ${key.substringBefore('/').substringAfterLast('.')}", "remove") {
-                    store.removeAlias(alias)
+            // Re-entry point for the onboarding prompt, visible only while another
+            // launcher is the default home.
+            var isDefault by remember { mutableStateOf(isDefaultLauncher(context)) }
+            val roleRequest =
+                rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+                    isDefault = isDefaultLauncher(context)
+                }
+            if (!isDefault) {
+                SettingRow("default launcher", "set foyer") {
+                    runCatching { roleRequest.launch(defaultLauncherIntent(context)) }
                 }
             }
-        }
 
-        ChoiceLabel("font")
-        Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
-            FontChoice.entries.forEach { choice ->
-                val selected = store.font == choice
-                OptionText(
-                    label = choice.label,
-                    selected = selected,
-                    color = if (selected) palette.text else palette.muted,
-                    family = choice.family,
-                ) { store.chooseFont(choice) }
+            SettingRow("theme", store.themeMode.label) { store.cycleTheme() }
+            SettingRow("clock", store.clockStyle.label) { store.cycleClockStyle() }
+            SettingRow("fast scroll", store.fastScrollStyle.label) { store.cycleFastScroll() }
+
+            val scope = rememberCoroutineScope()
+            SettingRow("on-device ai", if (store.aiEnabled) "on" else "off") { store.toggleAi() }
+            if (store.aiEnabled) {
+                when {
+                    store.modelDownloaded() -> {
+                        ModelNote(
+                            when {
+                                store.isSelfTesting -> "model · installed — testing…"
+                                store.selfTestResult != null -> "model · installed — ${store.selfTestResult}"
+                                else -> "model · installed"
+                            },
+                        )
+                        if (!store.isSelfTesting) {
+                            Box(Modifier.padding(vertical = 8.dp)) {
+                                ActionButton("test model") { scope.launch { store.selfTestModel() } }
+                            }
+                        }
+                    }
+                    store.isDownloading -> {
+                        val pct = if (store.totalBytes > 0L) store.downloadedBytes * 100 / store.totalBytes else 0
+                        FoyerGlyph(
+                            state = GlyphState.THINKING,
+                            modifier =
+                                Modifier
+                                    .padding(top = 8.dp, bottom = 4.dp)
+                                    .size(width = 84.dp, height = 30.dp),
+                        )
+                        ModelNote("downloading… $pct%  (${mb(store.downloadedBytes)} / ${mb(store.totalBytes)})")
+                    }
+                    else -> {
+                        // Foyer ships no model (user decision, 2026-10-28): the
+                        // user brings a third-party .task model; we only make
+                        // the setup easy — paste a URL, or one-tap a suggestion.
+                        ModelNote("foyer includes no model — bring your own: paste a direct link to a mediapipe .task file")
+                        ModelUrlField(store)
+                        ModelTokenField(store)
+                        if (store.modelUrl.isBlank()) {
+                            ModelNote("suggestions — tap to fill:")
+                            Column(
+                                Modifier.padding(top = 8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                ActionButton("light · qwen 2.5 0.5b · ~550 mb · no token") {
+                                    store.updateModelUrl(SUGGESTED_QWEN_SMALL_URL)
+                                }
+                                ActionButton("balanced · qwen 2.5 1.5b · ~1.6 gb · no token") {
+                                    store.updateModelUrl(SUGGESTED_QWEN_BALANCED_URL)
+                                }
+                                ActionButton("gemma 3 1b · ~555 mb · hf token needed") {
+                                    store.updateModelUrl(SUGGESTED_GEMMA_URL)
+                                }
+                            }
+                            ModelNote(
+                                "qwen downloads with no account at all. gemma is gated: " +
+                                    "accept its license on hugging face + a classic read token.",
+                            )
+                        }
+                        // Download (storage is pre-checked), then a self-test
+                        // proves the model answers.
+                        Box(Modifier.padding(vertical = 10.dp)) {
+                            ActionButton("download & set up") { scope.launch { store.downloadModel() } }
+                        }
+                        store.downloadError?.let { ModelNote("error: $it") }
+                    }
+                }
+                SettingRow("how the ai works", "guide") { showAiGuide = true }
             }
-        }
 
-        ChoiceLabel("backup")
-        SettingRow("export settings", "to a file you choose") { exportLauncher.launch("foyer-backup.json") }
-        SettingRow("import settings", "from a backup file") { importLauncher.launch(arrayOf("*/*")) }
-        backupNote?.let { ModelNote(it) }
+            ChoiceLabel("gestures")
+            SettingRow("swipe up", store.swipeUpAction.label) { store.cycleSwipeUp() }
+            SettingRow("swipe down", store.swipeDownAction.label) { store.cycleSwipeDown() }
+            SettingRow("double tap", store.doubleTapAction.label) { store.cycleDoubleTap() }
+            if (store.swipeUpAction == GestureAction.LOCK_SCREEN ||
+                store.swipeDownAction == GestureAction.LOCK_SCREEN ||
+                store.doubleTapAction == GestureAction.LOCK_SCREEN
+            ) {
+                if (!LockService.isEnabled()) {
+                    ModelNote("lock screen needs foyer's accessibility service — tap to enable")
+                    BasicText(
+                        text = "enable in accessibility settings ↗",
+                        modifier =
+                            Modifier
+                                .padding(top = 6.dp, bottom = 4.dp)
+                                .clickable {
+                                    runCatching {
+                                        context.startActivity(
+                                            android.content
+                                                .Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                                                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+                                        )
+                                    }
+                                },
+                        style = TextStyle(color = palette.accent, fontSize = 14.sp, fontFamily = ff),
+                    )
+                } else {
+                    ModelNote("lock screen service · enabled")
+                }
+            }
 
-        // Leaves the app — the ↗ marks it as the device's settings, not foyer's.
-        BasicText(
-            text = "android settings ↗",
-            modifier = Modifier
-                .padding(top = 30.dp)
-                .clickable { openSettings(context) },
-            style = TextStyle(color = palette.text, fontSize = 22.sp, fontFamily = ff),
-        )
-        BasicText(
-            text = "about",
-            modifier = Modifier
-                .padding(top = 22.dp)
-                .clickable { openAppInfo(context, context.packageName) },
-            style = TextStyle(color = palette.text, fontSize = 22.sp, fontFamily = ff),
-        )
-        BasicText(
-            text = "reset all",
-            modifier = Modifier
-                .padding(top = 22.dp)
-                .clickable { store.resetAll(); onClose() },
-            style = TextStyle(color = palette.accent, fontSize = 22.sp, fontFamily = ff),
-        )
-    }
+            ChoiceLabel("background")
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                BackgroundTone.entries.forEach { tone ->
+                    val selected = store.backgroundTone == tone
+                    val swatch = toneBase(tone)?.first?.background ?: palette.background
+                    Box(
+                        Modifier
+                            .size(26.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(swatch)
+                            .border(
+                                width = if (selected) 2.dp else 1.dp,
+                                color = if (selected) palette.accent else palette.muted.copy(alpha = 0.5f),
+                                shape = RoundedCornerShape(8.dp),
+                            ).semantics {
+                                role = Role.RadioButton
+                                this.selected = selected
+                                contentDescription = "background ${tone.label}"
+                            }.clickable { store.chooseTone(tone) },
+                    )
+                }
+                BasicText(
+                    text = store.backgroundTone.label,
+                    modifier = Modifier.padding(start = 6.dp),
+                    style = TextStyle(color = palette.muted, fontSize = 14.sp, fontFamily = ff),
+                )
+            }
+            SettingRow("wallpaper", if (store.showWallpaper) "on · behind a scrim" else "off") {
+                store.toggleWallpaper()
+            }
+            if (store.showWallpaper) {
+                SettingRow("wallpaper dim", "${(store.wallpaperScrim * 100).toInt()}%") {
+                    store.cycleWallpaperScrim()
+                }
+                ModelNote("shows your system wallpaper (set it from android settings). live wallpapers work too.")
+            }
 
-    // Import confirmation: show what the file restores before touching state.
-    importPreview?.let { preview ->
-        FoyerSheet(title = "restore from backup?", onDismiss = { importPreview = null }) {
-            SheetNote(
-                "restores ${preview.favorites} favorites, ${preview.hidden} hidden apps, " +
-                    "${preview.distracting} distracting marks, ${preview.aliases} aliases, " +
-                    "plus theme and gesture preferences. current settings are replaced.",
+            ChoiceLabel("accent color")
+            Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+                AccentChoice.entries.forEach { choice ->
+                    val selected = store.accent == choice
+                    // The currently selected accent is exactly palette.accent.
+                    OptionText(
+                        label = choice.label,
+                        selected = selected,
+                        color = if (selected) palette.accent else palette.muted,
+                        family = ff,
+                    ) { store.chooseAccent(choice) }
+                }
+            }
+
+            if (store.aliases.isNotEmpty()) {
+                ChoiceLabel("aliases")
+                store.aliases.entries.sortedBy { it.key }.forEach { (alias, key) ->
+                    SettingRow("“$alias” → ${key.substringBefore('/').substringAfterLast('.')}", "remove") {
+                        store.removeAlias(alias)
+                    }
+                }
+            }
+
+            ChoiceLabel("font")
+            Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+                FontChoice.entries.forEach { choice ->
+                    val selected = store.font == choice
+                    OptionText(
+                        label = choice.label,
+                        selected = selected,
+                        color = if (selected) palette.text else palette.muted,
+                        family = choice.family,
+                    ) { store.chooseFont(choice) }
+                }
+            }
+
+            ChoiceLabel("backup")
+            SettingRow("export settings", "to a file you choose") { exportLauncher.launch("foyer-backup.json") }
+            SettingRow("import settings", "from a backup file") { importLauncher.launch(arrayOf("*/*")) }
+            backupNote?.let { ModelNote(it) }
+
+            // Leaves the app — the ↗ marks it as the device's settings, not foyer's.
+            BasicText(
+                text = "android settings ↗",
+                modifier =
+                    Modifier
+                        .padding(top = 30.dp)
+                        .clickable { openSettings(context) },
+                style = TextStyle(color = palette.text, fontSize = 22.sp, fontFamily = ff),
             )
-            SheetRow("restore") {
-                store.applyBackup(preview)
-                importPreview = null
-                backupNote = "settings restored ✓"
-            }
-            SheetRow("cancel") { importPreview = null }
+            BasicText(
+                text = "about",
+                modifier =
+                    Modifier
+                        .padding(top = 22.dp)
+                        .clickable { openAppInfo(context, context.packageName) },
+                style = TextStyle(color = palette.text, fontSize = 22.sp, fontFamily = ff),
+            )
+            BasicText(
+                text = "reset all",
+                modifier =
+                    Modifier
+                        .padding(top = 22.dp)
+                        .clickable {
+                            store.resetAll()
+                            onClose()
+                        },
+                style = TextStyle(color = palette.accent, fontSize = 22.sp, fontFamily = ff),
+            )
         }
-    }
 
-    if (showAiGuide) {
-        AiGuideScreen(onClose = { showAiGuide = false })
-    }
+        // Import confirmation: show what the file restores before touching state.
+        importPreview?.let { preview ->
+            FoyerSheet(title = "restore from backup?", onDismiss = { importPreview = null }) {
+                SheetNote(
+                    "restores ${preview.favorites} favorites, ${preview.hidden} hidden apps, " +
+                        "${preview.distracting} distracting marks, ${preview.aliases} aliases, " +
+                        "plus theme and gesture preferences. current settings are replaced.",
+                )
+                SheetRow("restore") {
+                    store.applyBackup(preview)
+                    importPreview = null
+                    backupNote = "settings restored ✓"
+                }
+                SheetRow("cancel") { importPreview = null }
+            }
+        }
+
+        if (showAiGuide) {
+            AiGuideScreen(onClose = { showAiGuide = false })
+        }
     }
 }
 
 @Composable
-private fun SettingRow(label: String, value: String, onClick: () -> Unit) {
+private fun SettingRow(
+    label: String,
+    value: String,
+    onClick: () -> Unit,
+) {
     val palette = LocalPalette.current
     val ff = LocalFontFamily.current
     Row(
@@ -411,20 +432,21 @@ private fun OptionText(
 ) {
     BasicText(
         text = label,
-        modifier = Modifier
-            .defaultMinSize(minHeight = 48.dp)
-            .semantics {
-                role = Role.RadioButton
-                this.selected = selected
-            }
-            .clickable { onClick() }
-            .padding(vertical = 4.dp),
-        style = TextStyle(
-            color = color,
-            fontSize = 16.sp,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-            fontFamily = family,
-        ),
+        modifier =
+            Modifier
+                .defaultMinSize(minHeight = 48.dp)
+                .semantics {
+                    role = Role.RadioButton
+                    this.selected = selected
+                }.clickable { onClick() }
+                .padding(vertical = 4.dp),
+        style =
+            TextStyle(
+                color = color,
+                fontSize = 16.sp,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                fontFamily = family,
+            ),
     )
 }
 
@@ -453,10 +475,11 @@ private fun ModelUrlField(store: LauncherStore) {
             singleLine = true,
             textStyle = TextStyle(color = palette.text, fontSize = 13.sp, fontFamily = ff),
             cursorBrush = SolidColor(palette.accent),
-            modifier = Modifier
-                .fillMaxWidth()
-                .semantics { contentDescription = "model url" }
-                .padding(vertical = 6.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .semantics { contentDescription = "model url" }
+                    .padding(vertical = 6.dp),
         )
         Box(
             Modifier
@@ -479,15 +502,19 @@ private fun ModelTokenField(store: LauncherStore) {
         )
         BasicTextField(
             value = token,
-            onValueChange = { token = it; store.updateHfToken(it) },
+            onValueChange = {
+                token = it
+                store.updateHfToken(it)
+            },
             singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
             textStyle = TextStyle(color = palette.text, fontSize = 13.sp, fontFamily = ff),
             cursorBrush = SolidColor(palette.accent),
-            modifier = Modifier
-                .fillMaxWidth()
-                .semantics { contentDescription = "hugging face token, only for gated models" }
-                .padding(vertical = 6.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .semantics { contentDescription = "hugging face token, only for gated models" }
+                    .padding(vertical = 6.dp),
             decorationBox = { inner ->
                 if (token.isEmpty()) {
                     BasicText(

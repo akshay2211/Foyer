@@ -1,11 +1,8 @@
 package com.foyerlauncher.foyer.ui.components
 
-import android.accessibilityservice.AccessibilityService
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.provider.Settings
-import android.view.accessibility.AccessibilityEvent
 import com.foyerlauncher.foyer.LockService
 import com.foyerlauncher.foyer.data.expandNotifications
 import com.foyerlauncher.foyer.data.openBrowser
@@ -15,7 +12,9 @@ import com.foyerlauncher.foyer.data.openBrowser
  * launcher-UI targets (drawer / ask me) are injected by [GestureUi] because
  * they live in compose state, not intents.
  */
-enum class GestureAction(val label: String) {
+enum class GestureAction(
+    val label: String,
+) {
     NONE("none"),
     DRAWER("app drawer"),
     NOTIFICATIONS("notifications"),
@@ -34,7 +33,11 @@ class GestureUi(
     val openVoice: () -> Unit,
 )
 
-fun runGestureAction(context: Context, action: GestureAction, ui: GestureUi) {
+fun runGestureAction(
+    context: Context,
+    action: GestureAction,
+    ui: GestureUi,
+) {
     when (action) {
         GestureAction.NONE -> Unit
         GestureAction.DRAWER -> ui.openDrawer()

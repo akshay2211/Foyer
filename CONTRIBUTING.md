@@ -25,10 +25,11 @@ that a change fits the product and the codebase, not just that it works.
   the semantic path; teach the deterministic router (`ai/router`) or improve
   the prompt instead.
 - **Match the existing style** — lowercase UI copy, KDoc on public APIs,
-  comments explain *why*, not *what*.
+  comments explain *why*, not *what*. Formatting is enforced by ktlint
+  (`./gradlew ktlintFormat` fixes most things).
 - **Tests:** changes to `ai/router`, `Normalizer`, or persistence codecs must
-  come with unit tests. `./gradlew testDebugUnitTest lintDebug` must pass
-  (CI enforces this).
+  come with unit tests. `./gradlew ktlintCheck testDebugUnitTest lintDebug`
+  must pass (CI enforces all three).
 
 ## Building
 

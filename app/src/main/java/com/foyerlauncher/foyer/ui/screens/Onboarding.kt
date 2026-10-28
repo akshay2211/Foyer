@@ -43,10 +43,11 @@ fun isDefaultLauncher(context: Context): Boolean {
             return rm.isRoleHeld(RoleManager.ROLE_HOME)
         }
     }
-    val res = context.packageManager.resolveActivity(
-        Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),
-        PackageManager.MATCH_DEFAULT_ONLY,
-    )
+    val res =
+        context.packageManager.resolveActivity(
+            Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),
+            PackageManager.MATCH_DEFAULT_ONLY,
+        )
     return res?.activityInfo?.packageName == context.packageName
 }
 
@@ -77,10 +78,11 @@ fun OnboardingScreen(onDone: () -> Unit) {
     val ff = LocalFontFamily.current
 
     var becameDefault by remember { mutableStateOf(isDefaultLauncher(context)) }
-    val roleRequest = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        becameDefault = isDefaultLauncher(context)
-        if (becameDefault) onDone()
-    }
+    val roleRequest =
+        rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            becameDefault = isDefaultLauncher(context)
+            if (becameDefault) onDone()
+        }
 
     Column(
         Modifier

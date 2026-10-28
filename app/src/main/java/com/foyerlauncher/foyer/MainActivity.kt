@@ -1,7 +1,6 @@
 package com.foyerlauncher.foyer
 
 import android.graphics.Color
-import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -15,7 +14,6 @@ import com.foyerlauncher.foyer.ui.screens.LauncherScreen
 import com.foyerlauncher.foyer.ui.theme.LauncherTheme
 
 class MainActivity : ComponentActivity() {
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()

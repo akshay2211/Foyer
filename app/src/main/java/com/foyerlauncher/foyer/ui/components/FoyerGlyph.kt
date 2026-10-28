@@ -24,7 +24,9 @@ import kotlin.random.Random
  * What the assistant is doing, as the glyph shows it. [announce] doubles as
  * the TalkBack description so the indicator is never the only channel (#10).
  */
-enum class GlyphState(val announce: String) {
+enum class GlyphState(
+    val announce: String,
+) {
     IDLE("assistant ready"),
     LISTENING("listening"),
     THINKING("thinking"),
@@ -70,24 +72,25 @@ fun FoyerGlyph(
         val baseline = h * 0.92f
         val maxBar = h * 0.78f
 
-        fun barHeight(i: Int): Float = when (state) {
-            GlyphState.IDLE -> maxBar * (IDLE_PATTERN[i] + jitter[i])
-            GlyphState.LISTENING -> {
-                val amp = amplitude().coerceIn(0f, 1f)
-                // Quantized per-bar weight so equal input still reads as strokes,
-                // not a smooth meter; flat floor when the mic is silent/closed.
-                val step = floor(clock * 6f + i * 1.3f).toInt() % 3
-                maxBar * (0.12f + amp * (0.55f + 0.33f * step / 2f + jitter[i]))
+        fun barHeight(i: Int): Float =
+            when (state) {
+                GlyphState.IDLE -> maxBar * (IDLE_PATTERN[i] + jitter[i])
+                GlyphState.LISTENING -> {
+                    val amp = amplitude().coerceIn(0f, 1f)
+                    // Quantized per-bar weight so equal input still reads as strokes,
+                    // not a smooth meter; flat floor when the mic is silent/closed.
+                    val step = floor(clock * 6f + i * 1.3f).toInt() % 3
+                    maxBar * (0.12f + amp * (0.55f + 0.33f * step / 2f + jitter[i]))
+                }
+                GlyphState.THINKING -> {
+                    // A single pulse hops bar to bar in discrete steps (90° motion:
+                    // bars only ever grow/shrink vertically, the pulse moves in snaps).
+                    val active = floor(clock * BARS * 2).toInt() % BARS
+                    maxBar * (if (i == active) 0.72f else 0.26f + jitter[i] / 2f)
+                }
+                GlyphState.DONE -> maxBar * 0.52f
+                GlyphState.ERROR -> maxBar * ERROR_PATTERN[i]
             }
-            GlyphState.THINKING -> {
-                // A single pulse hops bar to bar in discrete steps (90° motion:
-                // bars only ever grow/shrink vertically, the pulse moves in snaps).
-                val active = floor(clock * BARS * 2).toInt() % BARS
-                maxBar * (if (i == active) 0.72f else 0.26f + jitter[i] / 2f)
-            }
-            GlyphState.DONE -> maxBar * 0.52f
-            GlyphState.ERROR -> maxBar * ERROR_PATTERN[i]
-        }
 
         // The vertical strokes.
         for (i in 0 until BARS) {
@@ -102,24 +105,27 @@ fun FoyerGlyph(
         }
 
         // The horizontal bar — the wordmark F's floating elbow.
-        val capY = when (state) {
-            GlyphState.ERROR -> baseline // fallen
-            else -> h * 0.08f
-        }
-        val capHalf = when (state) {
-            GlyphState.DONE -> (gap * BARS) / 2f // full width: snapped together
-            GlyphState.THINKING -> {
-                // Steps across the top in quantized hops, loading-bar style.
-                gap * 0.8f
+        val capY =
+            when (state) {
+                GlyphState.ERROR -> baseline // fallen
+                else -> h * 0.08f
             }
-            else -> gap * 0.8f
-        }
-        val capCenter = when (state) {
-            GlyphState.THINKING -> gap * (floor(clock * BARS * 2).toInt() % BARS + 1)
-            GlyphState.DONE -> gap * (BARS + 1) / 2f
-            GlyphState.ERROR -> gap * 2f
-            else -> gap * 1.5f // resting over the first bars, like the F
-        }
+        val capHalf =
+            when (state) {
+                GlyphState.DONE -> (gap * BARS) / 2f // full width: snapped together
+                GlyphState.THINKING -> {
+                    // Steps across the top in quantized hops, loading-bar style.
+                    gap * 0.8f
+                }
+                else -> gap * 0.8f
+            }
+        val capCenter =
+            when (state) {
+                GlyphState.THINKING -> gap * (floor(clock * BARS * 2).toInt() % BARS + 1)
+                GlyphState.DONE -> gap * (BARS + 1) / 2f
+                GlyphState.ERROR -> gap * 2f
+                else -> gap * 1.5f // resting over the first bars, like the F
+            }
         drawLine(
             color = if (state == GlyphState.ERROR) palette.muted else palette.accent,
             start = Offset(capCenter - capHalf, capY),

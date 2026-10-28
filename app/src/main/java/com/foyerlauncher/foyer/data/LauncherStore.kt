@@ -60,16 +60,17 @@ private const val KEY_DISTRACTING = "distracting"
 const val DISTRACTION_THRESHOLD_MS = 20 * 60 * 1000L
 
 // Common time-sinks, pre-marked as distracting (user can unmark any).
-private val DEFAULT_DISTRACTING = setOf(
-    "com.instagram.android",
-    "com.facebook.katana",
-    "com.zhiliaoapp.musically", // TikTok
-    "com.google.android.youtube",
-    "com.twitter.android",
-    "com.reddit.frontpage",
-    "com.snapchat.android",
-    "com.facebook.orca", // Messenger
-)
+private val DEFAULT_DISTRACTING =
+    setOf(
+        "com.instagram.android",
+        "com.facebook.katana",
+        "com.zhiliaoapp.musically", // TikTok
+        "com.google.android.youtube",
+        "com.twitter.android",
+        "com.reddit.frontpage",
+        "com.snapchat.android",
+        "com.facebook.orca", // Messenger
+    )
 private const val KEY_ONBOARDED = "onboarded"
 private const val KEY_ALIASES = "aliases"
 private const val KEY_LIMITS = "app_limits"
@@ -109,7 +110,11 @@ val AppEntry.key: String
     get() = if (userSerial == 0L) "$packageName/$activityName" else "$packageName/$activityName/$userSerial"
 
 /** True if a stored [AppEntry.key] belongs to [packageName] in profile [userSerial]. */
-private fun keyMatches(key: String, packageName: String, userSerial: Long): Boolean {
+private fun keyMatches(
+    key: String,
+    packageName: String,
+    userSerial: Long,
+): Boolean {
     if (!key.startsWith("$packageName/")) return false
     val serialPart = key.substringAfter('/').substringAfter('/', missingDelimiterValue = "")
     return if (userSerial == 0L) serialPart.isEmpty() else serialPart == userSerial.toString()
@@ -119,11 +124,11 @@ private fun keyMatches(key: String, packageName: String, userSerial: Long): Bool
 private const val UNIT_SEP = '\u001F'
 private const val REC_SEP = "\u001E"
 
-private fun AppEntry.encode(): String =
+internal fun AppEntry.encode(): String =
     "$label$UNIT_SEP$packageName$UNIT_SEP$activityName" +
         if (userSerial != 0L) "$UNIT_SEP$userSerial" else ""
 
-private fun decodeApp(raw: String?): AppEntry? {
+internal fun decodeApp(raw: String?): AppEntry? {
     if (raw.isNullOrBlank()) return null
     val parts = raw.split(UNIT_SEP)
     return when (parts.size) {
@@ -137,7 +142,11 @@ private fun decodeApp(raw: String?): AppEntry? {
  * Resolves the default handler for [probe] to its *launcher* component, so it can
  * be started the same way as any app in the drawer.
  */
-private fun resolveAsLauncher(context: Context, probe: Intent, label: String): AppEntry? {
+private fun resolveAsLauncher(
+    context: Context,
+    probe: Intent,
+    label: String,
+): AppEntry? {
     val pm = context.packageManager
     val pkg = pm.resolveActivity(probe, 0)?.activityInfo?.packageName ?: return null
     if (pkg == "android") return null // system resolver / no concrete handler
@@ -146,19 +155,23 @@ private fun resolveAsLauncher(context: Context, probe: Intent, label: String): A
 }
 
 /** Snapshot-backed launcher settings, persisted to SharedPreferences. */
-class LauncherStore(private val context: Context) {
+class LauncherStore(
+    private val context: Context,
+) {
     private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    val favorites: SnapshotStateList<AppEntry> = mutableStateListOf<AppEntry>().apply {
-        (prefs.getString(KEY_FAVS, "") ?: "")
-            .split(REC_SEP)
-            .mapNotNull { decodeApp(it) }
-            .let { addAll(it) }
-    }
+    val favorites: SnapshotStateList<AppEntry> =
+        mutableStateListOf<AppEntry>().apply {
+            (prefs.getString(KEY_FAVS, "") ?: "")
+                .split(REC_SEP)
+                .mapNotNull { decodeApp(it) }
+                .let { addAll(it) }
+        }
 
     /** Clock style; migrates the old show/hide boolean (hidden → OFF). */
     var clockStyle by mutableStateOf(
-        prefs.getString(KEY_CLOCK_STYLE, null)
+        prefs
+            .getString(KEY_CLOCK_STYLE, null)
             ?.let { raw -> runCatching { ClockStyle.valueOf(raw) }.getOrNull() }
             ?: if (prefs.getBoolean(KEY_CLOCK, true)) ClockStyle.DIGITAL else ClockStyle.OFF,
     )
@@ -200,11 +213,12 @@ class LauncherStore(private val context: Context) {
     }
 
     fun cycleWallpaperScrim() {
-        wallpaperScrim = when {
-            wallpaperScrim < 0.5f -> 0.6f
-            wallpaperScrim < 0.7f -> 0.8f
-            else -> 0.4f
-        }
+        wallpaperScrim =
+            when {
+                wallpaperScrim < 0.5f -> 0.6f
+                wallpaperScrim < 0.7f -> 0.8f
+                else -> 0.4f
+            }
         prefs.edit { putFloat(KEY_SCRIM, wallpaperScrim) }
     }
 
@@ -260,6 +274,7 @@ class LauncherStore(private val context: Context) {
     // Empty until the user supplies a model URL — Foyer bundles no model.
     var modelUrl by mutableStateOf(prefs.getString(KEY_MODEL_URL, "") ?: "")
         private set
+
     // Optional — only needed for gated URLs. Empty for a public/self-hosted model.
     var hfToken by mutableStateOf(prefs.getString(KEY_HF_TOKEN, "") ?: "")
         private set
@@ -290,11 +305,12 @@ class LauncherStore(private val context: Context) {
         isSelfTesting = true
         selfTestResult = null
         val engine = LlmEngine(context, modelFile(context).path)
-        selfTestResult = runCatching {
-            if (!engine.prepare()) return@runCatching "model failed to load"
-            val reply = engine.generate("Reply with the single word: ready")
-            if (reply.isNullOrBlank()) "model loaded but gave no answer" else "model working ✓"
-        }.getOrElse { "self-test failed: ${it.message}" }
+        selfTestResult =
+            runCatching {
+                if (!engine.prepare()) return@runCatching "model failed to load"
+                val reply = engine.generate("Reply with the single word: ready")
+                if (reply.isNullOrBlank()) "model loaded but gave no answer" else "model working ✓"
+            }.getOrElse { "self-test failed: ${it.message}" }
         engine.close()
         isSelfTesting = false
     }
@@ -328,19 +344,22 @@ class LauncherStore(private val context: Context) {
         selfTestResult = null
         downloadedBytes = 0L
         totalBytes = 0L
-        val result = ModelDownloader.download(modelUrl, modelFile(context), token = hfToken.ifBlank { null }) { d, t ->
-            downloadedBytes = d
-            totalBytes = t
-        }
+        val result =
+            ModelDownloader.download(modelUrl, modelFile(context), token = hfToken.ifBlank { null }) { d, t ->
+                downloadedBytes = d
+                totalBytes = t
+            }
         isDownloading = false
         result
             .onSuccess {
                 selfTestModel() // prove it answers before calling setup done
-            }
-            .onFailure { downloadError = it.message ?: "download failed" }
+            }.onFailure { downloadError = it.message ?: "download failed" }
     }
 
-    private inline fun <reified T : Enum<T>> enumFromPrefs(key: String, default: T): T {
+    private inline fun <reified T : Enum<T>> enumFromPrefs(
+        key: String,
+        default: T,
+    ): T {
         val raw = prefs.getString(key, null) ?: return default
         return runCatching { enumValueOf<T>(raw) }.getOrDefault(default)
     }
@@ -387,25 +406,26 @@ class LauncherStore(private val context: Context) {
         private set
 
     /** Keys of apps hidden from the default drawer browse list. */
-    val hidden: SnapshotStateList<String> = mutableStateListOf<String>().apply {
-        (prefs.getString(KEY_HIDDEN, "") ?: "")
-            .split(REC_SEP)
-            .filter { it.isNotBlank() }
-            .let { addAll(it) }
-    }
+    val hidden: SnapshotStateList<String> =
+        mutableStateListOf<String>().apply {
+            (prefs.getString(KEY_HIDDEN, "") ?: "")
+                .split(REC_SEP)
+                .filter { it.isNotBlank() }
+                .let { addAll(it) }
+        }
 
     /** Launch counts keyed by app key, used to float most-used apps. */
-    val usage: SnapshotStateMap<String, Int> = mutableStateMapOf<String, Int>().apply {
-        (prefs.getString(KEY_USAGE, "") ?: "")
-            .split(REC_SEP)
-            .forEach { rec ->
-                val p = rec.split(UNIT_SEP)
-                if (p.size == 2) p[1].toIntOrNull()?.let { put(p[0], it) }
-            }
-    }
+    val usage: SnapshotStateMap<String, Int> =
+        mutableStateMapOf<String, Int>().apply {
+            (prefs.getString(KEY_USAGE, "") ?: "")
+                .split(REC_SEP)
+                .forEach { rec ->
+                    val p = rec.split(UNIT_SEP)
+                    if (p.size == 2) p[1].toIntOrNull()?.let { put(p[0], it) }
+                }
+        }
 
-    fun isFavorite(app: AppEntry): Boolean =
-        favorites.any { it.packageName == app.packageName && it.activityName == app.activityName }
+    fun isFavorite(app: AppEntry): Boolean = favorites.any { it.packageName == app.packageName && it.activityName == app.activityName }
 
     fun isHidden(app: AppEntry): Boolean = hidden.contains(app.key)
 
@@ -419,16 +439,20 @@ class LauncherStore(private val context: Context) {
      * the highest-confidence resolution tier — "bank" → HDFC opens instantly,
      * before fuzzy matching or any model call.
      */
-    val aliases: SnapshotStateMap<String, String> = mutableStateMapOf<String, String>().apply {
-        (prefs.getString(KEY_ALIASES, "") ?: "")
-            .split(REC_SEP)
-            .forEach { rec ->
-                val p = rec.split(UNIT_SEP)
-                if (p.size == 2) put(p[0], p[1])
-            }
-    }
+    val aliases: SnapshotStateMap<String, String> =
+        mutableStateMapOf<String, String>().apply {
+            (prefs.getString(KEY_ALIASES, "") ?: "")
+                .split(REC_SEP)
+                .forEach { rec ->
+                    val p = rec.split(UNIT_SEP)
+                    if (p.size == 2) put(p[0], p[1])
+                }
+        }
 
-    fun addAlias(alias: String, app: AppEntry) {
+    fun addAlias(
+        alias: String,
+        app: AppEntry,
+    ) {
         val a = alias.trim().lowercase()
         if (a.isEmpty()) return
         aliases[a] = app.key
@@ -447,15 +471,16 @@ class LauncherStore(private val context: Context) {
     }
 
     /** Packages the user treats as time-sinks (seeded with common ones). */
-    val distracting: SnapshotStateList<String> = mutableStateListOf<String>().apply {
-        val stored = prefs.getString(KEY_DISTRACTING, null)
-        if (stored == null) {
-            addAll(DEFAULT_DISTRACTING)
-            prefs.edit { putString(KEY_DISTRACTING, DEFAULT_DISTRACTING.joinToString(REC_SEP)) }
-        } else {
-            addAll(stored.split(REC_SEP).filter { it.isNotBlank() })
+    val distracting: SnapshotStateList<String> =
+        mutableStateListOf<String>().apply {
+            val stored = prefs.getString(KEY_DISTRACTING, null)
+            if (stored == null) {
+                addAll(DEFAULT_DISTRACTING)
+                prefs.edit { putString(KEY_DISTRACTING, DEFAULT_DISTRACTING.joinToString(REC_SEP)) }
+            } else {
+                addAll(stored.split(REC_SEP).filter { it.isNotBlank() })
+            }
         }
-    }
 
     fun isDistracting(app: AppEntry): Boolean = distracting.contains(app.packageName)
 
@@ -480,34 +505,34 @@ class LauncherStore(private val context: Context) {
     }
 
     /** The app list as focus allows it: distracting apps vanish while active. */
-    fun focusFiltered(apps: List<AppEntry>): List<AppEntry> =
-        if (!isFocusActive()) apps else apps.filterNot { distracting.contains(it.packageName) }
+    fun focusFiltered(apps: List<AppEntry>): List<AppEntry> = if (!isFocusActive()) apps else apps.filterNot { distracting.contains(it.packageName) }
 
     // ---- Per-app daily timers (#13) ----------------------------------------
 
     /** Custom daily budgets, package → ms. Apps without one fall back to the
      *  global [DISTRACTION_THRESHOLD_MS] if they're marked distracting. */
-    val appLimits: SnapshotStateMap<String, Long> = mutableStateMapOf<String, Long>().apply {
-        (prefs.getString(KEY_LIMITS, "") ?: "")
-            .split(REC_SEP)
-            .forEach { rec ->
-                val p = rec.split(UNIT_SEP)
-                if (p.size == 2) p[1].toLongOrNull()?.let { put(p[0], it) }
-            }
-    }
+    val appLimits: SnapshotStateMap<String, Long> =
+        mutableStateMapOf<String, Long>().apply {
+            (prefs.getString(KEY_LIMITS, "") ?: "")
+                .split(REC_SEP)
+                .forEach { rec ->
+                    val p = rec.split(UNIT_SEP)
+                    if (p.size == 2) p[1].toLongOrNull()?.let { put(p[0], it) }
+                }
+        }
 
-    fun limitFor(packageName: String): Long? =
-        appLimits[packageName] ?: DISTRACTION_THRESHOLD_MS.takeIf { distracting.contains(packageName) }
+    fun limitFor(packageName: String): Long? = appLimits[packageName] ?: DISTRACTION_THRESHOLD_MS.takeIf { distracting.contains(packageName) }
 
     /** Cycles none → 15m → 30m → 1h → 2h → none, like the other setting rows. */
     fun cycleLimit(packageName: String) {
         val steps = listOf(15L, 30L, 60L, 120L).map { it * 60_000 }
         val current = appLimits[packageName]
-        val next = when (current) {
-            null -> steps.first()
-            steps.last() -> null
-            else -> steps.getOrNull(steps.indexOf(current) + 1)
-        }
+        val next =
+            when (current) {
+                null -> steps.first()
+                steps.last() -> null
+                else -> steps.getOrNull(steps.indexOf(current) + 1)
+            }
         if (next == null) appLimits.remove(packageName) else appLimits[packageName] = next
         prefs.edit {
             putString(KEY_LIMITS, appLimits.entries.joinToString(REC_SEP) { "${it.key}$UNIT_SEP${it.value}" })
@@ -518,8 +543,7 @@ class LauncherStore(private val context: Context) {
     // launcher process lives as long as the home screen does).
     private val bypassUntil = HashMap<String, Long>()
 
-    fun bypassActive(packageName: String): Boolean =
-        (bypassUntil[packageName] ?: 0L) > System.currentTimeMillis()
+    fun bypassActive(packageName: String): Boolean = (bypassUntil[packageName] ?: 0L) > System.currentTimeMillis()
 
     fun recordBypass(packageName: String) {
         bypassUntil[packageName] = System.currentTimeMillis() + 5 * 60_000L
@@ -561,7 +585,10 @@ class LauncherStore(private val context: Context) {
         persistFavorites()
     }
 
-    fun setShortcut(side: ShortcutSide, app: AppEntry) {
+    fun setShortcut(
+        side: ShortcutSide,
+        app: AppEntry,
+    ) {
         when (side) {
             ShortcutSide.LEFT -> {
                 leftShortcut = app
@@ -581,30 +608,32 @@ class LauncherStore(private val context: Context) {
     // ---- Backup (user-controlled file, no server, no accounts; see #11) ----
 
     /** Everything restorable as versioned JSON. Deliberately excludes the HF token. */
-    fun exportBackup(): String = JSONObject().apply {
-        put("app", "foyer")
-        put("version", BACKUP_VERSION)
-        put("favorites", JSONArray(favorites.map { it.encode() }))
-        put("hidden", JSONArray(hidden.toList()))
-        put("distracting", JSONArray(distracting.toList()))
-        put("aliases", JSONObject(aliases.toMap() as Map<*, *>))
-        put("appLimits", JSONObject(appLimits.toMap() as Map<*, *>))
-        put("clockStyle", clockStyle.name)
-        put("fastScroll", fastScrollStyle.name)
-        put("backgroundTone", backgroundTone.name)
-        put("showWallpaper", showWallpaper)
-        put("wallpaperScrim", wallpaperScrim.toDouble())
-        put("theme", themeMode.name)
-        put("accent", accent.name)
-        put("font", font.name)
-        put("aiEnabled", aiEnabled)
-        put("modelUrl", modelUrl)
-        put("swipeUp", swipeUpAction.name)
-        put("swipeDown", swipeDownAction.name)
-        put("doubleTap", doubleTapAction.name)
-        leftShortcut?.let { put("leftShortcut", it.encode()) }
-        rightShortcut?.let { put("rightShortcut", it.encode()) }
-    }.toString(2)
+    fun exportBackup(): String =
+        JSONObject()
+            .apply {
+                put("app", "foyer")
+                put("version", BACKUP_VERSION)
+                put("favorites", JSONArray(favorites.map { it.encode() }))
+                put("hidden", JSONArray(hidden.toList()))
+                put("distracting", JSONArray(distracting.toList()))
+                put("aliases", JSONObject(aliases.toMap() as Map<*, *>))
+                put("appLimits", JSONObject(appLimits.toMap() as Map<*, *>))
+                put("clockStyle", clockStyle.name)
+                put("fastScroll", fastScrollStyle.name)
+                put("backgroundTone", backgroundTone.name)
+                put("showWallpaper", showWallpaper)
+                put("wallpaperScrim", wallpaperScrim.toDouble())
+                put("theme", themeMode.name)
+                put("accent", accent.name)
+                put("font", font.name)
+                put("aiEnabled", aiEnabled)
+                put("modelUrl", modelUrl)
+                put("swipeUp", swipeUpAction.name)
+                put("swipeDown", swipeDownAction.name)
+                put("doubleTap", doubleTapAction.name)
+                leftShortcut?.let { put("leftShortcut", it.encode()) }
+                rightShortcut?.let { put("rightShortcut", it.encode()) }
+            }.toString(2)
 
     /** What an import would restore — shown for confirmation before [applyBackup]. */
     data class BackupSummary(
@@ -615,20 +644,21 @@ class LauncherStore(private val context: Context) {
         internal val json: JSONObject,
     )
 
-    fun parseBackup(raw: String): Result<BackupSummary> = runCatching {
-        val o = JSONObject(raw)
-        require(o.optString("app") == "foyer") { "not a foyer backup file" }
-        require(o.optInt("version", Int.MAX_VALUE) <= BACKUP_VERSION) {
-            "backup from a newer foyer — update the app first"
+    fun parseBackup(raw: String): Result<BackupSummary> =
+        runCatching {
+            val o = JSONObject(raw)
+            require(o.optString("app") == "foyer") { "not a foyer backup file" }
+            require(o.optInt("version", Int.MAX_VALUE) <= BACKUP_VERSION) {
+                "backup from a newer foyer — update the app first"
+            }
+            BackupSummary(
+                favorites = o.optJSONArray("favorites")?.length() ?: 0,
+                hidden = o.optJSONArray("hidden")?.length() ?: 0,
+                distracting = o.optJSONArray("distracting")?.length() ?: 0,
+                aliases = o.optJSONObject("aliases")?.length() ?: 0,
+                json = o,
+            )
         }
-        BackupSummary(
-            favorites = o.optJSONArray("favorites")?.length() ?: 0,
-            hidden = o.optJSONArray("hidden")?.length() ?: 0,
-            distracting = o.optJSONArray("distracting")?.length() ?: 0,
-            aliases = o.optJSONObject("aliases")?.length() ?: 0,
-            json = o,
-        )
-    }
 
     fun applyBackup(summary: BackupSummary) {
         val o = summary.json
@@ -699,15 +729,20 @@ class LauncherStore(private val context: Context) {
         }
     }
 
-    private inline fun <reified T : Enum<T>> enumOrCurrent(raw: String?, current: T): T =
-        if (raw.isNullOrBlank()) current else runCatching { enumValueOf<T>(raw) }.getOrDefault(current)
+    private inline fun <reified T : Enum<T>> enumOrCurrent(
+        raw: String?,
+        current: T,
+    ): T = if (raw.isNullOrBlank()) current else runCatching { enumValueOf<T>(raw) }.getOrDefault(current)
 
     /**
      * Drops all stored state for a package that was uninstalled from profile
      * [userSerial], so favorites/hidden/usage don't accumulate ghosts. The
      * package-only distracting list is touched only for the personal profile.
      */
-    fun pruneApp(packageName: String, userSerial: Long = 0L) {
+    fun pruneApp(
+        packageName: String,
+        userSerial: Long = 0L,
+    ) {
         if (favorites.removeAll { it.packageName == packageName && it.userSerial == userSerial }) {
             persistFavorites()
         }
@@ -755,7 +790,10 @@ fun rememberLauncherStore(): LauncherStore {
 
 // ---- Intent helpers -------------------------------------------------------
 
-fun launchApp(context: Context, app: AppEntry) {
+fun launchApp(
+    context: Context,
+    app: AppEntry,
+) {
     // Apps in another profile (work / private space) must be started through
     // LauncherApps so they open as *that* profile's copy.
     if (app.userSerial != 0L) {
@@ -767,10 +805,11 @@ fun launchApp(context: Context, app: AppEntry) {
         }
         return
     }
-    val intent = Intent(Intent.ACTION_MAIN)
-        .addCategory(Intent.CATEGORY_LAUNCHER)
-        .setClassName(app.packageName, app.activityName)
-        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+    val intent =
+        Intent(Intent.ACTION_MAIN)
+            .addCategory(Intent.CATEGORY_LAUNCHER)
+            .setClassName(app.packageName, app.activityName)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
     runCatching { context.startActivity(intent) }
 }
 
@@ -779,7 +818,10 @@ fun launchApp(context: Context, app: AppEntry) {
  * non-system apps only (system apps can't be uninstalled, and other profiles'
  * apps are managed from within that profile).
  */
-fun canUninstall(context: Context, app: AppEntry): Boolean {
+fun canUninstall(
+    context: Context,
+    app: AppEntry,
+): Boolean {
     if (app.userSerial != 0L) return false
     return runCatching {
         val ai = context.packageManager.getApplicationInfo(app.packageName, 0)
@@ -788,7 +830,10 @@ fun canUninstall(context: Context, app: AppEntry): Boolean {
 }
 
 /** Fires the system uninstall confirmation for [app]; the OS does the rest. */
-fun requestUninstall(context: Context, app: AppEntry) {
+fun requestUninstall(
+    context: Context,
+    app: AppEntry,
+) {
     runCatching {
         context.startActivity(
             Intent(Intent.ACTION_DELETE, Uri.fromParts("package", app.packageName, null))
@@ -804,9 +849,10 @@ fun openSettings(context: Context) {
 }
 
 fun openBrowser(context: Context) {
-    val browser = Intent(Intent.ACTION_MAIN)
-        .addCategory(Intent.CATEGORY_APP_BROWSER)
-        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    val browser =
+        Intent(Intent.ACTION_MAIN)
+            .addCategory(Intent.CATEGORY_APP_BROWSER)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     runCatching { context.startActivity(browser) }.onFailure {
         runCatching {
             context.startActivity(
@@ -825,7 +871,10 @@ fun openClockApp(context: Context) {
     }
 }
 
-fun openAppInfo(context: Context, packageName: String) {
+fun openAppInfo(
+    context: Context,
+    packageName: String,
+) {
     runCatching {
         context.startActivity(
             Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null))
@@ -834,11 +883,15 @@ fun openAppInfo(context: Context, packageName: String) {
     }
 }
 
-fun webSearch(context: Context, query: String) {
+fun webSearch(
+    context: Context,
+    query: String,
+) {
     val q = query.trim()
-    val search = Intent(Intent.ACTION_WEB_SEARCH)
-        .putExtra(SearchManager.QUERY, q)
-        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    val search =
+        Intent(Intent.ACTION_WEB_SEARCH)
+            .putExtra(SearchManager.QUERY, q)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     runCatching { context.startActivity(search) }.onFailure {
         runCatching {
             context.startActivity(
@@ -849,7 +902,10 @@ fun webSearch(context: Context, query: String) {
     }
 }
 
-fun playSearch(context: Context, query: String) {
+fun playSearch(
+    context: Context,
+    query: String,
+) {
     val q = Uri.encode(query.trim())
     runCatching {
         context.startActivity(

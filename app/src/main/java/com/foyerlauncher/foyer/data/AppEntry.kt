@@ -38,20 +38,21 @@ fun loadLaunchableApps(context: Context): List<AppEntry> {
     val um = context.getSystemService(Context.USER_SERVICE) as UserManager
     val self = context.packageName
     val me = Process.myUserHandle()
-    return um.userProfiles.flatMap { user ->
-        val serial = if (user == me) 0L else um.getSerialNumberForUser(user)
-        la.getActivityList(null, user).mapNotNull { ai ->
-            if (ai.applicationInfo.packageName == self) return@mapNotNull null
-            val label = ai.label.toString().trim()
-            if (label.isEmpty()) return@mapNotNull null
-            AppEntry(
-                label = label,
-                packageName = ai.componentName.packageName,
-                activityName = ai.componentName.className,
-                userSerial = serial,
-            ).also {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) it.category = ai.applicationInfo.category
+    return um.userProfiles
+        .flatMap { user ->
+            val serial = if (user == me) 0L else um.getSerialNumberForUser(user)
+            la.getActivityList(null, user).mapNotNull { ai ->
+                if (ai.applicationInfo.packageName == self) return@mapNotNull null
+                val label = ai.label.toString().trim()
+                if (label.isEmpty()) return@mapNotNull null
+                AppEntry(
+                    label = label,
+                    packageName = ai.componentName.packageName,
+                    activityName = ai.componentName.className,
+                    userSerial = serial,
+                ).also {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) it.category = ai.applicationInfo.category
+                }
             }
-        }
-    }.sortedBy { it.label.lowercase() }
+        }.sortedBy { it.label.lowercase() }
 }

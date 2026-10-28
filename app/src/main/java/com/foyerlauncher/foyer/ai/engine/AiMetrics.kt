@@ -18,10 +18,16 @@ object AiMetrics {
     private var lastPromptChars = 0
 
     /** One user request entered the pipeline (deterministic or not). */
-    @Synchronized fun recordRequest() { requests++ }
+    @Synchronized fun recordRequest() {
+        requests++
+    }
 
     /** One model invocation completed (or failed). */
-    @Synchronized fun recordLlm(latencyMs: Long, ok: Boolean, promptChars: Int) {
+    @Synchronized fun recordLlm(
+        latencyMs: Long,
+        ok: Boolean,
+        promptChars: Int,
+    ) {
         llmCalls++
         if (!ok) llmFailures++
         totalLatencyMs += latencyMs

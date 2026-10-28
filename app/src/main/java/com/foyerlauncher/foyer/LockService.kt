@@ -10,7 +10,6 @@ import android.view.accessibility.AccessibilityEvent
  * the user enables it knowingly from system accessibility settings.
  */
 class LockService : AccessibilityService() {
-
     override fun onServiceConnected() {
         instance = this
     }
@@ -21,6 +20,7 @@ class LockService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) = Unit
+
     override fun onInterrupt() = Unit
 
     companion object {

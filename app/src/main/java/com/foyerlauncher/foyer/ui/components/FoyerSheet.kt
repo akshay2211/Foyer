@@ -52,8 +52,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.foyerlauncher.foyer.ui.theme.LocalFontFamily
 import com.foyerlauncher.foyer.ui.theme.LocalPalette
-import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /**
  * Foyer's reusable bottom sheet — the one pop-up surface for long-press menus
@@ -98,9 +98,10 @@ fun FoyerSheet(
     ) {
         AnimatedVisibility(
             visibleState = transition,
-            enter = slideInVertically(
-                spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow),
-            ) { it },
+            enter =
+                slideInVertically(
+                    spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow),
+                ) { it },
             exit = slideOutVertically(tween(160)) { it },
             modifier = Modifier.align(Alignment.BottomCenter),
         ) {
@@ -122,13 +123,15 @@ fun FoyerSheet(
                                 scope.launch { dragOffset.snapTo((dragOffset.value + delta).coerceAtLeast(0f)) }
                             },
                             onDragEnd = {
-                                if (dragOffset.value > size.height * 0.3f) close()
-                                else scope.launch { dragOffset.animateTo(0f, spring()) }
+                                if (dragOffset.value > size.height * 0.3f) {
+                                    close()
+                                } else {
+                                    scope.launch { dragOffset.animateTo(0f, spring()) }
+                                }
                             },
                             onDragCancel = { scope.launch { dragOffset.animateTo(0f) } },
                         )
-                    }
-                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    }.windowInsetsPadding(WindowInsets.navigationBars)
                     .padding(horizontal = 26.dp, vertical = 14.dp),
             ) {
                 Box(
@@ -155,19 +158,23 @@ fun FoyerSheet(
  * accent dot (and announces it), so state is visible without parsing the verb.
  */
 @Composable
-fun SheetRow(text: String, active: Boolean = false, onClick: () -> Unit) {
+fun SheetRow(
+    text: String,
+    active: Boolean = false,
+    onClick: () -> Unit,
+) {
     val palette = LocalPalette.current
     val ff = LocalFontFamily.current
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .defaultMinSize(minHeight = 48.dp)
-            .semantics {
-                role = Role.Button
-                if (active) stateDescription = "on"
-            }
-            .clickable { onClick() }
-            .padding(vertical = 13.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .defaultMinSize(minHeight = 48.dp)
+                .semantics {
+                    role = Role.Button
+                    if (active) stateDescription = "on"
+                }.clickable { onClick() }
+                .padding(vertical = 13.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {

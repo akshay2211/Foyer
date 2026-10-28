@@ -10,7 +10,10 @@ package com.foyerlauncher.foyer.ai.router
  * bails (returns null) on anything compound ("… and …"), a contact-name call,
  * or an unresolved app — those fall through to the model.
  */
-fun fastRoute(query: String, index: AppIndex): Plan? {
+fun fastRoute(
+    query: String,
+    index: AppIndex,
+): Plan? {
     val q = query.trim().lowercase()
     if (q.isEmpty()) return null
     // Anything joining two clauses is a plan — let the model compose it.
@@ -21,7 +24,14 @@ fun fastRoute(query: String, index: AppIndex): Plan? {
     // against usage-style questions (those are a future feature).
     if (!q.contains("use") && !q.contains("using") && !q.contains("time") && !q.contains("most")) {
         Regex("^(?:how many|list all|list my|list|which|what|show me)\\s+(.*?)\\bapps?\\b.*$").find(q)?.let { m ->
-            return listOf(AiIntent.FindApps(m.groupValues[1].trim().removePrefix("my ").trim()))
+            return listOf(
+                AiIntent.FindApps(
+                    m.groupValues[1]
+                        .trim()
+                        .removePrefix("my ")
+                        .trim(),
+                ),
+            )
         }
     }
 
@@ -29,11 +39,18 @@ fun fastRoute(query: String, index: AppIndex): Plan? {
     // "turn on/off X" toggle, or a lightly-verbed request ("enable usb debugging",
     // "take me to wifi settings"). Deterministic: no app-list search, no model call.
     ActionRegistry.settingKey(q)?.let { return listOf(AiIntent.OpenSetting(it)) }
-    val settingsPhrase = q
-        .removePrefix("turn on ").removePrefix("turn off ").removePrefix("toggle ")
-        .removePrefix("enable ").removePrefix("disable ")
-        .removePrefix("open ").removePrefix("go to ").removePrefix("show me ").removePrefix("take me to ")
-        .trim()
+    val settingsPhrase =
+        q
+            .removePrefix("turn on ")
+            .removePrefix("turn off ")
+            .removePrefix("toggle ")
+            .removePrefix("enable ")
+            .removePrefix("disable ")
+            .removePrefix("open ")
+            .removePrefix("go to ")
+            .removePrefix("show me ")
+            .removePrefix("take me to ")
+            .trim()
     if (settingsPhrase != q) ActionRegistry.settingKey(settingsPhrase)?.let { return listOf(AiIntent.OpenSetting(it)) }
 
     Regex("^(?:open|launch|start|run|go to|show)\\s+(?:the\\s+)?(.+?)(?:\\s+app)?$").find(q)?.let { m ->
@@ -70,11 +87,12 @@ fun fastRoute(query: String, index: AppIndex): Plan? {
 
     Regex("^set (?:a )?timer for (\\d+)\\s*(hour|hr|min|minute|sec|second)s?$").find(q)?.let { m ->
         val n = m.groupValues[1].toInt()
-        val secs = when (m.groupValues[2]) {
-            "hour", "hr" -> n * 3600
-            "min", "minute" -> n * 60
-            else -> n
-        }
+        val secs =
+            when (m.groupValues[2]) {
+                "hour", "hr" -> n * 3600
+                "min", "minute" -> n * 60
+                else -> n
+            }
         return if (secs in 1..86_400) listOf(AiIntent.SetTimer(secs, null)) else null
     }
 

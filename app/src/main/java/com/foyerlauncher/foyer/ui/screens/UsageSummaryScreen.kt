@@ -20,7 +20,6 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,17 +34,17 @@ import com.foyerlauncher.foyer.data.UsageTracker
 import com.foyerlauncher.foyer.data.formatDuration
 import com.foyerlauncher.foyer.ui.theme.LocalFontFamily
 import com.foyerlauncher.foyer.ui.theme.LocalPalette
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 private data class UsageSummary(
     val todayMs: Long,
     val unlocks: Int,
     val topApps: List<Triple<String, Long, Boolean>>, // label, ms, distracting
-    val days: List<Triple<String, Long, Boolean>>,    // weekday initial, ms, isToday
+    val days: List<Triple<String, Long, Boolean>>, // weekday initial, ms, isToday
     val thisWeekMs: Long,
     val lastWeekMs: Long,
 )
@@ -68,23 +67,26 @@ fun UsageSummaryScreen(
 
     val labelByPkg = apps.associate { it.packageName to it.label.lowercase() }
     val summary by produceState<UsageSummary?>(initialValue = null) {
-        value = withContext(Dispatchers.IO) {
-            val daily = UsageTracker.dailyTotals(context, 14)
-            val dayFmt = SimpleDateFormat("EEEEE", Locale.getDefault()) // single-letter weekday
-            UsageSummary(
-                todayMs = UsageTracker.screenTimeTodayMs(context),
-                unlocks = UsageTracker.unlocksToday(context),
-                topApps = UsageTracker.topAppsToday(context).take(10).map { (pkg, ms) ->
-                    val label = labelByPkg[pkg] ?: pkg.substringAfterLast('.')
-                    Triple(label, ms, store.distracting.contains(pkg))
-                },
-                days = daily.takeLast(7).mapIndexed { i, (start, ms) ->
-                    Triple(dayFmt.format(Date(start)).lowercase(), ms, i == 6)
-                },
-                thisWeekMs = daily.takeLast(7).sumOf { it.second },
-                lastWeekMs = daily.take(7).sumOf { it.second },
-            )
-        }
+        value =
+            withContext(Dispatchers.IO) {
+                val daily = UsageTracker.dailyTotals(context, 14)
+                val dayFmt = SimpleDateFormat("EEEEE", Locale.getDefault()) // single-letter weekday
+                UsageSummary(
+                    todayMs = UsageTracker.screenTimeTodayMs(context),
+                    unlocks = UsageTracker.unlocksToday(context),
+                    topApps =
+                        UsageTracker.topAppsToday(context).take(10).map { (pkg, ms) ->
+                            val label = labelByPkg[pkg] ?: pkg.substringAfterLast('.')
+                            Triple(label, ms, store.distracting.contains(pkg))
+                        },
+                    days =
+                        daily.takeLast(7).mapIndexed { i, (start, ms) ->
+                            Triple(dayFmt.format(Date(start)).lowercase(), ms, i == 6)
+                        },
+                    thisWeekMs = daily.takeLast(7).sumOf { it.second },
+                    lastWeekMs = daily.take(7).sumOf { it.second },
+                )
+            }
     }
 
     Column(
@@ -127,8 +129,9 @@ fun UsageSummaryScreen(
             )
             val bypasses = store.bypassesToday()
             BasicText(
-                text = "today · ${s.unlocks} unlocks" +
-                    if (bypasses > 0) " · $bypasses limit bypass${if (bypasses == 1) "" else "es"}" else "",
+                text =
+                    "today · ${s.unlocks} unlocks" +
+                        if (bypasses > 0) " · $bypasses limit bypass${if (bypasses == 1) "" else "es"}" else "",
                 modifier = Modifier.padding(top = 2.dp, bottom = 26.dp),
                 style = TextStyle(color = palette.muted, fontSize = 14.sp, letterSpacing = 1.sp, fontFamily = ff),
             )
@@ -159,20 +162,22 @@ fun UsageSummaryScreen(
                     }
                     BasicText(
                         text = formatDuration(ms),
-                        style = TextStyle(
-                            color = if (isToday) palette.text else palette.muted,
-                            fontSize = 13.sp,
-                            fontFamily = ff,
-                        ),
+                        style =
+                            TextStyle(
+                                color = if (isToday) palette.text else palette.muted,
+                                fontSize = 13.sp,
+                                fontFamily = ff,
+                            ),
                     )
                 }
             }
             val delta = s.thisWeekMs - s.lastWeekMs
-            val deltaText = when {
-                s.lastWeekMs == 0L -> ""
-                delta > 0 -> " · up ${formatDuration(delta)} from last week"
-                else -> " · down ${formatDuration(-delta)} from last week"
-            }
+            val deltaText =
+                when {
+                    s.lastWeekMs == 0L -> ""
+                    delta > 0 -> " · up ${formatDuration(delta)} from last week"
+                    else -> " · down ${formatDuration(-delta)} from last week"
+                }
             BasicText(
                 text = "this week ${formatDuration(s.thisWeekMs)}$deltaText",
                 modifier = Modifier.padding(top = 10.dp, bottom = 26.dp),
