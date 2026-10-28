@@ -23,9 +23,9 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.edit
-import com.foyerlauncher.foyer.ai.engine.GemmaEngine
+import com.foyerlauncher.foyer.ai.engine.LlmEngine
 import com.foyerlauncher.foyer.ai.engine.ModelDownloader
-import com.foyerlauncher.foyer.ai.engine.gemmaModelFile
+import com.foyerlauncher.foyer.ai.engine.modelFile
 import com.foyerlauncher.foyer.ui.components.ClockStyle
 import com.foyerlauncher.foyer.ui.components.FastScrollStyle
 import com.foyerlauncher.foyer.ui.components.GestureAction
@@ -82,8 +82,7 @@ private const val KEY_THEME = "theme_mode"
 private const val KEY_ACCENT = "accent"
 private const val KEY_FONT = "font"
 private const val KEY_AI = "ai_enabled"
-private const val KEY_BACKEND = "ai_backend"
-private const val KEY_MODEL_URL = "gemma_url"
+private const val KEY_MODEL_URL = "model_url"
 private const val KEY_HF_TOKEN = "hf_token"
 
 // Product decision (2026-10-28): Foyer never ships or hosts a model — users
@@ -258,11 +257,8 @@ class LauncherStore(private val context: Context) {
         prefs.edit { putBoolean(KEY_AI, aiEnabled) }
     }
 
-    /** Which brain answers: Gemini Nano (AICore) or a downloaded Gemma. */
-    var activeBackend by mutableStateOf(enumFromPrefs(KEY_BACKEND, Backend.NANO))
-        private set
     // Empty until the user supplies a model URL — Foyer bundles no model.
-    var gemmaModelUrl by mutableStateOf(prefs.getString(KEY_MODEL_URL, "") ?: "")
+    var modelUrl by mutableStateOf(prefs.getString(KEY_MODEL_URL, "") ?: "")
         private set
     // Optional — only needed for gated URLs. Empty for a public/self-hosted model.
     var hfToken by mutableStateOf(prefs.getString(KEY_HF_TOKEN, "") ?: "")
@@ -283,7 +279,7 @@ class LauncherStore(private val context: Context) {
     var isSelfTesting by mutableStateOf(false)
         private set
 
-    fun modelDownloaded(): Boolean = gemmaModelFile(context).exists()
+    fun modelDownloaded(): Boolean = modelFile(context).exists()
 
     /**
      * Loads the downloaded model and runs a one-word prompt so setup ends with
@@ -293,7 +289,7 @@ class LauncherStore(private val context: Context) {
         if (isSelfTesting || !modelDownloaded()) return
         isSelfTesting = true
         selfTestResult = null
-        val engine = GemmaEngine(context, gemmaModelFile(context).path)
+        val engine = LlmEngine(context, modelFile(context).path)
         selfTestResult = runCatching {
             if (!engine.prepare()) return@runCatching "model failed to load"
             val reply = engine.generate("Reply with the single word: ready")
@@ -303,14 +299,9 @@ class LauncherStore(private val context: Context) {
         isSelfTesting = false
     }
 
-    fun setBackend(backend: Backend) {
-        activeBackend = backend
-        prefs.edit { putString(KEY_BACKEND, backend.name) }
-    }
-
-    fun setModelUrl(url: String) {
-        gemmaModelUrl = url.trim()
-        prefs.edit { putString(KEY_MODEL_URL, gemmaModelUrl) }
+    fun updateModelUrl(url: String) {
+        modelUrl = url.trim()
+        prefs.edit { putString(KEY_MODEL_URL, modelUrl) }
     }
 
     fun updateHfToken(token: String) {
@@ -320,7 +311,7 @@ class LauncherStore(private val context: Context) {
 
     suspend fun downloadModel() {
         if (isDownloading) return
-        if (gemmaModelUrl.isBlank()) {
+        if (modelUrl.isBlank()) {
             downloadError = "paste a model url first"
             return
         }
@@ -337,14 +328,13 @@ class LauncherStore(private val context: Context) {
         selfTestResult = null
         downloadedBytes = 0L
         totalBytes = 0L
-        val result = ModelDownloader.download(gemmaModelUrl, gemmaModelFile(context), token = hfToken.ifBlank { null }) { d, t ->
+        val result = ModelDownloader.download(modelUrl, modelFile(context), token = hfToken.ifBlank { null }) { d, t ->
             downloadedBytes = d
             totalBytes = t
         }
         isDownloading = false
         result
             .onSuccess {
-                setBackend(Backend.GEMMA)
                 selfTestModel() // prove it answers before calling setup done
             }
             .onFailure { downloadError = it.message ?: "download failed" }
@@ -608,8 +598,7 @@ class LauncherStore(private val context: Context) {
         put("accent", accent.name)
         put("font", font.name)
         put("aiEnabled", aiEnabled)
-        put("backend", activeBackend.name)
-        put("modelUrl", gemmaModelUrl)
+        put("modelUrl", modelUrl)
         put("swipeUp", swipeUpAction.name)
         put("swipeDown", swipeDownAction.name)
         put("doubleTap", doubleTapAction.name)
@@ -693,8 +682,7 @@ class LauncherStore(private val context: Context) {
         swipeDownAction = enumOrCurrent(o.optString("swipeDown"), swipeDownAction)
         doubleTapAction = enumOrCurrent(o.optString("doubleTap"), doubleTapAction)
         if (o.has("aiEnabled")) aiEnabled = o.optBoolean("aiEnabled", aiEnabled)
-        activeBackend = enumOrCurrent(o.optString("backend"), activeBackend)
-        o.optString("modelUrl").ifBlank { null }?.let { gemmaModelUrl = it }
+        o.optString("modelUrl").ifBlank { null }?.let { modelUrl = it }
         decodeApp(o.optString("leftShortcut").ifBlank { null })?.let { leftShortcut = it }
         decodeApp(o.optString("rightShortcut").ifBlank { null })?.let { rightShortcut = it }
         prefs.edit {
@@ -705,8 +693,7 @@ class LauncherStore(private val context: Context) {
             putString(KEY_SWIPE_DOWN, swipeDownAction.name)
             putString(KEY_DOUBLE_TAP, doubleTapAction.name)
             putBoolean(KEY_AI, aiEnabled)
-            putString(KEY_BACKEND, activeBackend.name)
-            putString(KEY_MODEL_URL, gemmaModelUrl)
+            putString(KEY_MODEL_URL, modelUrl)
             leftShortcut?.let { putString(KEY_LEFT, it.encode()) }
             rightShortcut?.let { putString(KEY_RIGHT, it.encode()) }
         }
@@ -759,8 +746,6 @@ class LauncherStore(private val context: Context) {
 }
 
 enum class ShortcutSide { LEFT, RIGHT }
-
-enum class Backend { NANO, GEMMA }
 
 @Composable
 fun rememberLauncherStore(): LauncherStore {

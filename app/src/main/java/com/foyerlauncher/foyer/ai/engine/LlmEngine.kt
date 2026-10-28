@@ -6,17 +6,17 @@ import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import com.google.mediapipe.tasks.genai.llminference.LlmInference.LlmInferenceOptions
 import com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession
 import com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession.LlmInferenceSessionOptions
-import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
- * On-device text generation via MediaPipe LLM Inference, backed by a downloaded
- * Gemma `.task` model. This is the "bigger brain" alternative to Gemini Nano —
- * fully local, no network at inference time.
+ * On-device text generation via MediaPipe LLM Inference, backed by whatever
+ * `.task` model the user downloaded (Qwen, Gemma, …) — fully local, no network
+ * at inference time.
  *
  * Two generation paths:
- *  - [generate] (one-shot): wraps the whole prompt in Gemma's chat template and
+ *  - [generate] (one-shot): wraps the whole prompt in the chat template and
  *    generates. Simple, always correct.
  *  - [generate] (prefix/suffix): KV **prefix-cache** — the stable preamble is
  *    prefilled into a base session once, then each turn clones that session and
@@ -24,7 +24,7 @@ import kotlinx.coroutines.withContext
  *    preamble. Falls back to the one-shot path on any failure, so it can never
  *    regress correctness; flip [PREFIX_CACHE] off to disable entirely.
  */
-class GemmaEngine(context: Context, private val modelPath: String) {
+class LlmEngine(context: Context, private val modelPath: String) {
     private val appContext = context.applicationContext
 
     private val llm: LlmInference by lazy {
@@ -45,8 +45,8 @@ class GemmaEngine(context: Context, private val modelPath: String) {
     /** Warms up the model (loads weights); returns whether it's usable. */
     suspend fun prepare(): Boolean = withContext(Dispatchers.IO) {
         runCatching { llm }.fold(
-            { Log.d(AI_TAG, "gemma: loaded $modelPath"); true },
-            { Log.w(AI_TAG, "gemma load FAILED: ${it.message}", it); false },
+            { Log.d(AI_TAG, "llm: loaded $modelPath"); true },
+            { Log.w(AI_TAG, "llm load FAILED: ${it.message}", it); false },
         )
     }
 
@@ -61,7 +61,7 @@ class GemmaEngine(context: Context, private val modelPath: String) {
     suspend fun generate(prefix: String, suffix: String): String? = withContext(Dispatchers.IO) {
         if (PREFIX_CACHE) {
             runCatching { generateCached(prefix, suffix) }
-                .onFailure { Log.w(AI_TAG, "gemma prefix-cache failed → one-shot fallback: ${it.message}") }
+                .onFailure { Log.w(AI_TAG, "llm prefix-cache failed → one-shot fallback: ${it.message}") }
                 .getOrNull()
                 ?: generateOneShot(prefix + suffix)
         } else {
@@ -77,7 +77,7 @@ class GemmaEngine(context: Context, private val modelPath: String) {
                 addQueryChunk(wrappedPrefix) // prefill the preamble once
             }
             cachedPrefix = wrappedPrefix
-            Log.d(AI_TAG, "gemma: prefilled preamble (${prefix.length} chars) into base session")
+            Log.d(AI_TAG, "llm: prefilled preamble (${prefix.length} chars) into base session")
         }
         val work = baseSession!!.cloneSession() // reuse the preamble's KV cache
         return try {
@@ -91,7 +91,7 @@ class GemmaEngine(context: Context, private val modelPath: String) {
     private fun generateOneShot(prompt: String): String? {
         val formatted = "<start_of_turn>user\n$prompt<end_of_turn>\n<start_of_turn>model\n"
         return runCatching { llm.generateResponse(formatted) }
-            .onFailure { Log.w(AI_TAG, "gemma generate FAILED: ${it.message}", it) }
+            .onFailure { Log.w(AI_TAG, "llm generate FAILED: ${it.message}", it) }
             .getOrNull()
             ?.clean()
     }

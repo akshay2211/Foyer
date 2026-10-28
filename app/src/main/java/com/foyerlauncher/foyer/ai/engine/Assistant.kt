@@ -1,7 +1,5 @@
 package com.foyerlauncher.foyer.ai.engine
 
-import android.content.Context
-import android.os.Build
 import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -18,57 +16,13 @@ import com.foyerlauncher.foyer.ai.router.fastRoute
 import com.foyerlauncher.foyer.ai.router.fewShotBlock
 import com.foyerlauncher.foyer.ai.router.parsePlan
 import com.foyerlauncher.foyer.data.AppEntry
-import com.foyerlauncher.foyer.data.Backend
 import com.foyerlauncher.foyer.data.LauncherStore
 import com.foyerlauncher.foyer.data.key
-import com.google.ai.edge.aicore.GenerativeModel
-import com.google.ai.edge.aicore.generationConfig
 
-const val AI_TAG = "unAI"
-
-/** Readiness of the on-device model. */
-enum class AiStatus { UNKNOWN, PREPARING, READY, UNAVAILABLE }
-
-/** AICore/Gemini Nano needs API 31+; never touch the SDK below that. */
-fun aiSupported(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+const val AI_TAG = "FoyerAI"
 
 /**
- * Thin wrapper over Gemini Nano (AI Edge SDK / AICore). It only *generates* — the
- * decision of what to do is the model's; callers parse the structured reply and
- * execute it. Runs entirely on-device.
- */
-class AiIntentEngine(context: Context) {
-    private val appContext = context.applicationContext
-
-    private val model: GenerativeModel by lazy {
-        val config = generationConfig {
-            this.context = appContext
-            temperature = 0.2f
-            topK = 16
-            maxOutputTokens = 128
-        }
-        GenerativeModel(generationConfig = config)
-    }
-
-    /** Downloads (via AICore) / initialises the inference engine if needed. */
-    suspend fun prepare(): AiStatus =
-        runCatching { model.prepareInferenceEngine() }
-            .fold(
-                { Log.d(AI_TAG, "prepare: READY"); AiStatus.READY },
-                { Log.w(AI_TAG, "prepare FAILED: ${it.javaClass.simpleName}: ${it.message}", it); AiStatus.UNAVAILABLE },
-            )
-
-    /** Raw generation. Returns null on any failure. */
-    suspend fun generate(prompt: String): String? =
-        runCatching { model.generateContent(prompt).text }
-            .onFailure { Log.w(AI_TAG, "generate FAILED: ${it.javaClass.simpleName}: ${it.message}", it) }
-            .getOrNull()
-
-    fun close() {}
-}
-
-/**
- * Backend-agnostic decision: given any text generator (Nano or Gemma), ask the
+ * Model-driven decision: given a text generator, ask the
  * model to pick one or more actions. The prompt is generated from the capability
  * [CAPABILITIES] catalog and *grounded* with the actual installed apps that look
  * relevant, so the model selects a real app instead of guessing a name. The
@@ -108,7 +62,7 @@ private val STABLE_FEWSHOTS: String by lazy { fewShotBlock() }
 
 /**
  * The stable, query-independent preambles used as the KV prefix-cache key
- * ([GemmaEngine.generate]). Everything that varies per turn (settings block,
+ * ([LlmEngine.generate]). Everything that varies per turn (settings block,
  * app grounding, conversation history, the command itself) lives in the suffix.
  */
 private val DECIDE_PREFIX: String by lazy {
@@ -175,11 +129,6 @@ private suspend fun timedGenerate(
     return reply
 }
 
-/**
- * Picks the active brain (Gemini Nano or downloaded Gemma), prepares it lazily,
- * and exposes a uniform [decide]. Falls back to a plain web search when no model
- * is usable, so callers never break.
- */
 /**
  * One turn of the conversation:
  *  - [Do]  the assistant wants to perform a plan,
@@ -407,36 +356,19 @@ private fun sanitizeReply(raw: String): String {
     return s.trim().removePrefix("->").trim()
 }
 
-/** Builds the [Assistant] for the active backend, or null if AI is off/unusable. */
+/** Builds the [Assistant] over the downloaded model, or null if AI is off or no model is set up. */
 @Composable
 fun rememberAssistant(store: LauncherStore): Assistant? {
     val context = LocalContext.current
     val downloaded = store.modelDownloaded()
-    return remember(store.aiEnabled, store.activeBackend, downloaded) {
-        if (!store.aiEnabled) return@remember null
-        when (store.activeBackend) {
-            Backend.GEMMA -> if (downloaded) {
-                val engine = GemmaEngine(context, gemmaModelFile(context).path)
-                // Gemma reuses the prefilled preamble via its prefix-cache path.
-                Assistant(
-                    { engine.prepare() },
-                    { prefix, suffix -> engine.generate(prefix, suffix) },
-                    { store.aliases.toMap() },
-                )
-            } else {
-                null
-            }
-            Backend.NANO -> if (aiSupported()) {
-                val engine = AiIntentEngine(context)
-                // Nano has no session cache; concatenate to the same single prompt.
-                Assistant(
-                    { engine.prepare() == AiStatus.READY },
-                    { prefix, suffix -> engine.generate(prefix + suffix) },
-                    { store.aliases.toMap() },
-                )
-            } else {
-                null
-            }
-        }
+    return remember(store.aiEnabled, downloaded) {
+        if (!store.aiEnabled || !downloaded) return@remember null
+        val engine = LlmEngine(context, modelFile(context).path)
+        // The engine reuses the prefilled preamble via its prefix-cache path.
+        Assistant(
+            { engine.prepare() },
+            { prefix, suffix -> engine.generate(prefix, suffix) },
+            { store.aliases.toMap() },
+        )
     }
 }

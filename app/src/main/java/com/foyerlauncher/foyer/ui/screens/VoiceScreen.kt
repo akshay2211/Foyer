@@ -42,7 +42,6 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.foyerlauncher.foyer.ai.engine.AI_TAG
 import com.foyerlauncher.foyer.ai.engine.AgentTurn
-import com.foyerlauncher.foyer.ai.engine.AiIntentEngine
 import com.foyerlauncher.foyer.ai.engine.rememberAssistant
 import com.foyerlauncher.foyer.ai.router.AiIntent
 import com.foyerlauncher.foyer.ai.router.Command
@@ -66,7 +65,7 @@ private val loneVerbs = setOf(
 
 /**
  * Conversational entry point. Android on-device speech-to-text captures the
- * request; Gemini Nano (via [AiIntentEngine]) decides the action; the launcher
+ * request; the on-device model (via [Assistant]) decides the action; the launcher
  * only executes the model's choice. Fully on-device.
  */
 @Composable

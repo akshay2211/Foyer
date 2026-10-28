@@ -22,7 +22,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,11 +45,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.foyerlauncher.foyer.LockService
-import com.foyerlauncher.foyer.ai.engine.AiIntentEngine
-import com.foyerlauncher.foyer.ai.engine.AiStatus
-import com.foyerlauncher.foyer.ai.engine.aiSupported
 import com.foyerlauncher.foyer.ai.router.Capability
-import com.foyerlauncher.foyer.data.Backend
 import com.foyerlauncher.foyer.data.LauncherStore
 import com.foyerlauncher.foyer.data.SUGGESTED_GEMMA_URL
 import com.foyerlauncher.foyer.data.SUGGESTED_QWEN_BALANCED_URL
@@ -153,90 +148,65 @@ fun SettingsScreen(store: LauncherStore, onClose: () -> Unit) {
         val scope = rememberCoroutineScope()
         SettingRow("on-device ai", if (store.aiEnabled) "on" else "off") { store.toggleAi() }
         if (store.aiEnabled) {
-            // Capability first: know whether nano exists before offering it.
-            var nanoReady by remember { mutableStateOf<Boolean?>(null) }
-            LaunchedEffect(Unit) {
-                nanoReady = aiSupported() && AiIntentEngine(context).prepare() == AiStatus.READY
-            }
-            SettingRow("brain", store.activeBackend.name.lowercase()) {
-                store.setBackend(if (store.activeBackend == Backend.NANO) Backend.GEMMA else Backend.NANO)
-            }
-            when (store.activeBackend) {
-                Backend.NANO -> when (nanoReady) {
-                    null -> ModelNote("checking for gemini nano…")
-                    true -> ModelNote("gemini-nano · ready")
-                    false -> {
-                        // Lead the user to the backend that can work here,
-                        // with the reason stated — never a dead toggle.
-                        ModelNote(
-                            if (!aiSupported()) "nano needs android 12+ — this device can't run it"
-                            else "this device has no aicore, so nano can't run here",
-                        )
-                        Box(Modifier.padding(vertical = 10.dp)) {
-                            ActionButton("set up gemma instead") { store.setBackend(Backend.GEMMA) }
+            when {
+                store.modelDownloaded() -> {
+                    ModelNote(
+                        when {
+                            store.isSelfTesting -> "model · installed — testing…"
+                            store.selfTestResult != null -> "model · installed — ${store.selfTestResult}"
+                            else -> "model · installed"
+                        },
+                    )
+                    if (!store.isSelfTesting) {
+                        Box(Modifier.padding(vertical = 8.dp)) {
+                            ActionButton("test model") { scope.launch { store.selfTestModel() } }
                         }
                     }
                 }
-                Backend.GEMMA -> when {
-                    store.modelDownloaded() -> {
+                store.isDownloading -> {
+                    val pct = if (store.totalBytes > 0L) store.downloadedBytes * 100 / store.totalBytes else 0
+                    FoyerGlyph(
+                        state = GlyphState.THINKING,
+                        modifier = Modifier
+                            .padding(top = 8.dp, bottom = 4.dp)
+                            .size(width = 84.dp, height = 30.dp),
+                    )
+                    ModelNote("downloading… $pct%  (${mb(store.downloadedBytes)} / ${mb(store.totalBytes)})")
+                }
+                else -> {
+                    // Foyer ships no model (user decision, 2026-10-28): the
+                    // user brings a third-party .task model; we only make
+                    // the setup easy — paste a URL, or one-tap a suggestion.
+                    ModelNote("foyer includes no model — bring your own: paste a direct link to a mediapipe .task file")
+                    ModelUrlField(store)
+                    ModelTokenField(store)
+                    if (store.modelUrl.isBlank()) {
+                        ModelNote("suggestions — tap to fill:")
+                        Column(
+                            Modifier.padding(top = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            ActionButton("light · qwen 2.5 0.5b · ~550 mb · no token") {
+                                store.updateModelUrl(SUGGESTED_QWEN_SMALL_URL)
+                            }
+                            ActionButton("balanced · qwen 2.5 1.5b · ~1.6 gb · no token") {
+                                store.updateModelUrl(SUGGESTED_QWEN_BALANCED_URL)
+                            }
+                            ActionButton("gemma 3 1b · ~555 mb · hf token needed") {
+                                store.updateModelUrl(SUGGESTED_GEMMA_URL)
+                            }
+                        }
                         ModelNote(
-                            when {
-                                store.isSelfTesting -> "gemma · installed — testing…"
-                                store.selfTestResult != null -> "gemma · installed — ${store.selfTestResult}"
-                                else -> "gemma · installed"
-                            },
+                            "qwen downloads with no account at all. gemma is gated: " +
+                                "accept its license on hugging face + a classic read token.",
                         )
-                        if (!store.isSelfTesting) {
-                            Box(Modifier.padding(vertical = 8.dp)) {
-                                ActionButton("test model") { scope.launch { store.selfTestModel() } }
-                            }
-                        }
                     }
-                    store.isDownloading -> {
-                        val pct = if (store.totalBytes > 0L) store.downloadedBytes * 100 / store.totalBytes else 0
-                        FoyerGlyph(
-                            state = GlyphState.THINKING,
-                            modifier = Modifier
-                                .padding(top = 8.dp, bottom = 4.dp)
-                                .size(width = 84.dp, height = 30.dp),
-                        )
-                        ModelNote("downloading… $pct%  (${mb(store.downloadedBytes)} / ${mb(store.totalBytes)})")
+                    // Download (storage is pre-checked), then a self-test
+                    // proves the model answers.
+                    Box(Modifier.padding(vertical = 10.dp)) {
+                        ActionButton("download & set up") { scope.launch { store.downloadModel() } }
                     }
-                    else -> {
-                        // Foyer ships no model (user decision, 2026-10-28): the
-                        // user brings a third-party .task model; we only make
-                        // the setup easy — paste a URL, or one-tap a suggestion.
-                        ModelNote("foyer includes no model — bring your own: paste a direct link to a mediapipe .task file")
-                        ModelUrlField(store)
-                        ModelTokenField(store)
-                        if (store.gemmaModelUrl.isBlank()) {
-                            ModelNote("suggestions — tap to fill:")
-                            Column(
-                                Modifier.padding(top = 8.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                ActionButton("light · qwen 2.5 0.5b · ~550 mb · no token") {
-                                    store.setModelUrl(SUGGESTED_QWEN_SMALL_URL)
-                                }
-                                ActionButton("balanced · qwen 2.5 1.5b · ~1.6 gb · no token") {
-                                    store.setModelUrl(SUGGESTED_QWEN_BALANCED_URL)
-                                }
-                                ActionButton("gemma 3 1b · ~555 mb · hf token needed") {
-                                    store.setModelUrl(SUGGESTED_GEMMA_URL)
-                                }
-                            }
-                            ModelNote(
-                                "qwen downloads with no account at all. gemma is gated: " +
-                                    "accept its license on hugging face + a classic read token.",
-                            )
-                        }
-                        // Download (storage is pre-checked), then a self-test
-                        // proves the model answers.
-                        Box(Modifier.padding(vertical = 10.dp)) {
-                            ActionButton("download & set up") { scope.launch { store.downloadModel() } }
-                        }
-                        store.downloadError?.let { ModelNote("error: $it") }
-                    }
+                    store.downloadError?.let { ModelNote("error: $it") }
                 }
             }
             SettingRow("how the ai works", "guide") { showAiGuide = true }
@@ -478,8 +448,8 @@ private fun ModelUrlField(store: LauncherStore) {
             style = TextStyle(color = palette.muted, fontSize = 11.sp, letterSpacing = 1.sp, fontFamily = ff),
         )
         BasicTextField(
-            value = store.gemmaModelUrl,
-            onValueChange = { store.setModelUrl(it) },
+            value = store.modelUrl,
+            onValueChange = { store.updateModelUrl(it) },
             singleLine = true,
             textStyle = TextStyle(color = palette.text, fontSize = 13.sp, fontFamily = ff),
             cursorBrush = SolidColor(palette.accent),

@@ -25,7 +25,7 @@ import com.foyerlauncher.foyer.ui.theme.LocalPalette
 
 /**
  * The in-settings, fully offline "how the ai works" tutorial (#2): what runs
- * on-device, nano vs gemma, bringing your own model, and troubleshooting.
+ * on-device, bringing your own model, and troubleshooting.
  */
 @Composable
 fun AiGuideScreen(onClose: () -> Unit) {
@@ -66,28 +66,24 @@ fun AiGuideScreen(onClose: () -> Unit) {
                     "questions and ambiguous requests.",
             )
             Section(
-                "two brains: nano and gemma",
-                "nano is google's gemini nano, built into some phones (pixel 8 and later, " +
-                    "recent galaxy flagships) via aicore. nothing to download — if your " +
-                    "phone has it, it just works.\n\n" +
-                    "gemma is an open model you bring yourself and foyer runs locally. " +
-                    "it works on any reasonably modern phone (android 7+, 4 gb+ ram) — " +
-                    "this is the right choice when nano says “not available”.",
+                "one brain: a model you bring",
+                "foyer runs an open model you choose, locally on your phone. " +
+                    "it works on any reasonably modern phone (android 7+, 4 gb+ ram) " +
+                    "and needs a one-time download of the model file.",
             )
             Section(
                 "bring your own model",
                 "foyer ships no model and hosts no downloads — you choose one and foyer " +
                     "sets it up. paste a direct link to any mediapipe .task model file " +
-                    "under “model url” (the suggestion button fills a known-good gemma 3 " +
-                    "1b link). models you fetch are under their own licenses: gated " +
+                    "under “model url” (the suggestion buttons fill known-good links). " +
+                    "models you fetch are under their own licenses: gated " +
                     "hugging face models need the license accepted on their page plus a " +
                     "classic read token (fine-grained tokens fail with a 401). public, " +
                     "non-gated .task files need nothing.",
             )
             Section(
                 "troubleshooting",
-                "“not available” on nano — your phone has no aicore; use gemma.\n" +
-                    "401 or 403 during download — gated model: accept its license and " +
+                "401 or 403 during download — gated model: accept its license and " +
                     "set a classic read token, or use the recommended model.\n" +
                     "not enough storage — the download checks for ~700 mb free first; " +
                     "clear space and retry.\n" +
