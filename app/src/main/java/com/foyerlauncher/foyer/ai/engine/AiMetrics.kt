@@ -1,4 +1,4 @@
-package com.foyerlauncher.foyer
+package com.foyerlauncher.foyer.ai.engine
 
 import android.util.Log
 

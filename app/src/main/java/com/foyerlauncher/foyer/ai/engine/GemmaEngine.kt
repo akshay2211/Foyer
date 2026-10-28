@@ -1,4 +1,4 @@
-package com.foyerlauncher.foyer
+package com.foyerlauncher.foyer.ai.engine
 
 import android.content.Context
 import android.util.Log
@@ -6,9 +6,9 @@ import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import com.google.mediapipe.tasks.genai.llminference.LlmInference.LlmInferenceOptions
 import com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession
 import com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession.LlmInferenceSessionOptions
+import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
 
 /**
  * On-device text generation via MediaPipe LLM Inference, backed by a downloaded

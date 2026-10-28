@@ -1,4 +1,4 @@
-package com.foyerlauncher.foyer
+package com.foyerlauncher.foyer.ai.router
 
 import android.content.Context
 import android.content.Intent
@@ -9,6 +9,12 @@ import android.provider.CalendarContract
 import android.provider.MediaStore
 import android.provider.Settings
 import android.util.Log
+import com.foyerlauncher.foyer.ai.engine.AI_TAG
+import com.foyerlauncher.foyer.ai.engine.Assistant
+import com.foyerlauncher.foyer.data.AppEntry
+import com.foyerlauncher.foyer.data.key
+import com.foyerlauncher.foyer.data.launchApp
+import com.foyerlauncher.foyer.data.webSearch
 import org.json.JSONObject
 
 /**

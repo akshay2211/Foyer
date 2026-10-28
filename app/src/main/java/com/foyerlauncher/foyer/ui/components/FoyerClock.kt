@@ -1,4 +1,4 @@
-package com.foyerlauncher.foyer
+package com.foyerlauncher.foyer.ui.components
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Column
@@ -21,11 +21,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.delay
+import com.foyerlauncher.foyer.ui.theme.LocalFontFamily
+import com.foyerlauncher.foyer.ui.theme.LocalPalette
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.delay
 
 /** Which clock the home screen shows (#15). Cycled in settings / home menu. */
 enum class ClockStyle(val label: String) {

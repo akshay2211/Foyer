@@ -9,6 +9,10 @@ import androidx.activity.addCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.LaunchedEffect
+import androidx.core.graphics.drawable.toDrawable
+import com.foyerlauncher.foyer.data.rememberLauncherStore
+import com.foyerlauncher.foyer.ui.screens.LauncherScreen
+import com.foyerlauncher.foyer.ui.theme.LauncherTheme
 
 class MainActivity : ComponentActivity() {
 
@@ -28,7 +32,7 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(store.showWallpaper) {
                 if (store.showWallpaper) {
                     window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
-                    window.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+                    window.setBackgroundDrawable(Color.TRANSPARENT.toDrawable())
                 } else {
                     window.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
                 }

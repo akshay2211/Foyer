@@ -1,4 +1,4 @@
-package com.foyerlauncher.foyer
+package com.foyerlauncher.foyer.ui.screens
 
 import android.Manifest
 import android.content.Intent
@@ -40,6 +40,22 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.foyerlauncher.foyer.ai.engine.AI_TAG
+import com.foyerlauncher.foyer.ai.engine.AgentTurn
+import com.foyerlauncher.foyer.ai.engine.AiIntentEngine
+import com.foyerlauncher.foyer.ai.engine.rememberAssistant
+import com.foyerlauncher.foyer.ai.router.AiIntent
+import com.foyerlauncher.foyer.ai.router.Command
+import com.foyerlauncher.foyer.ai.router.CommandKind
+import com.foyerlauncher.foyer.ai.router.toCommand
+import com.foyerlauncher.foyer.data.AppEntry
+import com.foyerlauncher.foyer.data.LauncherStore
+import com.foyerlauncher.foyer.data.launchApp
+import com.foyerlauncher.foyer.data.loadLaunchableApps
+import com.foyerlauncher.foyer.ui.components.FoyerGlyph
+import com.foyerlauncher.foyer.ui.components.GlyphState
+import com.foyerlauncher.foyer.ui.theme.LocalFontFamily
+import com.foyerlauncher.foyer.ui.theme.LocalPalette
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext

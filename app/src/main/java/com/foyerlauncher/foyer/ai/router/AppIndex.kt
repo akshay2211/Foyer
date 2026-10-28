@@ -1,4 +1,7 @@
-package com.foyerlauncher.foyer
+package com.foyerlauncher.foyer.ai.router
+
+import com.foyerlauncher.foyer.data.AppEntry
+import com.foyerlauncher.foyer.data.key
 
 /**
  * Precomputed, query-efficient index over the installed apps. Built once per app

@@ -1,4 +1,4 @@
-package com.foyerlauncher.foyer
+package com.foyerlauncher.foyer.ai.engine
 
 import android.content.Context
 import android.os.Build
@@ -6,6 +6,21 @@ import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import com.foyerlauncher.foyer.ai.router.ActionRegistry
+import com.foyerlauncher.foyer.ai.router.AiIntent
+import com.foyerlauncher.foyer.ai.router.AppCatalog
+import com.foyerlauncher.foyer.ai.router.AppIndex
+import com.foyerlauncher.foyer.ai.router.CAPABILITIES
+import com.foyerlauncher.foyer.ai.router.Normalizer
+import com.foyerlauncher.foyer.ai.router.Plan
+import com.foyerlauncher.foyer.ai.router.allowedActionsBlock
+import com.foyerlauncher.foyer.ai.router.fastRoute
+import com.foyerlauncher.foyer.ai.router.fewShotBlock
+import com.foyerlauncher.foyer.ai.router.parsePlan
+import com.foyerlauncher.foyer.data.AppEntry
+import com.foyerlauncher.foyer.data.Backend
+import com.foyerlauncher.foyer.data.LauncherStore
+import com.foyerlauncher.foyer.data.key
 import com.google.ai.edge.aicore.GenerativeModel
 import com.google.ai.edge.aicore.generationConfig
 

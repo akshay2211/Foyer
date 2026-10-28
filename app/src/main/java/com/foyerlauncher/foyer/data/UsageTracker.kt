@@ -1,4 +1,4 @@
-package com.foyerlauncher.foyer
+package com.foyerlauncher.foyer.data
 
 import android.app.AppOpsManager
 import android.app.usage.UsageEvents

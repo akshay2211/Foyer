@@ -1,4 +1,4 @@
-package com.foyerlauncher.foyer
+package com.foyerlauncher.foyer.ui.theme
 
 import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme

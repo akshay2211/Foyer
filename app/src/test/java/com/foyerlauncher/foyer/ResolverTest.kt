@@ -1,5 +1,16 @@
 package com.foyerlauncher.foyer
 
+import com.foyerlauncher.foyer.ai.router.ActionCategory
+import com.foyerlauncher.foyer.ai.router.ActionRegistry
+import com.foyerlauncher.foyer.ai.router.AiIntent
+import com.foyerlauncher.foyer.ai.router.AppCatalog
+import com.foyerlauncher.foyer.ai.router.AppIndex
+import com.foyerlauncher.foyer.ai.router.Normalizer
+import com.foyerlauncher.foyer.ai.router.ResolverConfig
+import com.foyerlauncher.foyer.ai.router.allowedActionsBlock
+import com.foyerlauncher.foyer.ai.router.fastRoute
+import com.foyerlauncher.foyer.data.AppEntry
+import com.foyerlauncher.foyer.data.key
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue

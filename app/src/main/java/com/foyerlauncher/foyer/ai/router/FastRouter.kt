@@ -1,4 +1,4 @@
-package com.foyerlauncher.foyer
+package com.foyerlauncher.foyer.ai.router
 
 /**
  * Tier-0 deterministic router. The obvious ~70% of launcher commands — "open X",

@@ -1,4 +1,6 @@
-package com.foyerlauncher.foyer
+package com.foyerlauncher.foyer.ai.router
+
+import com.foyerlauncher.foyer.data.AppEntry
 
 /**
  * Answers questions *about* the installed apps deterministically from the local

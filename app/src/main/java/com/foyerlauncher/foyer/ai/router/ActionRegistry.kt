@@ -1,4 +1,6 @@
-package com.foyerlauncher.foyer
+package com.foyerlauncher.foyer.ai.router
+
+import com.foyerlauncher.foyer.data.key
 
 /** Broad grouping for a system action, for future filtering/retrieval (§12). */
 enum class ActionCategory { SYSTEM, CONNECTIVITY, DISPLAY, PRIVACY, DEVELOPER, POWER }

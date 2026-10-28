@@ -1,4 +1,4 @@
-package com.foyerlauncher.foyer
+package com.foyerlauncher.foyer.ui.components
 
 import android.content.Context
 import android.content.pm.LauncherApps
@@ -7,6 +7,8 @@ import android.os.UserManager
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.graphics.drawable.toBitmap
+import com.foyerlauncher.foyer.data.AppEntry
+import com.foyerlauncher.foyer.data.key
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 

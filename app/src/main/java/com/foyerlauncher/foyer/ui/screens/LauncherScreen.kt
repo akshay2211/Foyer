@@ -1,4 +1,4 @@
-package com.foyerlauncher.foyer
+package com.foyerlauncher.foyer.ui.screens
 
 import android.content.Context
 import android.content.Intent
@@ -25,9 +25,9 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -84,70 +84,55 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import com.foyerlauncher.foyer.ai.engine.rememberAssistant
+import com.foyerlauncher.foyer.ai.router.AiIntent
+import com.foyerlauncher.foyer.ai.router.Command
+import com.foyerlauncher.foyer.ai.router.CommandKind
+import com.foyerlauncher.foyer.ai.router.toCommand
+import com.foyerlauncher.foyer.data.AppEntry
+import com.foyerlauncher.foyer.data.DISTRACTION_THRESHOLD_MS
+import com.foyerlauncher.foyer.data.LauncherStore
+import com.foyerlauncher.foyer.data.MAX_FAVORITES
+import com.foyerlauncher.foyer.data.ShortcutSide
+import com.foyerlauncher.foyer.data.UsageTracker
+import com.foyerlauncher.foyer.data.canUninstall
+import com.foyerlauncher.foyer.data.formatDuration
+import com.foyerlauncher.foyer.data.key
+import com.foyerlauncher.foyer.data.launchApp
+import com.foyerlauncher.foyer.data.loadLaunchableApps
+import com.foyerlauncher.foyer.data.openAppInfo
+import com.foyerlauncher.foyer.data.openClockApp
+import com.foyerlauncher.foyer.data.playSearch
+import com.foyerlauncher.foyer.data.requestUninstall
+import com.foyerlauncher.foyer.data.webSearch
+import com.foyerlauncher.foyer.ui.components.AnalogueClockWidget
+import com.foyerlauncher.foyer.ui.components.AppIconCache
+import com.foyerlauncher.foyer.ui.components.ClockStyle
+import com.foyerlauncher.foyer.ui.components.FastScrollStyle
+import com.foyerlauncher.foyer.ui.components.FoyerGlyph
+import com.foyerlauncher.foyer.ui.components.FoyerSheet
+import com.foyerlauncher.foyer.ui.components.GestureUi
+import com.foyerlauncher.foyer.ui.components.GlyphState
+import com.foyerlauncher.foyer.ui.components.SheetNote
+import com.foyerlauncher.foyer.ui.components.SheetRow
+import com.foyerlauncher.foyer.ui.components.runGestureAction
+import com.foyerlauncher.foyer.ui.theme.LocalFontFamily
+import com.foyerlauncher.foyer.ui.theme.LocalPalette
+import com.foyerlauncher.foyer.ui.theme.ThemeMode
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
-
-/**
- * A launchable app: just what we need to show a name and start it. [userSerial]
- * identifies which profile the app lives in: 0 = the launcher's own (personal)
- * profile, otherwise the work/private profile's stable serial number — the same
- * package can be installed in both, and they are distinct entries.
- */
-data class AppEntry(
-    val label: String,
-    val packageName: String,
-    val activityName: String,
-    val userSerial: Long = 0L,
-) {
-    /**
-     * Android's declared app category (ApplicationInfo.CATEGORY_*), or -1 if
-     * unknown/pre-API-26. Kept out of the primary constructor so it stays out of
-     * equals/hashCode/copy and the persisted (favorites/shortcuts) encoding —
-     * it's populated only on the live list from [loadLaunchableApps].
-     */
-    var category: Int = -1
-}
-
-/**
- * Enumerates launchable apps across *all* profiles (personal + work + private
- * space) via [LauncherApps] — plain PackageManager queries only see the personal
- * profile. Locked/quiet profiles simply don't return activities, so their apps
- * disappear while paused, which is the system-consistent behavior.
- */
-fun loadLaunchableApps(context: Context): List<AppEntry> {
-    val la = context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as LauncherApps
-    val um = context.getSystemService(Context.USER_SERVICE) as UserManager
-    val self = context.packageName
-    val me = Process.myUserHandle()
-    return um.userProfiles.flatMap { user ->
-        val serial = if (user == me) 0L else um.getSerialNumberForUser(user)
-        la.getActivityList(null, user).mapNotNull { ai ->
-            if (ai.applicationInfo.packageName == self) return@mapNotNull null
-            val label = ai.label.toString().trim()
-            if (label.isEmpty()) return@mapNotNull null
-            AppEntry(
-                label = label,
-                packageName = ai.componentName.packageName,
-                activityName = ai.componentName.className,
-                userSerial = serial,
-            ).also {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) it.category = ai.applicationInfo.category
-            }
-        }
-    }.sortedBy { it.label.lowercase() }
-}
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private fun sectionOf(label: String): Char {
     val c = label.firstOrNull()?.uppercaseChar() ?: '#'

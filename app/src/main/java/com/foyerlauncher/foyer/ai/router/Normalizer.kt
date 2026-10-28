@@ -1,4 +1,4 @@
-package com.foyerlauncher.foyer
+package com.foyerlauncher.foyer.ai.router
 
 /**
  * Cheap deterministic text cleanup applied before any routing (§5.2). Keeps the

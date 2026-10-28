@@ -1,4 +1,4 @@
-package com.foyerlauncher.foyer
+package com.foyerlauncher.foyer.ui.screens
 
 import android.app.role.RoleManager
 import android.content.Context
@@ -31,6 +31,9 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.foyerlauncher.foyer.data.LauncherStore
+import com.foyerlauncher.foyer.ui.theme.LocalFontFamily
+import com.foyerlauncher.foyer.ui.theme.LocalPalette
 
 /** True when Foyer is the device's current default home app. */
 fun isDefaultLauncher(context: Context): Boolean {

@@ -1,4 +1,4 @@
-package com.foyerlauncher.foyer
+package com.foyerlauncher.foyer.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -29,11 +29,17 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import com.foyerlauncher.foyer.data.AppEntry
+import com.foyerlauncher.foyer.data.LauncherStore
+import com.foyerlauncher.foyer.data.UsageTracker
+import com.foyerlauncher.foyer.data.formatDuration
+import com.foyerlauncher.foyer.ui.theme.LocalFontFamily
+import com.foyerlauncher.foyer.ui.theme.LocalPalette
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private data class UsageSummary(
     val todayMs: Long,

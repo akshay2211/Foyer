@@ -1,4 +1,7 @@
-package com.foyerlauncher.foyer
+package com.foyerlauncher.foyer.ai.router
+
+import com.foyerlauncher.foyer.ai.engine.Assistant
+import com.foyerlauncher.foyer.data.key
 
 /**
  * The capability catalog — the single source of truth for what the on-device

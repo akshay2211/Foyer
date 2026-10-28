@@ -1,4 +1,4 @@
-package com.foyerlauncher.foyer
+package com.foyerlauncher.foyer.data
 
 import android.app.SearchManager
 import android.content.ComponentName
@@ -23,6 +23,16 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.edit
+import com.foyerlauncher.foyer.ai.engine.GemmaEngine
+import com.foyerlauncher.foyer.ai.engine.ModelDownloader
+import com.foyerlauncher.foyer.ai.engine.gemmaModelFile
+import com.foyerlauncher.foyer.ui.components.ClockStyle
+import com.foyerlauncher.foyer.ui.components.FastScrollStyle
+import com.foyerlauncher.foyer.ui.components.GestureAction
+import com.foyerlauncher.foyer.ui.theme.AccentChoice
+import com.foyerlauncher.foyer.ui.theme.BackgroundTone
+import com.foyerlauncher.foyer.ui.theme.FontChoice
+import com.foyerlauncher.foyer.ui.theme.ThemeMode
 import org.json.JSONArray
 import org.json.JSONObject
 

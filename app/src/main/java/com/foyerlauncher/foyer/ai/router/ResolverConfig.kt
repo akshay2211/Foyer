@@ -1,4 +1,4 @@
-package com.foyerlauncher.foyer
+package com.foyerlauncher.foyer.ai.router
 
 /**
  * Centralized, tunable confidence policy for app resolution (SoT §15). These are

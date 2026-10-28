@@ -1,13 +1,13 @@
-package com.foyerlauncher.foyer
+package com.foyerlauncher.foyer.ai.engine
 
 import android.content.Context
 import android.util.Log
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /** Where the downloaded Gemma model lives. */
 fun gemmaModelFile(context: Context): File = File(context.filesDir, "llm/gemma.task")
