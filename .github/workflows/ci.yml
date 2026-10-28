@@ -32,6 +32,9 @@ jobs:
       - name: Build
         run: ./gradlew assembleDebug
 
+      - name: Release build (R8) + vital lint
+        run: ./gradlew assembleRelease lintVitalRelease
+
       - name: Unit tests
         run: ./gradlew testDebugUnitTest
 
