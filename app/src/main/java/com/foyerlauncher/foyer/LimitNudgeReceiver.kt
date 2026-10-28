@@ -129,13 +129,13 @@ class LimitNudgeReceiver : BroadcastReceiver() {
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 )
             val alarms = context.getSystemService(AlarmManager::class.java) ?: return
-            // +20s grace so the fire-time re-check sees usage past the limit;
-            // a 3-minute delivery window — it's a nudge, exactness isn't worth
-            // the exact-alarm permission.
-            alarms.setWindow(
+            // +20s grace so the fire-time re-check sees usage past the limit.
+            // allow-while-idle: plain inexact wakeups are deferred indefinitely
+            // under battery saver (observed on device: +364d); this variant may
+            // fire under doze/saver, is still inexact, and needs no permission.
+            alarms.setAndAllowWhileIdle(
                 AlarmManager.RTC_WAKEUP,
                 System.currentTimeMillis() + remaining + 20_000L,
-                3 * 60_000L,
                 pending,
             )
         }
