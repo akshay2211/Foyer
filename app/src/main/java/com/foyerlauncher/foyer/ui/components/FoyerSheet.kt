@@ -39,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -109,8 +110,10 @@ fun FoyerSheet(
                 Modifier
                     .offset { IntOffset(0, dragOffset.value.roundToInt().coerceAtLeast(0)) }
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp))
-                    .background(palette.background)
+                    .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                    // Tonal container (M3: sheets sit on surface-container, not
+                    // the surface itself) so the sheet reads against the screen.
+                    .background(lerp(palette.background, palette.text, 0.08f))
                     // Swallow taps so touching the sheet doesn't hit the scrim.
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
@@ -138,9 +141,9 @@ fun FoyerSheet(
                     Modifier
                         .align(Alignment.CenterHorizontally)
                         .padding(bottom = 14.dp)
-                        .size(width = 34.dp, height = 3.dp)
+                        .size(width = 32.dp, height = 4.dp)
                         .clip(RoundedCornerShape(2.dp))
-                        .background(palette.muted.copy(alpha = 0.4f)),
+                        .background(palette.muted.copy(alpha = 0.5f)),
                 )
                 BasicText(
                     text = title,

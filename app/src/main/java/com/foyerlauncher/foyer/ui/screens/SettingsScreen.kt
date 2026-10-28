@@ -33,7 +33,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -73,6 +72,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.foyerlauncher.foyer.LockService
 import com.foyerlauncher.foyer.data.LauncherStore
 import com.foyerlauncher.foyer.data.SUGGESTED_GEMMA_URL
@@ -762,11 +762,18 @@ private fun PageScaffold(
                 title = { Text(title) },
                 subtitle = subtitle?.let { { Text(it) } },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = if (backIsClose) Icons.Filled.Close else Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = if (backIsClose) "close settings" else "back",
-                        )
+                    if (backIsClose) {
+                        TextButton(onClick = onBack) {
+                            Text(
+                                "back",
+                                style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 2.sp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    } else {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "back")
+                        }
                     }
                 },
                 scrollBehavior = scrollBehavior,

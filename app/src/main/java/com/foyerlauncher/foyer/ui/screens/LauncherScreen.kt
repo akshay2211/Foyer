@@ -760,6 +760,12 @@ private fun DrawerPage(
 
     val onLaunch: (AppEntry) -> Unit = onLaunchApp
 
+    // Long-press opens the app sheet; the keyboard must not stay over it.
+    val onLongPress: (AppEntry) -> Unit = {
+        focusManager.clearFocus()
+        onLongPressApp(it)
+    }
+
     // Browse list excludes hidden apps; search reveals everything (incl. hidden).
     val browse = apps.filterNot { store.isHidden(it) }
     val searchResults =
@@ -843,9 +849,23 @@ private fun DrawerPage(
                 Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.End,
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                TextButton(onClick = onOpenSettings) {
+                TextButton(onClick = {
+                    focusManager.clearFocus()
+                    onNavigateHome()
+                }) {
+                    Text(
+                        "back",
+                        style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 2.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                TextButton(onClick = {
+                    // Drop the IME before the settings overlay comes up.
+                    focusManager.clearFocus()
+                    onOpenSettings()
+                }) {
                     Text(
                         "settings",
                         style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 2.sp),
@@ -989,7 +1009,7 @@ private fun DrawerPage(
                             }
                         }
                         items(searchResults, key = { "s/" + it.key }) { app ->
-                            AppRow(app, onLaunch, onLongPressApp)
+                            AppRow(app, onLaunch, onLongPress)
                         }
                         item(key = "web") {
                             FallbackRow("search web for “$q”") {
@@ -1013,7 +1033,7 @@ private fun DrawerPage(
                         if (frequent.isNotEmpty()) {
                             item(key = "freq-header") { SectionHeader("frequently used") }
                             items(frequent, key = { "f/" + it.key }) { app ->
-                                AppRow(app, onLaunch, onLongPressApp)
+                                AppRow(app, onLaunch, onLongPress)
                             }
                             item(key = "freq-divider") {
                                 HorizontalDivider(
@@ -1023,7 +1043,7 @@ private fun DrawerPage(
                             }
                         }
                         items(browse, key = { "a/" + it.key }) { app ->
-                            AppRow(app, onLaunch, onLongPressApp)
+                            AppRow(app, onLaunch, onLongPress)
                         }
                     }
                 }
