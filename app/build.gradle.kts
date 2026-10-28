@@ -50,6 +50,8 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.foundation)
     implementation(libs.androidx.animation)
+    implementation(libs.androidx.material3) // settings surfaces only; home stays foundation
+    implementation(libs.androidx.material.icons.core)
     implementation(libs.tasks.genai)
     implementation(libs.androidx.ui.tooling.preview)
     debugImplementation(libs.androidx.ui.tooling)

@@ -177,17 +177,17 @@ class LauncherStore(
     )
         private set
 
-    fun cycleClockStyle() {
-        clockStyle = clockStyle.next()
-        prefs.edit { putString(KEY_CLOCK_STYLE, clockStyle.name) }
+    fun chooseClockStyle(style: ClockStyle) {
+        clockStyle = style
+        prefs.edit { putString(KEY_CLOCK_STYLE, style.name) }
     }
 
     var fastScrollStyle by mutableStateOf(enumFromPrefs(KEY_FAST_SCROLL, FastScrollStyle.INTERACTIVE))
         private set
 
-    fun cycleFastScroll() {
-        fastScrollStyle = fastScrollStyle.next()
-        prefs.edit { putString(KEY_FAST_SCROLL, fastScrollStyle.name) }
+    fun chooseFastScroll(style: FastScrollStyle) {
+        fastScrollStyle = style
+        prefs.edit { putString(KEY_FAST_SCROLL, style.name) }
     }
 
     /** Curated background tone (#16); DEFAULT follows the theme. */
@@ -203,7 +203,7 @@ class LauncherStore(
     var showWallpaper by mutableStateOf(prefs.getBoolean(KEY_WALLPAPER, false))
         private set
 
-    /** Scrim opacity over the wallpaper; cycles 0.4 / 0.6 / 0.8. */
+    /** Scrim opacity over the wallpaper, 0.4–0.8 (text must stay readable). */
     var wallpaperScrim by mutableStateOf(prefs.getFloat(KEY_SCRIM, 0.6f))
         private set
 
@@ -212,13 +212,8 @@ class LauncherStore(
         prefs.edit { putBoolean(KEY_WALLPAPER, showWallpaper) }
     }
 
-    fun cycleWallpaperScrim() {
-        wallpaperScrim =
-            when {
-                wallpaperScrim < 0.5f -> 0.6f
-                wallpaperScrim < 0.7f -> 0.8f
-                else -> 0.4f
-            }
+    fun updateWallpaperScrim(value: Float) {
+        wallpaperScrim = value.coerceIn(0.4f, 0.8f)
         prefs.edit { putFloat(KEY_SCRIM, wallpaperScrim) }
     }
 
@@ -247,19 +242,19 @@ class LauncherStore(
     var doubleTapAction by mutableStateOf(enumFromPrefs(KEY_DOUBLE_TAP, GestureAction.NONE))
         private set
 
-    fun cycleSwipeUp() {
-        swipeUpAction = swipeUpAction.next()
-        prefs.edit { putString(KEY_SWIPE_UP, swipeUpAction.name) }
+    fun chooseSwipeUp(action: GestureAction) {
+        swipeUpAction = action
+        prefs.edit { putString(KEY_SWIPE_UP, action.name) }
     }
 
-    fun cycleSwipeDown() {
-        swipeDownAction = swipeDownAction.next()
-        prefs.edit { putString(KEY_SWIPE_DOWN, swipeDownAction.name) }
+    fun chooseSwipeDown(action: GestureAction) {
+        swipeDownAction = action
+        prefs.edit { putString(KEY_SWIPE_DOWN, action.name) }
     }
 
-    fun cycleDoubleTap() {
-        doubleTapAction = doubleTapAction.next()
-        prefs.edit { putString(KEY_DOUBLE_TAP, doubleTapAction.name) }
+    fun chooseDoubleTap(action: GestureAction) {
+        doubleTapAction = action
+        prefs.edit { putString(KEY_DOUBLE_TAP, action.name) }
     }
 
     /** Route "ask me" (voice) through the on-device model. On by default. */
@@ -367,6 +362,11 @@ class LauncherStore(
     fun cycleTheme() {
         themeMode = themeMode.next()
         prefs.edit { putString(KEY_THEME, themeMode.name) }
+    }
+
+    fun chooseTheme(mode: ThemeMode) {
+        themeMode = mode
+        prefs.edit { putString(KEY_THEME, mode.name) }
     }
 
     fun chooseAccent(choice: AccentChoice) {

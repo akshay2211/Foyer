@@ -65,7 +65,10 @@ com.foyerlauncher.foyer/
 ```
 
 - **Single activity, Compose-only, unidirectional data flow.** State flows
-  down, events go up as lambdas.
+  down, events go up as lambdas. Home surfaces are foundation-only Compose;
+  settings pages use Material 3 Expressive components themed entirely from
+  the Foyer palette via `FoyerMaterialTheme` (ui/theme) — never default M3
+  purple.
 - **Plain state holder, no ViewModel.** `LauncherStore` is a snapshot-state
   class persisted to SharedPreferences. This is intentional: the activity
   handles `configChanges` itself (standard launcher practice), a home app's
@@ -110,12 +113,14 @@ com.foyerlauncher.foyer/
 - **Don't** clutter the home surface: no widgets, no icon grids, no live
   wallpaper rendering of our own (wallpaper mode just shows the system one
   behind a scrim).
+- **Don't** use Material components on home/drawer surfaces — M3 is scoped
+  to settings and utility pages; the home screen stays foundation-only.
 
 ## 6. Actual Tech Stack
 
 | Component | Choice |
 |---|---|
-| Language / UI | Kotlin, Jetpack Compose (foundation + ui, no Material) |
+| Language / UI | Kotlin, Jetpack Compose (foundation for home; Material 3 Expressive for settings, themed from the Foyer palette) |
 | State | Compose snapshot state in a plain store class |
 | Persistence | SharedPreferences (+ user-exported JSON backup) |
 | App enumeration | `LauncherApps` across all user profiles |

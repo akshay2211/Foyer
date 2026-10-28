@@ -49,7 +49,8 @@ accessibility service used solely for the lock-screen gesture).
 
 ## Architecture
 
-Single-activity Jetpack Compose (foundation-only, no Material), plain
+Single-activity Jetpack Compose (foundation-only home; Material 3
+Expressive settings themed from the app palette), plain
 snapshot-state holders persisted to SharedPreferences, and a two-tier AI
 pipeline — a deterministic router first, the model as semantic fallback:
 

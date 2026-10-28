@@ -120,7 +120,8 @@ private val DarkBase =
         accent = Color(0xFFEDEDED),
     )
 
-private fun accentColor(
+/** The concrete color an accent choice maps to ([mono] = the theme's ink). */
+internal fun accentColor(
     choice: AccentChoice,
     mono: Color,
 ): Color =

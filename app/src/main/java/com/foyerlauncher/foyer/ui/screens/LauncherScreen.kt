@@ -375,7 +375,7 @@ fun LauncherScreen(store: LauncherStore) {
             HomeMenu(
                 clockStyle = store.clockStyle,
                 focusActive = store.isFocusActive(),
-                onCycleClock = { store.cycleClockStyle() },
+                onCycleClock = { store.chooseClockStyle(store.clockStyle.next()) },
                 onFocus = {
                     showHomeMenu = false
                     if (store.isFocusActive()) store.endFocus() else showFocusPicker = true

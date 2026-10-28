@@ -20,7 +20,8 @@ that a change fits the product and the codebase, not just that it works.
   model download), no analytics, no new permissions without a point-of-use
   explanation screen.
 - **No new dependencies** without prior discussion — the app is deliberately
-  lean (foundation-only Compose, no Material).
+  lean. Home/drawer surfaces are foundation-only Compose; Material 3 is used
+  on settings pages only, themed via `FoyerMaterialTheme`.
 - **AI decides, code executes.** Don't add hardcoded regex/keyword rules to
   the semantic path; teach the deterministic router (`ai/router`) or improve
   the prompt instead.
