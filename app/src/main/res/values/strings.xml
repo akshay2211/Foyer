@@ -2,4 +2,6 @@
     <string name="app_name">Foyer</string>
     <string name="lock_service_label">Foyer lock screen gesture</string>
     <string name="lock_service_description">Used only for the optional double-tap-to-lock gesture. Foyer performs the system lock action and nothing else: it reads no screen content and processes no events.</string>
+    <string name="limit_channel_name">App limits</string>
+    <string name="limit_channel_description">A nudge when an app reaches the daily limit you set for it.</string>
 </resources>

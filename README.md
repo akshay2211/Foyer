@@ -44,8 +44,9 @@ nothing.
 Everything stays on the phone. No network calls except the model download
 you explicitly start. No analytics, no accounts, no notification access.
 The only permissions requested are explained at the point of use
-(microphone for voice, usage access for screen-time features, an optional
-accessibility service used solely for the lock-screen gesture).
+(microphone for voice, usage access for screen-time features, notifications
+for the limit-reached nudge, an optional accessibility service used solely
+for the lock-screen gesture).
 
 ## Architecture
 

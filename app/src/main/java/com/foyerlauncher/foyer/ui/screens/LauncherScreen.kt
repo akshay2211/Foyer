@@ -6,6 +6,8 @@ import android.os.Process
 import android.os.UserHandle
 import android.os.UserManager
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -99,6 +101,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.foyerlauncher.foyer.LimitNudgeReceiver
 import com.foyerlauncher.foyer.ai.engine.rememberAssistant
 import com.foyerlauncher.foyer.ai.router.AiIntent
 import com.foyerlauncher.foyer.ai.router.Command
@@ -152,6 +155,9 @@ private fun sectionOf(label: String): Char {
 fun LauncherScreen(store: LauncherStore) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+
+    val notifPermission =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
     var apps by remember { mutableStateOf(emptyList<AppEntry>()) }
     // Load once, then keep in sync with installs/uninstalls/profile changes in
@@ -265,6 +271,16 @@ fun LauncherScreen(store: LauncherStore) {
             overLimit -> guardApp = app
             else -> {
                 store.recordLaunch(app)
+                // Arm the "limit reached" nudge for the moment today's budget
+                // runs out; the receiver re-checks usage before notifying.
+                if (limit != null && UsageTracker.hasAccess(context)) {
+                    LimitNudgeReceiver.schedule(
+                        context,
+                        app,
+                        limit,
+                        UsageTracker.usageTodayMs(context, app.packageName),
+                    )
+                }
                 launchApp(context, app)
             }
         }
@@ -364,7 +380,17 @@ fun LauncherScreen(store: LauncherStore) {
                 },
                 onRemoveAlias = { store.removeAlias(it) },
                 limitMs = store.appLimits[app.packageName],
-                onCycleLimit = { store.cycleLimit(app.packageName) },
+                onCycleLimit = {
+                    store.cycleLimit(app.packageName)
+                    // Point-of-use: the nudge needs notifications on 13+.
+                    if (store.limitFor(app.packageName) != null &&
+                        android.os.Build.VERSION.SDK_INT >= 33 &&
+                        context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
+                        android.content.pm.PackageManager.PERMISSION_GRANTED
+                    ) {
+                        notifPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                },
                 onDismiss = { menuApp = null },
             )
         }

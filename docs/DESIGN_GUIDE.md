@@ -34,8 +34,9 @@ assistant.
   simple rail.
 - App hiding, and user-taught aliases (also used by the AI resolver).
 - Distraction tools: mark-distracting apps, per-app daily limits with a
-  conscious 5-minute bypass, focus mode with a countdown, usage summary
-  (screen time, top apps, unlocks).
+  conscious 5-minute bypass and a limit-reached notification nudge (inexact
+  alarm + fire-time usage re-check — no service, no foreground watching),
+  focus mode with a countdown, usage summary (screen time, top apps, unlocks).
 - On-device assistant: voice ("ask me") + typed command bar; multi-turn
   conversation, disambiguation questions, inventory answers from the local
   app index.
