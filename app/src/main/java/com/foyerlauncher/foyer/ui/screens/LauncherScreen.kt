@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -41,11 +42,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -530,95 +533,102 @@ private fun HomePage(
                 )
             }.windowInsetsPadding(WindowInsets.systemBars),
     ) {
-        when (store.clockStyle) {
-            ClockStyle.DIGITAL ->
-                ClockWidget(
-                    modifier =
-                        Modifier
-                            .align(Alignment.TopStart)
-                            .padding(start = 28.dp, top = 56.dp)
-                            .clickable(onClickLabel = "open clock app") { openClockApp(context) },
-                )
-            ClockStyle.ANALOGUE ->
-                AnalogueClockWidget(
-                    modifier =
-                        Modifier
-                            .align(Alignment.TopStart)
-                            .padding(start = 28.dp, top = 56.dp)
-                            .clickable(onClickLabel = "open clock app") { openClockApp(context) },
-                )
-            ClockStyle.OFF -> Unit
-        }
-
-        // Today's screen time (the minimalist nudge). Taps to grant access.
-        val hasUsage = UsageTracker.hasAccess(context)
-        var screenMs by remember { mutableLongStateOf(0L) }
-        LaunchedEffect(hasUsage) {
-            while (hasUsage) {
-                screenMs = UsageTracker.screenTimeTodayMs(context)
-                delay(60_000)
-            }
-        }
-        BasicText(
-            text = if (hasUsage) "${formatDuration(screenMs)} today" else "track screen time",
-            modifier =
-                Modifier
-                    .align(Alignment.TopStart)
-                    .padding(start = 28.dp, top = 152.dp)
-                    .clickable(onClickLabel = if (hasUsage) "open screen time summary" else "grant usage access") {
-                        if (hasUsage) onOpenUsage() else UsageTracker.openAccessSettings(context)
-                    },
-            style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = 1.sp, fontFamily = ff),
-        )
-
-        // Focus countdown — the minute tick also re-evaluates the focus filters
-        // so distracting favorites reappear on their own when focus expires.
-        var focusTick by remember { mutableIntStateOf(0) }
-        LaunchedEffect(store.focusUntil) {
-            while (store.isFocusActive()) {
-                delay(30_000)
-                focusTick++
-            }
-        }
-        if (store.isFocusActive() && focusTick >= 0) {
-            BasicText(
-                text = focusLabel(store.focusUntil),
-                modifier =
-                    Modifier
-                        .align(Alignment.TopStart)
-                        .padding(start = 28.dp, top = 178.dp),
-                style = TextStyle(color = palette.accent, fontSize = 13.sp, letterSpacing = 1.sp, fontFamily = ff),
-            )
-        }
-
-        // Favorites, vertically centered on the left.
-        Column(
-            modifier =
-                Modifier
-                    .align(Alignment.CenterStart)
-                    .padding(start = 28.dp, end = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            if (store.favorites.isEmpty()) {
-                BasicText(
-                    text = "long-press an app to pin it",
-                    style = TextStyle(color = palette.muted, fontSize = 15.sp, fontFamily = ff),
-                )
-            } else {
-                store.focusFiltered(store.favorites).forEach { app ->
-                    BasicText(
-                        text = app.label.lowercase(),
+        // The whole left side is one flowing column: header (clock, screen
+        // time, focus) then favorites in the remaining space — spacing adapts
+        // to whichever clock is shown, so nothing can overlap or hide.
+        Column(Modifier.fillMaxSize().padding(start = 28.dp)) {
+            when (store.clockStyle) {
+                ClockStyle.DIGITAL ->
+                    ClockWidget(
                         modifier =
                             Modifier
-                                .defaultMinSize(minHeight = 48.dp)
-                                .combinedClickable(
-                                    onClick = { onLaunchFavorite(app) },
-                                    onClickLabel = "open",
-                                    onLongClick = { onLongPressFavorite(app) },
-                                    onLongClickLabel = "app options",
-                                ).padding(vertical = 9.dp),
-                        style = TextStyle(color = palette.text, fontSize = 22.sp, fontFamily = ff),
+                                .padding(top = 56.dp)
+                                .clickable(onClickLabel = "open clock app") { openClockApp(context) },
                     )
+                ClockStyle.ANALOGUE ->
+                    AnalogueClockWidget(
+                        modifier =
+                            Modifier
+                                .padding(top = 56.dp)
+                                .clickable(onClickLabel = "open clock app") { openClockApp(context) },
+                    )
+                ClockStyle.OFF -> Spacer(Modifier.height(56.dp))
+            }
+
+            // Today's screen time (the minimalist nudge). Taps to grant access.
+            val hasUsage = UsageTracker.hasAccess(context)
+            var screenMs by remember { mutableLongStateOf(0L) }
+            LaunchedEffect(hasUsage) {
+                while (hasUsage) {
+                    screenMs = UsageTracker.screenTimeTodayMs(context)
+                    delay(60_000)
+                }
+            }
+            BasicText(
+                text = if (hasUsage) "${formatDuration(screenMs)} today" else "track screen time",
+                modifier =
+                    Modifier
+                        .padding(top = 16.dp)
+                        .clickable(onClickLabel = if (hasUsage) "open screen time summary" else "grant usage access") {
+                            if (hasUsage) onOpenUsage() else UsageTracker.openAccessSettings(context)
+                        },
+                style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = 1.sp, fontFamily = ff),
+            )
+
+            // Focus countdown — the minute tick also re-evaluates the focus filters
+            // so distracting favorites reappear on their own when focus expires.
+            var focusTick by remember { mutableIntStateOf(0) }
+            LaunchedEffect(store.focusUntil) {
+                while (store.isFocusActive()) {
+                    delay(30_000)
+                    focusTick++
+                }
+            }
+            if (store.isFocusActive() && focusTick >= 0) {
+                BasicText(
+                    text = focusLabel(store.focusUntil),
+                    modifier = Modifier.padding(top = 8.dp),
+                    style = TextStyle(color = palette.accent, fontSize = 13.sp, letterSpacing = 1.sp, fontFamily = ff),
+                )
+            }
+
+            // Favorites, centered in whatever space the header leaves; the
+            // bottom padding keeps them clear of "ask me" and the shortcuts,
+            // and the scroll is a safety net for many favorites on small
+            // screens — invisible when everything fits.
+            Box(
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(end = 24.dp, bottom = 72.dp),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    if (store.favorites.isEmpty()) {
+                        BasicText(
+                            text = "long-press an app to pin it",
+                            style = TextStyle(color = palette.muted, fontSize = 15.sp, fontFamily = ff),
+                        )
+                    } else {
+                        store.focusFiltered(store.favorites).forEach { app ->
+                            BasicText(
+                                text = app.label.lowercase(),
+                                modifier =
+                                    Modifier
+                                        .defaultMinSize(minHeight = 48.dp)
+                                        .combinedClickable(
+                                            onClick = { onLaunchFavorite(app) },
+                                            onClickLabel = "open",
+                                            onLongClick = { onLongPressFavorite(app) },
+                                            onLongClickLabel = "app options",
+                                        ).padding(vertical = 9.dp),
+                                style = TextStyle(color = palette.text, fontSize = 22.sp, fontFamily = ff),
+                            )
+                        }
+                    }
                 }
             }
         }

@@ -74,7 +74,7 @@ fun AnalogueClockWidget(modifier: Modifier = Modifier) {
         val timeText = timeFmt.format(Date(now))
         Canvas(
             Modifier
-                .size(112.dp)
+                .size(148.dp)
                 .semantics { contentDescription = "clock, $timeText" },
         ) {
             val r = size.minDimension / 2f
