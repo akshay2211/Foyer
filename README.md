@@ -35,9 +35,9 @@ nothing.
   daily limits with a conscious 5-minute bypass, mark-as-distracting,
   focus mode with a countdown, and a usage summary screen.
 - **Stays out of your way** — app hiding, user-taught aliases, work/private
-  profile support, gestures (swipe, double-tap, lock screen), wallpaper mode
-  behind a scrim, curated background tones, digital or analogue clock,
-  backup/restore to a JSON file you own.
+  profile support, gestures (swipe, double-tap, lock screen), curated
+  background tones, digital or analogue clock, backup/restore to a JSON
+  file you own.
 
 ## Privacy
 

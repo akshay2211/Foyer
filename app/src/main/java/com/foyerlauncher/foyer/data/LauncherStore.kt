@@ -50,8 +50,6 @@ private const val KEY_CLOCK = "show_clock"
 private const val KEY_CLOCK_STYLE = "clock_style"
 private const val KEY_FAST_SCROLL = "fast_scroll_style"
 private const val KEY_TONE = "background_tone"
-private const val KEY_WALLPAPER = "show_wallpaper"
-private const val KEY_SCRIM = "wallpaper_scrim"
 private const val KEY_HIDDEN = "hidden"
 private const val KEY_USAGE = "usage"
 private const val KEY_DISTRACTING = "distracting"
@@ -197,24 +195,6 @@ class LauncherStore(
     fun chooseTone(tone: BackgroundTone) {
         backgroundTone = tone
         prefs.edit { putString(KEY_TONE, tone.name) }
-    }
-
-    /** System wallpaper behind the home screen, always under a scrim (#17). Off by default. */
-    var showWallpaper by mutableStateOf(prefs.getBoolean(KEY_WALLPAPER, false))
-        private set
-
-    /** Scrim opacity over the wallpaper, 0.4–0.8 (text must stay readable). */
-    var wallpaperScrim by mutableStateOf(prefs.getFloat(KEY_SCRIM, 0.6f))
-        private set
-
-    fun toggleWallpaper() {
-        showWallpaper = !showWallpaper
-        prefs.edit { putBoolean(KEY_WALLPAPER, showWallpaper) }
-    }
-
-    fun updateWallpaperScrim(value: Float) {
-        wallpaperScrim = value.coerceIn(0.4f, 0.8f)
-        prefs.edit { putFloat(KEY_SCRIM, wallpaperScrim) }
     }
 
     /** First-run onboarding (pitch + default-launcher prompt) shown exactly once. */
@@ -616,8 +596,6 @@ class LauncherStore(
                 put("clockStyle", clockStyle.name)
                 put("fastScroll", fastScrollStyle.name)
                 put("backgroundTone", backgroundTone.name)
-                put("showWallpaper", showWallpaper)
-                put("wallpaperScrim", wallpaperScrim.toDouble())
                 put("theme", themeMode.name)
                 put("accent", accent.name)
                 put("font", font.name)
@@ -693,12 +671,8 @@ class LauncherStore(
         fastScrollStyle = enumOrCurrent(o.optString("fastScroll"), fastScrollStyle)
         prefs.edit { putString(KEY_FAST_SCROLL, fastScrollStyle.name) }
         backgroundTone = enumOrCurrent(o.optString("backgroundTone"), backgroundTone)
-        if (o.has("showWallpaper")) showWallpaper = o.optBoolean("showWallpaper", false)
-        if (o.has("wallpaperScrim")) wallpaperScrim = o.optDouble("wallpaperScrim", 0.6).toFloat().coerceIn(0.4f, 0.8f)
         prefs.edit {
             putString(KEY_TONE, backgroundTone.name)
-            putBoolean(KEY_WALLPAPER, showWallpaper)
-            putFloat(KEY_SCRIM, wallpaperScrim)
         }
         themeMode = enumOrCurrent(o.optString("theme"), themeMode)
         accent = enumOrCurrent(o.optString("accent"), accent)

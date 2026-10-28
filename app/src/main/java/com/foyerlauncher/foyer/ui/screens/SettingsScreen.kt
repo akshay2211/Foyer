@@ -49,14 +49,12 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -333,7 +331,7 @@ private fun AppearancePage(
         )
 
         GroupLabel("background")
-        GroupSurface(RoundedCornerShape(22.dp, 22.dp, 6.dp, 6.dp)) {
+        GroupSurface(RoundedCornerShape(22.dp)) {
             Row(
                 Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -354,43 +352,6 @@ private fun AppearancePage(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-        }
-        Spacer(Modifier.height(2.dp))
-        SwitchRow(
-            shape =
-                if (store.showWallpaper) {
-                    RoundedCornerShape(6.dp)
-                } else {
-                    RoundedCornerShape(6.dp, 6.dp, 22.dp, 22.dp)
-                },
-            title = "wallpaper",
-            subtitle = "system wallpaper behind a scrim",
-            checked = store.showWallpaper,
-        ) { store.toggleWallpaper() }
-        if (store.showWallpaper) {
-            Spacer(Modifier.height(2.dp))
-            GroupSurface(RoundedCornerShape(6.dp, 6.dp, 22.dp, 22.dp)) {
-                Column(Modifier.padding(horizontal = 18.dp, vertical = 10.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("dim", style = MaterialTheme.typography.titleMedium)
-                        Spacer(Modifier.weight(1f))
-                        Text(
-                            "${(store.wallpaperScrim * 100).toInt()}%",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    var scrim by remember { mutableFloatStateOf(store.wallpaperScrim) }
-                    Slider(
-                        value = scrim,
-                        onValueChange = { scrim = it },
-                        onValueChangeFinished = { store.updateWallpaperScrim(scrim) },
-                        valueRange = 0.4f..0.8f,
-                        modifier = Modifier.semantics { contentDescription = "wallpaper dim" },
-                    )
-                }
-            }
-            Caption("set the wallpaper itself from android settings — live wallpapers work too.")
         }
 
         GroupLabel("clock")

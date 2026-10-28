@@ -1,14 +1,10 @@
 package com.foyerlauncher.foyer
 
-import android.graphics.Color
 import android.os.Bundle
-import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.addCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.runtime.LaunchedEffect
-import androidx.core.graphics.drawable.toDrawable
 import com.foyerlauncher.foyer.data.rememberLauncherStore
 import com.foyerlauncher.foyer.ui.screens.LauncherScreen
 import com.foyerlauncher.foyer.ui.theme.LauncherTheme
@@ -23,19 +19,6 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val store = rememberLauncherStore()
-
-            // Wallpaper mode (#17): the system renders the user's wallpaper
-            // (static or live) behind the window; Foyer never picks or stores
-            // one. The home root draws a scrim instead of an opaque fill.
-            LaunchedEffect(store.showWallpaper) {
-                if (store.showWallpaper) {
-                    window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
-                    window.setBackgroundDrawable(Color.TRANSPARENT.toDrawable())
-                } else {
-                    window.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
-                }
-            }
-
             LauncherTheme(store.themeMode, store.accent, store.font, store.backgroundTone) {
                 LauncherScreen(store)
             }
