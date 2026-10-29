@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.foyerlauncher.foyer.ui.theme.LocalFontFamily
 import com.foyerlauncher.foyer.ui.theme.LocalPalette
+import com.foyerlauncher.foyer.ui.theme.tracked
 
 /**
  * The in-settings, fully offline "how the ai works" tutorial (#2): what runs
@@ -46,12 +47,12 @@ fun AiGuideScreen(onClose: () -> Unit) {
         ) {
             BasicText(
                 "how the ai works",
-                style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = 2.sp, fontFamily = ff),
+                style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = tracked(2.sp), fontFamily = ff),
             )
             BasicText(
                 "close",
                 modifier = Modifier.clickable { onClose() },
-                style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = 2.sp, fontFamily = ff),
+                style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = tracked(2.sp), fontFamily = ff),
             )
         }
 

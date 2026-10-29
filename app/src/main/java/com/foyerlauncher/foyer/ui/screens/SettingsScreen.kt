@@ -91,6 +91,7 @@ import com.foyerlauncher.foyer.ui.theme.LocalPalette
 import com.foyerlauncher.foyer.ui.theme.ThemeMode
 import com.foyerlauncher.foyer.ui.theme.accentColor
 import com.foyerlauncher.foyer.ui.theme.toneBase
+import com.foyerlauncher.foyer.ui.theme.tracked
 import kotlinx.coroutines.launch
 
 /** The settings hierarchy: a root hub and one page per section. */
@@ -556,7 +557,7 @@ private fun AssistantPage(
                     )
 
                     if (store.modelUrl.isBlank()) {
-                        GroupLabel("suggestions")
+                        GroupLabel("suggestions — tap one to fill the link")
                         SettingsGroup(
                             { shape ->
                                 NavRow(shape, "qwen 2.5 · 0.5b · light", "~550 mb · no account needed", chevron = false) {
@@ -727,7 +728,7 @@ private fun PageScaffold(
                         TextButton(onClick = onBack) {
                             Text(
                                 "back",
-                                style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 2.sp),
+                                style = MaterialTheme.typography.labelLarge.copy(letterSpacing = tracked(2.sp)),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }

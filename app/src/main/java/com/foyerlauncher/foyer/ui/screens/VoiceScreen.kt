@@ -55,6 +55,7 @@ import com.foyerlauncher.foyer.ui.components.FoyerGlyph
 import com.foyerlauncher.foyer.ui.components.GlyphState
 import com.foyerlauncher.foyer.ui.theme.LocalFontFamily
 import com.foyerlauncher.foyer.ui.theme.LocalPalette
+import com.foyerlauncher.foyer.ui.theme.tracked
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -301,7 +302,7 @@ fun VoiceScreen(
         if (sttAvailable && hasMic()) startListening()
     }
 
-    val tagStyle = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = 2.sp, fontFamily = ff)
+    val tagStyle = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = tracked(2.sp), fontFamily = ff)
 
     Box(
         Modifier
@@ -349,7 +350,7 @@ fun VoiceScreen(
                             .padding(top = 18.dp)
                             .clickable { onClose() }
                             .padding(4.dp),
-                    style = TextStyle(color = palette.muted, fontSize = 15.sp, letterSpacing = 1.sp, fontFamily = ff),
+                    style = TextStyle(color = palette.muted, fontSize = 15.sp, letterSpacing = tracked(1.sp), fontFamily = ff),
                 )
             }
             heard?.let {
@@ -415,7 +416,7 @@ fun VoiceScreen(
             )
             BasicText(
                 text = "on-device · private",
-                style = TextStyle(color = palette.muted, fontSize = 11.sp, letterSpacing = 1.sp, fontFamily = ff),
+                style = TextStyle(color = palette.muted, fontSize = 11.sp, letterSpacing = tracked(1.sp), fontFamily = ff),
             )
         }
     }

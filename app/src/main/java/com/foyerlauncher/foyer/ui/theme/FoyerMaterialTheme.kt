@@ -32,8 +32,10 @@ private fun foyerColorScheme(
         inversePrimary = p.background,
         secondary = p.text,
         onSecondary = p.background,
-        secondaryContainer = tone(0.12f),
-        onSecondaryContainer = p.text,
+        // Selected fills (segmented buttons, tonal buttons) go full ink —
+        // a pale tone step was unreadable as "selected" on light surfaces.
+        secondaryContainer = p.text,
+        onSecondaryContainer = p.background,
         tertiary = p.muted,
         onTertiary = p.background,
         tertiaryContainer = tone(0.08f),

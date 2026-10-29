@@ -9,6 +9,8 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 
 /** The three theme choices the launcher cycles through. */
@@ -133,6 +135,14 @@ internal fun accentColor(
     }
 
 val LocalPalette = staticCompositionLocalOf { LightBase }
+
+/** True when the chosen font is monospace — wide tracking doubles up there. */
+val LocalMonoFont = staticCompositionLocalOf { false }
+
+/** The requested letter-spacing, or none when the mono font is active. */
+@Composable
+fun tracked(spacing: TextUnit): TextUnit = if (LocalMonoFont.current) 0.sp else spacing
+
 val LocalFontFamily = staticCompositionLocalOf<FontFamily> { FontFamily.SansSerif }
 
 @Composable
@@ -168,6 +178,7 @@ fun LauncherTheme(
     CompositionLocalProvider(
         LocalPalette provides palette,
         LocalFontFamily provides font.family,
+        LocalMonoFont provides (font == FontChoice.MONO),
         content = content,
     )
 }

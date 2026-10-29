@@ -34,6 +34,7 @@ import com.foyerlauncher.foyer.data.UsageTracker
 import com.foyerlauncher.foyer.data.formatDuration
 import com.foyerlauncher.foyer.ui.theme.LocalFontFamily
 import com.foyerlauncher.foyer.ui.theme.LocalPalette
+import com.foyerlauncher.foyer.ui.theme.tracked
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
@@ -102,12 +103,12 @@ fun UsageSummaryScreen(
         ) {
             BasicText(
                 "screen time",
-                style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = 2.sp, fontFamily = ff),
+                style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = tracked(2.sp), fontFamily = ff),
             )
             BasicText(
                 "close",
                 modifier = Modifier.clickable { onClose() },
-                style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = 2.sp, fontFamily = ff),
+                style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = tracked(2.sp), fontFamily = ff),
             )
         }
 
@@ -133,7 +134,7 @@ fun UsageSummaryScreen(
                     "today · ${s.unlocks} unlocks" +
                         if (bypasses > 0) " · $bypasses limit bypass${if (bypasses == 1) "" else "es"}" else "",
                 modifier = Modifier.padding(top = 2.dp, bottom = 26.dp),
-                style = TextStyle(color = palette.muted, fontSize = 14.sp, letterSpacing = 1.sp, fontFamily = ff),
+                style = TextStyle(color = palette.muted, fontSize = 14.sp, letterSpacing = tracked(1.sp), fontFamily = ff),
             )
 
             // The week, as quiet bars; today in accent.
@@ -225,7 +226,7 @@ fun UsageSummaryScreen(
             BasicText(
                 text = "■ marked distracting · all data stays on this phone",
                 modifier = Modifier.padding(top = 18.dp),
-                style = TextStyle(color = palette.muted, fontSize = 11.sp, letterSpacing = 1.sp, fontFamily = ff),
+                style = TextStyle(color = palette.muted, fontSize = 11.sp, letterSpacing = tracked(1.sp), fontFamily = ff),
             )
         }
     }

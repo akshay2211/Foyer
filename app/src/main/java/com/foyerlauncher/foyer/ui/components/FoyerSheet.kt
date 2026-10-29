@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.foyerlauncher.foyer.ui.theme.LocalFontFamily
 import com.foyerlauncher.foyer.ui.theme.LocalPalette
+import com.foyerlauncher.foyer.ui.theme.tracked
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -148,7 +149,7 @@ fun FoyerSheet(
                 BasicText(
                     text = title,
                     modifier = Modifier.padding(bottom = 4.dp),
-                    style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = 1.sp, fontFamily = ff),
+                    style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = tracked(1.sp), fontFamily = ff),
                 )
                 content()
             }
@@ -164,6 +165,7 @@ fun FoyerSheet(
 fun SheetRow(
     text: String,
     active: Boolean = false,
+    value: String? = null,
     onClick: () -> Unit,
 ) {
     val palette = LocalPalette.current
@@ -182,7 +184,9 @@ fun SheetRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         BasicText(text, style = TextStyle(color = palette.text, fontSize = 18.sp, fontFamily = ff))
-        if (active) {
+        if (value != null) {
+            BasicText(value, style = TextStyle(color = palette.muted, fontSize = 14.sp, fontFamily = ff))
+        } else if (active) {
             Box(
                 Modifier
                     .size(7.dp)

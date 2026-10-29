@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import com.foyerlauncher.foyer.data.LauncherStore
 import com.foyerlauncher.foyer.ui.theme.LocalFontFamily
 import com.foyerlauncher.foyer.ui.theme.LocalPalette
+import com.foyerlauncher.foyer.ui.theme.tracked
 
 /** True when Foyer is the device's current default home app. */
 fun isDefaultLauncher(context: Context): Boolean {
@@ -126,7 +127,7 @@ fun OnboardingScreen(onDone: () -> Unit) {
         BasicText(
             text = if (becameDefault) "start" else "skip for now",
             modifier = Modifier.clickable { onDone() }.padding(vertical = 10.dp),
-            style = TextStyle(color = palette.muted, fontSize = 16.sp, letterSpacing = 1.sp, fontFamily = ff),
+            style = TextStyle(color = palette.muted, fontSize = 16.sp, letterSpacing = tracked(1.sp), fontFamily = ff),
         )
     }
 }

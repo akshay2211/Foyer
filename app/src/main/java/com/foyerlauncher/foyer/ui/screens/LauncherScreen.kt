@@ -137,6 +137,7 @@ import com.foyerlauncher.foyer.ui.components.runGestureAction
 import com.foyerlauncher.foyer.ui.theme.FoyerMaterialTheme
 import com.foyerlauncher.foyer.ui.theme.LocalFontFamily
 import com.foyerlauncher.foyer.ui.theme.LocalPalette
+import com.foyerlauncher.foyer.ui.theme.tracked
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -600,15 +601,22 @@ private fun HomePage(
                     delay(60_000)
                 }
             }
+            val dateFmt = remember { SimpleDateFormat("EEEE, MMM d", Locale.getDefault()) }
+            val dateText = dateFmt.format(Date()).lowercase()
             BasicText(
-                text = if (hasUsage) "${formatDuration(screenMs)} today" else "track screen time",
+                text =
+                    if (hasUsage) {
+                        "$dateText · ${formatDuration(screenMs)} today"
+                    } else {
+                        "$dateText · track screen time"
+                    },
                 modifier =
                     Modifier
-                        .padding(top = 16.dp)
+                        .padding(top = 14.dp)
                         .clickable(onClickLabel = if (hasUsage) "open screen time summary" else "grant usage access") {
                             if (hasUsage) onOpenUsage() else UsageTracker.openAccessSettings(context)
                         },
-                style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = 1.sp, fontFamily = ff),
+                style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = tracked(1.sp), fontFamily = ff),
             )
 
             // Focus countdown — the minute tick also re-evaluates the focus filters
@@ -624,7 +632,7 @@ private fun HomePage(
                 BasicText(
                     text = focusLabel(store.focusUntil),
                     modifier = Modifier.padding(top = 8.dp),
-                    style = TextStyle(color = palette.accent, fontSize = 13.sp, letterSpacing = 1.sp, fontFamily = ff),
+                    style = TextStyle(color = palette.accent, fontSize = 13.sp, letterSpacing = tracked(1.sp), fontFamily = ff),
                 )
             }
 
@@ -632,15 +640,20 @@ private fun HomePage(
             // bottom padding keeps them clear of "ask me" and the shortcuts,
             // and the scroll is a safety net for many favorites on small
             // screens — invisible when everything fits.
-            Box(
+            Column(
                 Modifier
                     .weight(1f)
                     .fillMaxWidth()
                     .padding(end = 24.dp, bottom = 72.dp),
-                contentAlignment = Alignment.CenterStart,
             ) {
+                // Optically a third down the remaining space, not dead centre —
+                // the weights collapse before the list ever gets clipped.
+                Spacer(Modifier.weight(0.36f))
                 Column(
-                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    modifier =
+                        Modifier
+                            .weight(4f, fill = false)
+                            .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
                     if (store.favorites.isEmpty()) {
@@ -666,6 +679,7 @@ private fun HomePage(
                         }
                     }
                 }
+                Spacer(Modifier.weight(0.64f))
             }
         }
 
@@ -682,7 +696,7 @@ private fun HomePage(
                 TextStyle(
                     color = palette.text,
                     fontSize = 17.sp,
-                    letterSpacing = 1.sp,
+                    letterSpacing = tracked(1.sp),
                     fontWeight = FontWeight.Medium,
                     fontFamily = ff,
                 ),
@@ -729,7 +743,7 @@ private fun EdgeShortcut(
             TextStyle(
                 color = if (app == null) palette.muted else palette.text,
                 fontSize = 15.sp,
-                letterSpacing = 1.sp,
+                letterSpacing = tracked(1.sp),
                 fontFamily = ff,
             ),
     )
@@ -747,18 +761,11 @@ private fun ClockWidget(modifier: Modifier = Modifier) {
         }
     }
     val timeFmt = remember { SimpleDateFormat("h:mm", Locale.getDefault()) }
-    val dateFmt = remember { SimpleDateFormat("EEEE, MMM d", Locale.getDefault()) }
-    val date = Date(now)
-    Column(modifier = modifier, horizontalAlignment = Alignment.Start) {
-        BasicText(
-            text = timeFmt.format(date),
-            style = TextStyle(color = palette.text, fontSize = 60.sp, fontWeight = FontWeight.Thin, fontFamily = ff),
-        )
-        BasicText(
-            text = dateFmt.format(date).lowercase(),
-            style = TextStyle(color = palette.muted, fontSize = 14.sp, letterSpacing = 1.sp, fontFamily = ff),
-        )
-    }
+    BasicText(
+        text = timeFmt.format(Date(now)),
+        modifier = modifier,
+        style = TextStyle(color = palette.text, fontSize = 60.sp, fontWeight = FontWeight.Thin, fontFamily = ff),
+    )
 }
 
 // ---- App drawer page ------------------------------------------------------
@@ -885,7 +892,7 @@ private fun DrawerPage(
                 }) {
                     Text(
                         "back",
-                        style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 2.sp),
+                        style = MaterialTheme.typography.labelLarge.copy(letterSpacing = tracked(2.sp)),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -896,7 +903,7 @@ private fun DrawerPage(
                 }) {
                     Text(
                         "settings",
-                        style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 2.sp),
+                        style = MaterialTheme.typography.labelLarge.copy(letterSpacing = tracked(2.sp)),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -1053,7 +1060,7 @@ private fun DrawerPage(
                                 BasicText(
                                     text = "on-device · private",
                                     modifier = Modifier.padding(top = 16.dp),
-                                    style = TextStyle(color = palette.muted, fontSize = 11.sp, letterSpacing = 1.sp, fontFamily = ff),
+                                    style = TextStyle(color = palette.muted, fontSize = 11.sp, letterSpacing = tracked(1.sp), fontFamily = ff),
                                 )
                             }
                         }
@@ -1100,7 +1107,7 @@ private fun SectionHeader(text: String) {
     BasicText(
         text = text,
         modifier = Modifier.padding(top = 6.dp, bottom = 4.dp),
-        style = TextStyle(color = palette.muted, fontSize = 12.sp, letterSpacing = 2.sp, fontFamily = ff),
+        style = TextStyle(color = palette.muted, fontSize = 12.sp, letterSpacing = tracked(2.sp), fontFamily = ff),
     )
 }
 
@@ -1503,8 +1510,9 @@ private fun AppActionMenu(
             onClick = onToggleDistracting,
         )
         SheetRow(
-            "daily limit · ${limitMs?.let { formatDuration(it) } ?: if (isDistracting) "${formatDuration(DISTRACTION_THRESHOLD_MS)} default" else "none"}",
+            "daily limit",
             active = limitMs != null,
+            value = limitMs?.let { formatDuration(it) } ?: if (isDistracting) "${formatDuration(DISTRACTION_THRESHOLD_MS)} default" else "none",
             onClick = onCycleLimit,
         )
         // Taught nicknames: tap one to forget it, or teach a new one.
@@ -1552,7 +1560,7 @@ private fun AliasPrompt(
             BasicText(
                 text = "alias for ${app.label.lowercase()}",
                 modifier = Modifier.padding(bottom = 10.dp),
-                style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = 1.sp, fontFamily = ff),
+                style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = tracked(1.sp), fontFamily = ff),
             )
             BasicTextField(
                 value = text,
@@ -1602,7 +1610,7 @@ private fun HomeMenu(
     onDismiss: () -> Unit,
 ) {
     FoyerSheet(title = "home", onDismiss = onDismiss) {
-        SheetRow("clock · ${clockStyle.label}", active = clockStyle != ClockStyle.OFF, onClick = onCycleClock)
+        SheetRow("clock", active = clockStyle != ClockStyle.OFF, value = clockStyle.label, onClick = onCycleClock)
         SheetRow(if (focusActive) "end focus" else "focus", active = focusActive, onClick = onFocus)
         SheetRow("settings", onClick = onOpenSettings)
     }
