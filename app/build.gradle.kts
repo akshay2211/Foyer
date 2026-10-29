@@ -2,6 +2,28 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.ktlint)
+    alias(libs.plugins.dokka)
+}
+
+dokka {
+    moduleName.set("foyer")
+    dokkaPublications.html {
+        suppressInheritedMembers.set(true)
+    }
+    dokkaSourceSets.configureEach {
+        // API docs are for contributors; internal symbols included on purpose.
+        documentedVisibilities.set(
+            setOf(
+                org.jetbrains.dokka.gradle.engine.parameters.VisibilityModifier.Public,
+                org.jetbrains.dokka.gradle.engine.parameters.VisibilityModifier.Internal,
+            ),
+        )
+        sourceLink {
+            localDirectory.set(file("src/main/java"))
+            remoteUrl("https://github.com/akshay2211/Foyer/tree/main/app/src/main/java")
+            remoteLineSuffix.set("#L")
+        }
+    }
 }
 
 android {

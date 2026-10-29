@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>foyer — a quiet home for your phone</title>
+  <meta name="description" content="A text-first Android launcher with a fully on-device AI assistant. No server, no account, no analytics — airplane mode changes nothing.">
+  <meta property="og:title" content="foyer — a quiet home for your phone">
+  <meta property="og:description" content="A text-first Android launcher with a fully on-device AI assistant.">
+  <meta property="og:url" content="https://foyerlauncher.com/">
+  <link rel="icon" href="assets/icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="nav">
+  <a class="wordmark" href="/" aria-label="foyer">
+    <img src="assets/wordmark.svg" alt="foyer" width="110" height="22">
+  </a>
+  <nav class="nav-right">
+    <a href="/docs/">docs</a>
+    <a href="/docs/privacy/">privacy</a>
+    <a class="button" href="https://github.com/akshay2211/Foyer">get foyer</a>
+  </nav>
+</header>
+
+<!-- hero: the sentence holds, the launcher passes through it -->
+<section class="hero" id="top">
+  <div class="hero-stage">
+    <h1>
+      <span class="hero-half left">a quiet home</span>
+      <span class="hero-half right">for your phone</span>
+    </h1>
+
+    <div class="reel" aria-hidden="false">
+      <div class="reel-track" id="reel">
+        <div class="frame"><div data-ui>
+          <p class="ui-clock">7:48</p>
+          <p class="ui-date">wednesday, oct 28</p>
+          <p class="ui-stat">1h 25m today</p>
+          <div class="ui-apps" role="list">
+            <span>camera</span><span>gemini</span><span>messages</span><span>whatsapp</span>
+          </div>
+        </div></div>
+        <div class="frame"><div data-ui>
+          <p class="ui-search">search&nbsp;<b>spot</b></p>
+          <div class="ui-apps">
+            <span>spoti<b>f</b>y</span>
+            <span class="ui-stat">press go to open</span>
+          </div>
+          <p class="ui-tag">hidden apps stay hidden · search sees everything</p>
+        </div></div>
+        <div class="frame"><div data-ui>
+          <div class="ui-row"><span>turn on wifi and open spotify</span></div>
+          <div class="ui-row"><span class="ui-accent">wifi settings</span><span class="ui-sub">setting</span></div>
+          <div class="ui-row"><span class="ui-accent">open spotify</span><span class="ui-sub">app</span></div>
+          <p class="ui-tag">on-device · private</p>
+        </div></div>
+        <div class="frame"><div data-ui>
+          <div class="ui-row"><span>instagram</span><span class="ui-dot" role="img" aria-label="marked distracting"></span></div>
+          <div class="ui-row"><span class="ui-sub">daily limit · 20m</span><span class="ui-sub">used 17m</span></div>
+          <span class="ui-chip">five more minutes</span>
+          <span class="ui-chip ui-accent">enough for today</span>
+        </div></div>
+      </div>
+    </div>
+
+    <p class="hero-support">
+      Plain text instead of an icon grid, and an assistant that runs
+      <strong>entirely on the phone</strong>. No server, no account, no
+      analytics — airplane mode changes nothing.
+    </p>
+  </div>
+</section>
+
+<!-- showcase: the real router, running here -->
+<section id="show" class="show" aria-label="try the assistant">
+  <div class="show-fields">
+    <div class="show-in">
+      <div class="show-in-inner">
+        <label for="cmd">type what you want — this box runs foyer's actual routing logic</label>
+        <input class="cmd" id="cmd" type="text" value="turn on wifi and open spotify"
+               autocomplete="off" autocapitalize="none" spellcheck="false">
+        <div class="chips" role="group" aria-label="example commands">
+          <button type="button">set an alarm for 7:30</button>
+          <button type="button">message mom i'm on my way</button>
+          <button type="button">how many music apps do i have</button>
+          <button type="button">timer 10 minutes</button>
+          <button type="button">open whatsapp</button>
+        </div>
+      </div>
+      <h2 class="show-head in">you say,</h2>
+    </div>
+    <div class="show-out">
+      <div class="show-out-inner">
+        <div class="plan" data-ui id="plan" aria-live="polite">
+          <!-- filled by app.js; static fallback below -->
+          <noscript>
+            <div class="ui-row"><span class="ui-title">wifi settings</span><span class="ui-kind">setting</span></div>
+            <div class="ui-row"><span class="ui-title">open spotify</span><span class="ui-kind">app</span></div>
+          </noscript>
+        </div>
+        <p class="plan-note" id="plan-note">parsed the same way the app parses a model reply — structured actions, never raw intents.</p>
+      </div>
+      <h2 class="show-head out">it does.</h2>
+    </div>
+  </div>
+</section>
+
+<!-- features: small proof beside text -->
+<section id="features" class="features">
+  <h2>less phone, on purpose</h2>
+
+  <div class="module rise">
+    <div class="panel"><img src="assets/shot-home.png" alt="Foyer's home screen: the analogue clock, the date, and today's screen time in plain text" width="360" height="200" style="object-position: 0 12%; aspect-ratio: 360/200;" loading="lazy"></div>
+    <div class="module-text">
+      <h3>your screen time, under the clock</h3>
+      <p>The first thing the home screen tells you is how long you've been on the phone today. Not an app you open — just quietly there.</p>
+    </div>
+  </div>
+
+  <div class="module rise">
+    <div class="panel"><img src="assets/shot-sheet.png" alt="The long-press sheet for an app: remove from home, hide, mark distracting, daily limit" width="360" height="200" style="object-position: 0 78%; aspect-ratio: 360/200;" loading="lazy"></div>
+    <div class="module-text">
+      <h3>limits that ask, not forbid</h3>
+      <p>Give instagram twenty minutes a day. When they're spent, foyer pauses the launch and asks. One conscious tap buys five more.</p>
+      <p>A notification nudges you when the budget runs out mid-scroll.</p>
+    </div>
+  </div>
+
+  <div class="module rise">
+    <div class="panel"><img src="assets/shot-drawer.png" alt="The app drawer: a plain text list with an A to Z rail on the right edge" width="360" height="200" style="object-position: 100% 42%; aspect-ratio: 360/200;" loading="lazy"></div>
+    <div class="module-text">
+      <h3>every app is one swipe and a letter away</h3>
+      <p>The drawer is a text list with an A–Z rail. Search opens the keyboard by itself; aliases you teach ("insta") rank first.</p>
+    </div>
+  </div>
+
+  <div class="module rise">
+    <div class="panel"><img src="assets/shot-appearance.png" alt="Appearance settings: theme, accent swatches, fonts and curated background tones" width="360" height="200" style="object-position: 0 62%; aspect-ratio: 360/200;" loading="lazy"></div>
+    <div class="module-text">
+      <h3>curated, not customised to death</h3>
+      <p>Three fonts, four accents, five background tones, true black to cream. Every pairing keeps its contrast; there is no wallpaper circus.</p>
+    </div>
+  </div>
+
+  <div class="module rise">
+    <div class="panel"><img src="assets/shot-ai.png" alt="The AI settings page: bring your own model, with one-tap Qwen and Gemma suggestions" width="360" height="200" style="object-position: 0 34%; aspect-ratio: 360/200;" loading="lazy"></div>
+    <div class="module-text">
+      <h3>bring your own brain</h3>
+      <p>Foyer ships no model. Paste a MediaPipe .task link or tap a suggestion. Qwen 2.5 downloads with no account at all, and runs locally, forever.</p>
+    </div>
+  </div>
+</section>
+
+<!-- the letter -->
+<section id="letter" class="letter">
+  <div class="letter-inner rise">
+    <img src="assets/icon.png" alt="the foyer mark" width="44" height="44">
+    <p>I built foyer because my home screen had become a casino floor: forty coloured icons, each engineered to be tapped. I wanted the room you pass through on the way out, not the room you get stuck in.</p>
+    <p>Then the assistant question came up, and every answer on the market was a microphone wired to someone's server. That felt wrong for the most personal screen you own. So foyer's assistant is a small open model that <mark>lives entirely on your phone</mark> — you download it once, from whoever you trust, and nothing you say ever leaves the device.</p>
+    <p>The whole launcher is GPL-3.0 on GitHub. Read every line; that's the point.</p>
+    <p class="sign">akshay sharma</p>
+    <p class="role">maker of foyer</p>
+  </div>
+</section>
+
+<!-- proof: the quiet row -->
+<section class="proof rise">
+  <span class="lead-in">nothing to hide —</span>
+  <b>GPL-3.0</b>
+  <b>no analytics</b>
+  <b>no account</b>
+  <b>no server</b>
+  <b>works offline</b>
+</section>
+
+<!-- cta -->
+<section id="cta" class="cta" aria-label="get foyer">
+  <div class="tile-side photo drift"><img src="assets/shot-settings.png" alt="Foyer's settings hub in dark mode" width="400" height="720" loading="lazy"></div>
+  <div class="tile-main rise">
+    <h2>make yours a foyer</h2>
+    <p>Free, open source, and yours to read. Install the app, pick a model, and give your phone a quieter front room.</p>
+    <a class="button" href="https://github.com/akshay2211/Foyer">get it on github</a>
+  </div>
+  <div class="tile-side flat"></div>
+</section>
+
+<footer class="footer">
+  <span>foyer — a quiet launcher</span>
+  <nav>
+    <a href="/docs/">docs</a>
+    <a href="/api/">api</a>
+    <a href="https://github.com/akshay2211/Foyer">github</a>
+    <a href="/docs/privacy/">privacy</a>
+  </nav>
+  <span class="right">© 2026 · GPL-3.0</span>
+</footer>
+
+<script src="app.js" defer></script>
+</body>
+</html>
