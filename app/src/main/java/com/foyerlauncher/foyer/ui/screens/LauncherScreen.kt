@@ -573,70 +573,75 @@ private fun HomePage(
                 )
             }.windowInsetsPadding(WindowInsets.systemBars),
     ) {
-        // The whole left side is one flowing column: header (clock, screen
-        // time, focus) then favorites in the remaining space — spacing adapts
-        // to whichever clock is shown, so nothing can overlap or hide.
+        // One flowing column: a centred watch-face lockup (clock + date line +
+        // focus) over the left-spine favorites — spacing adapts to whichever
+        // clock is shown, so nothing can overlap or hide.
         Column(Modifier.fillMaxSize().padding(start = 28.dp)) {
-            when (store.clockStyle) {
-                ClockStyle.DIGITAL ->
-                    ClockWidget(
-                        modifier =
-                            Modifier
-                                .padding(top = 56.dp)
-                                .clickable(onClickLabel = "open clock app") { openClockApp(context) },
-                    )
-                ClockStyle.ANALOGUE ->
-                    AnalogueClockWidget(
-                        modifier =
-                            Modifier
-                                .padding(top = 56.dp)
-                                .clickable(onClickLabel = "open clock app") { openClockApp(context) },
-                    )
-                ClockStyle.OFF -> Spacer(Modifier.height(56.dp))
-            }
-
-            // Today's screen time (the minimalist nudge). Taps to grant access.
-            val hasUsage = UsageTracker.hasAccess(context)
-            var screenMs by remember { mutableLongStateOf(0L) }
-            LaunchedEffect(hasUsage) {
-                while (hasUsage) {
-                    screenMs = UsageTracker.screenTimeTodayMs(context)
-                    delay(60_000)
+            Column(
+                Modifier.fillMaxWidth().padding(end = 28.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                when (store.clockStyle) {
+                    ClockStyle.DIGITAL ->
+                        ClockWidget(
+                            modifier =
+                                Modifier
+                                    .padding(top = 56.dp)
+                                    .clickable(onClickLabel = "open clock app") { openClockApp(context) },
+                        )
+                    ClockStyle.ANALOGUE ->
+                        AnalogueClockWidget(
+                            modifier =
+                                Modifier
+                                    .padding(top = 56.dp)
+                                    .clickable(onClickLabel = "open clock app") { openClockApp(context) },
+                        )
+                    ClockStyle.OFF -> Spacer(Modifier.height(56.dp))
                 }
-            }
-            val dateFmt = remember { SimpleDateFormat("EEEE, MMM d", Locale.getDefault()) }
-            val dateText = dateFmt.format(Date()).lowercase()
-            BasicText(
-                text =
-                    if (hasUsage) {
-                        "$dateText · ${formatDuration(screenMs)} today"
-                    } else {
-                        "$dateText · track screen time"
-                    },
-                modifier =
-                    Modifier
-                        .padding(top = 14.dp)
-                        .clickable(onClickLabel = if (hasUsage) "open screen time summary" else "grant usage access") {
-                            if (hasUsage) onOpenUsage() else UsageTracker.openAccessSettings(context)
-                        },
-                style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = tracked(1.sp), fontFamily = ff),
-            )
 
-            // Focus countdown — the minute tick also re-evaluates the focus filters
-            // so distracting favorites reappear on their own when focus expires.
-            var focusTick by remember { mutableIntStateOf(0) }
-            LaunchedEffect(store.focusUntil) {
-                while (store.isFocusActive()) {
-                    delay(30_000)
-                    focusTick++
+                // Today's screen time (the minimalist nudge). Taps to grant access.
+                val hasUsage = UsageTracker.hasAccess(context)
+                var screenMs by remember { mutableLongStateOf(0L) }
+                LaunchedEffect(hasUsage) {
+                    while (hasUsage) {
+                        screenMs = UsageTracker.screenTimeTodayMs(context)
+                        delay(60_000)
+                    }
                 }
-            }
-            if (store.isFocusActive() && focusTick >= 0) {
+                val dateFmt = remember { SimpleDateFormat("EEEE, MMM d", Locale.getDefault()) }
+                val dateText = dateFmt.format(Date()).lowercase()
                 BasicText(
-                    text = focusLabel(store.focusUntil),
-                    modifier = Modifier.padding(top = 8.dp),
-                    style = TextStyle(color = palette.accent, fontSize = 13.sp, letterSpacing = tracked(1.sp), fontFamily = ff),
+                    text =
+                        if (hasUsage) {
+                            "$dateText · ${formatDuration(screenMs)} today"
+                        } else {
+                            "$dateText · track screen time"
+                        },
+                    modifier =
+                        Modifier
+                            .padding(top = 14.dp)
+                            .clickable(onClickLabel = if (hasUsage) "open screen time summary" else "grant usage access") {
+                                if (hasUsage) onOpenUsage() else UsageTracker.openAccessSettings(context)
+                            },
+                    style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = tracked(1.sp), fontFamily = ff),
                 )
+
+                // Focus countdown — the minute tick also re-evaluates the focus filters
+                // so distracting favorites reappear on their own when focus expires.
+                var focusTick by remember { mutableIntStateOf(0) }
+                LaunchedEffect(store.focusUntil) {
+                    while (store.isFocusActive()) {
+                        delay(30_000)
+                        focusTick++
+                    }
+                }
+                if (store.isFocusActive() && focusTick >= 0) {
+                    BasicText(
+                        text = focusLabel(store.focusUntil),
+                        modifier = Modifier.padding(top = 8.dp),
+                        style = TextStyle(color = palette.accent, fontSize = 13.sp, letterSpacing = tracked(1.sp), fontFamily = ff),
+                    )
+                }
             }
 
             // Favorites, centered in whatever space the header leaves; the
