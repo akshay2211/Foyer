@@ -74,63 +74,41 @@ h1, h2, h3 {
 .button:active { transform: scale(0.97); }
 .button:hover { color: var(--accent-ink); }
 
-/* ---- hero: sentence split by a frame, pinned reel --------------------- */
+/* ---- hero: one real phone, one plain sentence --------------------------- */
 
-.hero { height: 320svh; position: relative; }
-.hero-stage {
-  position: sticky;
-  top: 0;
-  height: 100svh;
-  overflow: hidden;
-}
-.hero-half {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: clamp(40px, 3.6vw, 60px);
-  font-weight: 500;
-  letter-spacing: -0.03em;
-  line-height: 1;
-  white-space: nowrap;
-}
-.hero-half.left { left: var(--margin); }
-.hero-half.right { right: var(--margin); }
-
-.reel {
-  position: absolute;
-  left: 50%;
-  top: 0;
-  height: 100svh;
-  width: min(35vw, 480px);
-  transform: translateX(-50%);
-  display: flex;
+.hero { min-height: 100svh; display: flex; align-items: center; padding: 96px var(--margin) 48px; }
+.hero-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 48px;
   align-items: center;
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
 }
-.reel-track {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  will-change: transform;
-}
-.frame {
-  width: min(35vw, 480px);
-  aspect-ratio: 16 / 10;
-  border-radius: var(--radius);
-  background: var(--surface);
-  overflow: hidden;
-  flex: none;
-}
+.hero-copy h1 { font-size: clamp(44px, 4.6vw, 76px); max-width: 11ch; }
+.hero-sub { margin-top: 22px; font-size: var(--step-lead); line-height: 1.45; max-width: 44ch; }
+.hero-actions { display: flex; align-items: center; gap: 22px; margin-top: 30px; }
+.hero-actions .button { font-size: 16px; padding: 13px 22px; }
+.ghost { font-size: 16px; color: var(--ink); }
+.ghost:hover { color: var(--muted); }
+.hero-fine { margin-top: 18px; font-size: 14px; color: var(--muted); }
+.hero-phone { justify-self: center; text-align: center; }
+.hero-caption { margin-top: 14px; font-size: 14px; color: var(--muted); }
 
-.hero-support {
-  position: absolute;
-  left: var(--margin);
-  bottom: 32px;
-  max-width: 340px;
-  font-size: 18px;
-  line-height: 1.45;
-  color: var(--ink);
+/* the one allowed frame: owners call — screenshots must read as phones */
+.phone {
+  display: inline-block;
+  background: #1b1b1d;
+  border-radius: 34px;
+  padding: 9px;
 }
-.hero-support strong { font-weight: 500; color: var(--ink); }
+.phone img { border-radius: 26px; width: 100%; height: auto; }
+
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap;
+}
 
 /* ---- the in-frame launcher fragments ---------------------------------- */
 
@@ -171,7 +149,8 @@ h1, h2, h3 {
 .show-out { background: var(--field); color: var(--field-ink); position: relative; padding: 0 0 96px 0; }
 
 .show-in-inner { margin: 26svh 0 0 16.6%; max-width: 34ch; }
-.show-in label { display: block; color: var(--muted); font-size: 15px; margin-bottom: 14px; }
+.show-intro { color: var(--ink); font-size: 17px; line-height: 1.5; margin-bottom: 22px; max-width: 40ch; }
+.out-intro { color: var(--field-muted); font-size: 17px; line-height: 1.5; margin-bottom: 18px; max-width: 40ch; }
 .cmd {
   width: 100%;
   background: transparent;
@@ -253,15 +232,7 @@ h1, h2, h3 {
   max-width: 640px;
   margin: 0 0 120px 22%;
 }
-.module .panel {
-  width: 300px;
-  flex: none;
-  border-radius: 14px;
-  overflow: hidden;
-  background: var(--surface);
-}
-/* the whole screen, exactly as the phone draws it - never a crop */
-.module .panel img { width: 100%; height: auto; display: block; }
+.module .panel { width: 300px; flex: none; }
 .module .module-text { width: 250px; }
 .module h3 { font-size: 18px; font-weight: 500; letter-spacing: -0.01em; line-height: 1.25; margin-bottom: 10px; }
 .module p { font-size: 15px; color: var(--muted); line-height: 1.5; }
@@ -340,6 +311,7 @@ h1, h2, h3 {
 .tile-main h2 { font-size: 40px; letter-spacing: -0.03em; }
 .tile-main p { font-size: 17px; max-width: 46ch; margin: 14px 0 26px; }
 .tile-main .button { background: var(--field); color: var(--field-ink); width: fit-content; }
+.tile-fine { font-size: 13px; margin-top: 14px; opacity: 0.85; }
 
 /* ---- footer --------------------------------------------------------------- */
 
@@ -373,15 +345,11 @@ h1, h2, h3 {
 /* ---- phone -------------------------------------------------------------------- */
 
 @media (max-width: 760px) {
-  .hero { height: auto; }
-  .hero-stage { position: static; height: auto; overflow: visible; padding: 96px 16px 48px; }
-  .hero-half { position: static; transform: none; white-space: normal; font-size: 9vw; }
-  .hero-half.right { text-align: right; display: block; }
-  .reel { position: static; transform: none; width: 100%; height: auto; margin: 24px 0; }
-  .reel-track { width: 100%; }
-  .frame { width: 100%; aspect-ratio: 4 / 3; }
-  .frame:nth-child(n+3) { display: none; }
-  .hero-support { position: static; margin-top: 28px; max-width: none; font-size: 16px; }
+  .hero { padding: 88px 16px 40px; }
+  .hero-grid { grid-template-columns: 1fr; gap: 36px; }
+  .hero-copy h1 { font-size: 11vw; }
+  .hero-sub { font-size: 17px; }
+  .hero-phone .phone { width: min(260px, 72vw); }
 
   .show-fields { grid-template-columns: 1fr; }
   .show-in, .show-out { min-height: 62svh; padding-bottom: 72px; }

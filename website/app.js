@@ -130,11 +130,11 @@
       planEl.appendChild(row);
     });
     if (plan.length) {
-      var code = plan.map(function (s) { return JSON.stringify(s.json); }).join(" ");
-      noteEl.innerHTML = "the structured plan, exactly as the app parses it: <code></code>";
-      noteEl.querySelector("code").textContent = code;
+      noteEl.textContent = plan.length === 1
+        ? "one step, done on the phone itself."
+        : plan.length + " steps from one sentence, all done on the phone itself.";
     } else {
-      noteEl.textContent = "type a command on the dark side.";
+      noteEl.textContent = "type something above.";
     }
   }
 
@@ -149,27 +149,6 @@
         cmd.focus();
       });
     });
-  }
-
-  /* ---- hero reel: the pinned story -------------------------------------- */
-  var hero = document.querySelector(".hero");
-  var track = document.getElementById("reel");
-  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (hero && track && !reduced && window.matchMedia("(min-width: 761px)").matches) {
-    var frames = track.children.length;
-    var tick = function () {
-      var r = hero.getBoundingClientRect();
-      var span = r.height - window.innerHeight;
-      var p = Math.min(1, Math.max(0, -r.top / span));
-      var frameH = track.children[0].getBoundingClientRect().height + 24;
-      var centre = window.innerHeight / 2 - frameH / 2;
-      track.style.transform = "translateY(" + (centre - p * (frames - 1) * frameH) + "px)";
-    };
-    tick();
-    window.addEventListener("scroll", function () { requestAnimationFrame(tick); }, { passive: true });
-    window.addEventListener("resize", tick);
-  } else if (track) {
-    track.style.transform = "none";
   }
 
   /* ---- entrances ----------------------------------------------------------- */
