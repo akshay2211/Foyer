@@ -248,19 +248,20 @@ h1, h2, h3 {
 }
 .module {
   display: flex;
-  gap: 20px;
+  gap: 28px;
   align-items: flex-start;
   max-width: 640px;
-  margin: 0 0 110px 22%;
+  margin: 0 0 120px 22%;
 }
 .module .panel {
-  width: 360px;
+  width: 300px;
   flex: none;
-  border-radius: var(--radius);
+  border-radius: 14px;
   overflow: hidden;
   background: var(--surface);
 }
-.module .panel img { width: 100%; height: 100%; object-fit: cover; }
+/* the whole screen, exactly as the phone draws it - never a crop */
+.module .panel img { width: 100%; height: auto; display: block; }
 .module .module-text { width: 250px; }
 .module h3 { font-size: 18px; font-weight: 500; letter-spacing: -0.01em; line-height: 1.25; margin-bottom: 10px; }
 .module p { font-size: 15px; color: var(--muted); line-height: 1.5; }
@@ -324,8 +325,8 @@ h1, h2, h3 {
 .cta { display: flex; gap: 12px; align-items: stretch; }
 .cta > * { border-radius: var(--radius); height: 360px; }
 .tile-side { flex: 1 1 14%; min-width: 0; }
-.tile-side.photo { overflow: hidden; margin-left: -12px; border-top-left-radius: 0; border-bottom-left-radius: 0; }
-.tile-side.photo img { width: 100%; height: 100%; object-fit: cover; }
+.tile-side.frag { overflow: hidden; margin-left: -12px; border-top-left-radius: 0; border-bottom-left-radius: 0; background: #000; }
+.tile-ui { display: flex; flex-direction: column; justify-content: center; align-items: flex-start; padding-left: 28%; }
 .tile-side.flat { background: var(--surface); margin-right: -12px; border-top-right-radius: 0; border-bottom-right-radius: 0; }
 .tile-main {
   flex: 0 0 66%;
@@ -410,7 +411,7 @@ h1, h2, h3 {
   .tile-main { flex: 1 1 100%; height: auto; min-height: 300px; padding: 28px; }
   .tile-main h2 { font-size: 28px; }
   .tile-side { height: 120px; }
-  .tile-side.photo { flex: 1 1 40%; margin-left: 0; border-radius: var(--radius); }
+  .tile-side.frag { flex: 1 1 40%; margin-left: 0; border-radius: var(--radius); }
   .tile-side.flat { flex: 1 1 40%; margin-right: 0; border-radius: var(--radius); }
 
   .footer { margin-top: 20svh; grid-template-columns: 1fr; gap: 8px; font-size: 14px; }
