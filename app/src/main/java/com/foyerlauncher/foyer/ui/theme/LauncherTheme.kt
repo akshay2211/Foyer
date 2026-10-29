@@ -55,6 +55,7 @@ enum class BackgroundTone(
 ) {
     DEFAULT("theme"),
     TRUE_BLACK("black"),
+    MATTE("matte"),
     WARM_DARK("warm dark"),
     PAPER("paper"),
     CREAM("cream"),
@@ -64,6 +65,15 @@ enum class BackgroundTone(
 internal fun toneBase(tone: BackgroundTone): Pair<Palette, Boolean>? =
     when (tone) {
         BackgroundTone.DEFAULT -> null
+        // Lifted black with a grain overlay (drawn at the home root) —
+        // reads as material, not void. True black stays for OLED battery.
+        BackgroundTone.MATTE ->
+            Palette(
+                background = Color(0xFF0B0B0D),
+                text = Color(0xFFEDEDED),
+                muted = Color(0xFF8A8A8E),
+                accent = Color(0xFFEDEDED),
+            ) to true
         // AMOLED true black: battery + night reading.
         BackgroundTone.TRUE_BLACK ->
             Palette(

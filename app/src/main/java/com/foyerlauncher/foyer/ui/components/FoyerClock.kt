@@ -1,5 +1,8 @@
 package com.foyerlauncher.foyer.ui.components
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
@@ -58,6 +61,28 @@ fun AnalogueClockWidget(modifier: Modifier = Modifier) {
     val hours = cal.get(Calendar.HOUR)
     val timeFmt = remember { SimpleDateFormat("h:mm", Locale.getDefault()) }
 
+    // The hands are alive: they wind forward into place when the clock
+    // appears, then glide (never jump) on every minute change. Fractions are
+    // cumulative so 59 -> 0 keeps turning clockwise instead of snapping back.
+    val minuteTarget = minutes / 60f
+    val hourTarget = (hours + minutes / 60f) / 12f
+    val minuteAnim = remember { Animatable(minuteTarget - 0.12f) }
+    val hourAnim = remember { Animatable(hourTarget - 0.045f) }
+    LaunchedEffect(minuteTarget) {
+        val delta = ((minuteTarget - minuteAnim.value) % 1f + 1f) % 1f
+        minuteAnim.animateTo(
+            minuteAnim.value + delta,
+            spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessLow),
+        )
+    }
+    LaunchedEffect(hourTarget) {
+        val delta = ((hourTarget - hourAnim.value) % 1f + 1f) % 1f
+        hourAnim.animateTo(
+            hourAnim.value + delta,
+            spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessLow),
+        )
+    }
+
     val timeText = timeFmt.format(Date(now))
     Canvas(
         modifier
@@ -98,8 +123,8 @@ fun AnalogueClockWidget(modifier: Modifier = Modifier) {
             )
         }
 
-        hand((hours + minutes / 60f) / 12f, r * 0.50f, r * 0.085f) // hour: short, heavy
-        hand(minutes / 60f, r * 0.76f, r * 0.05f) // minute: long, light
+        hand(hourAnim.value, r * 0.50f, r * 0.085f) // hour: short, heavy
+        hand(minuteAnim.value, r * 0.76f, r * 0.05f) // minute: long, light
         drawCircle(color = palette.accent, radius = r * 0.055f, center = c)
     }
 }

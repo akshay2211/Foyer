@@ -134,9 +134,11 @@ import com.foyerlauncher.foyer.ui.components.GlyphState
 import com.foyerlauncher.foyer.ui.components.SheetNote
 import com.foyerlauncher.foyer.ui.components.SheetRow
 import com.foyerlauncher.foyer.ui.components.runGestureAction
+import com.foyerlauncher.foyer.ui.theme.BackgroundTone
 import com.foyerlauncher.foyer.ui.theme.FoyerMaterialTheme
 import com.foyerlauncher.foyer.ui.theme.LocalFontFamily
 import com.foyerlauncher.foyer.ui.theme.LocalPalette
+import com.foyerlauncher.foyer.ui.theme.matteGrain
 import com.foyerlauncher.foyer.ui.theme.tracked
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -290,7 +292,8 @@ fun LauncherScreen(store: LauncherStore) {
     Box(
         Modifier
             .fillMaxSize()
-            .background(LocalPalette.current.background),
+            .background(LocalPalette.current.background)
+            .matteGrain(store.backgroundTone == BackgroundTone.MATTE),
     ) {
         HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
             when (page) {
