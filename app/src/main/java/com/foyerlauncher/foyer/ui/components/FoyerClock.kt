@@ -49,13 +49,12 @@ enum class ClockStyle(
  * The dial clock (#15), matched to the rotating-dial reference:
  *
  *  - the hour sits large and still in the centre
- *  - two rings of minute numerals (every five) with dotted ticks running
- *    between them on the same circle; the inner ring is the live minutes,
- *    the outer is its phase-shifted echo (the reference's second ring is a
- *    seconds dial — a home screen that animates every second would break
- *    the minute-cadence battery rule, so ours steps with the minutes)
- *  - a fixed lens at the lower right — a circle with a tail line reaching
- *    toward the outer ring — holds the exact current minute
+ *  - the inner ring is the live minutes (numerals every five over dotted
+ *    ticks); the outer ring is the 24-hour dial (numerals every two hours),
+ *    turning so the current hour rests exactly where the lens tail points —
+ *    lens holds the minute, tail touches the hour, nothing is ornament
+ *    (the reference's outer ring is a seconds dial; a home screen that
+ *    animates every second would break the minute-cadence battery rule)
  *  - the rings wind in with a spring on appearance and glide one step per
  *    minute, always clockwise; nothing animates while time stands still
  */
@@ -72,10 +71,11 @@ fun AnalogueClockWidget(modifier: Modifier = Modifier) {
     }
     val cal = remember(now) { Calendar.getInstance().apply { timeInMillis = now } }
     val minute = cal.get(Calendar.MINUTE)
+    val hour24 = cal.get(Calendar.HOUR_OF_DAY)
     val hourText = remember(now) { SimpleDateFormat("HH", Locale.getDefault()).format(Date(now)) }
     val timeFmt = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
 
-    // The lens stays at this screen angle; the rings turn to meet it.
+    // The lens stays at this screen angle; both rings turn to meet it.
     val bubbleAngle = 28f
     val targetRotation = bubbleAngle - (minute * 6f - 90f)
     val rotation = remember { Animatable(targetRotation + 48f) } // wind in
@@ -85,6 +85,17 @@ fun AnalogueClockWidget(modifier: Modifier = Modifier) {
         rotation.animateTo(
             rotation.value + delta,
             spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessLow),
+        )
+    }
+    // The hour ring drifts a quarter-degree per minute, like a real hour hand.
+    val hourTargetRotation = bubbleAngle - (hour24 * 15f + minute * 0.25f - 90f)
+    val hourRotation = remember { Animatable(hourTargetRotation - 30f) } // wind in
+    LaunchedEffect(hourTargetRotation) {
+        var delta = (hourTargetRotation - hourRotation.value) % 360f
+        if (delta > 0f) delta -= 360f
+        hourRotation.animateTo(
+            hourRotation.value + delta,
+            spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessLow),
         )
     }
 
@@ -139,7 +150,30 @@ fun AnalogueClockWidget(modifier: Modifier = Modifier) {
                 }
             }
 
-            ring(rOuter, rotation.value + 42f, echoStyle, 0.22f, skipNearBubble = false)
+            // Outer: the 24-hour dial. The current hour rides at the tail tip.
+            for (h in 0 until 24) {
+                val deg = h * 15f - 90f + hourRotation.value
+                val a = Math.toRadians(deg.toDouble())
+                val dir = Offset(kotlin.math.cos(a).toFloat(), kotlin.math.sin(a).toFloat())
+                val isNow = h == hour24
+                if (h % 2 == 0) {
+                    val layout = measurer.measure("%02d".format(h), if (isNow) currentStyle else echoStyle)
+                    drawText(
+                        layout,
+                        topLeft =
+                            c + dir * rOuter -
+                                Offset(layout.size.width / 2f, layout.size.height / 2f),
+                    )
+                } else {
+                    drawCircle(
+                        color = if (isNow) palette.text else palette.muted.copy(alpha = 0.22f),
+                        radius = r * if (isNow) 0.016f else 0.009f,
+                        center = c + dir * rOuter,
+                    )
+                }
+            }
+
+            // Inner: the live minutes.
             ring(rInner, rotation.value, numeralStyle, 0.35f, skipNearBubble = true)
 
             // The lens: a circle on the minutes ring with a tail line reaching
@@ -157,7 +191,7 @@ fun AnalogueClockWidget(modifier: Modifier = Modifier) {
             drawLine(
                 color = palette.accent,
                 start = bc + bdir * lensR,
-                end = bc + bdir * (rOuter - rInner - r * 0.04f + lensR),
+                end = bc + bdir * (rOuter - rInner - r * 0.12f + lensR),
                 strokeWidth = r * 0.014f,
             )
             val minuteLayout = measurer.measure("%02d".format(minute), currentStyle)
