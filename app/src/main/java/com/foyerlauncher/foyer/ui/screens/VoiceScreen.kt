@@ -83,6 +83,7 @@ private val loneVerbs =
 fun VoiceScreen(
     store: LauncherStore,
     onClose: () -> Unit,
+    onOpenAiSettings: () -> Unit,
 ) {
     val context = LocalContext.current
     val palette = LocalPalette.current
@@ -97,10 +98,15 @@ fun VoiceScreen(
         value = withContext(Dispatchers.IO) { store.focusFiltered(loadLaunchableApps(context)) }
     }
 
+    // No model means no assistant — explain and route to setup instead of
+    // listening into a dead end (every reply would fall back to a web search).
+    val modelReady = remember { store.aiEnabled && store.modelDownloaded() }
+
     // Explain the mic (and contacts) *before* any system dialog (#5).
     var showMicIntro by remember {
         mutableStateOf(
-            sttAvailable &&
+            modelReady &&
+                sttAvailable &&
                 ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED,
         )
@@ -108,6 +114,7 @@ fun VoiceScreen(
     var status by remember {
         mutableStateOf(
             when {
+                !modelReady -> ""
                 !sttAvailable -> "voice unavailable on this device"
                 showMicIntro -> ""
                 else -> "listening…"
@@ -117,6 +124,7 @@ fun VoiceScreen(
     var glyphState by remember {
         mutableStateOf(
             when {
+                !modelReady -> GlyphState.IDLE
                 !sttAvailable -> GlyphState.ERROR
                 showMicIntro -> GlyphState.IDLE
                 else -> GlyphState.LISTENING
@@ -282,6 +290,7 @@ fun VoiceScreen(
     fun onTap() {
         // Tapping empty space starts a new turn — keeps the conversation going.
         when {
+            !modelReady -> Unit // the setup card's buttons decide
             !sttAvailable -> onClose()
             showMicIntro -> Unit // the intro card's buttons decide
             hasMic() -> startListening()
@@ -299,7 +308,7 @@ fun VoiceScreen(
     // otherwise the explanation card below is the screen — no system dialog
     // appears until the user has read why and tapped allow.
     LaunchedEffect(Unit) {
-        if (sttAvailable && hasMic()) startListening()
+        if (modelReady && sttAvailable && hasMic()) startListening()
     }
 
     val tagStyle = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = tracked(2.sp), fontFamily = ff)
@@ -327,6 +336,34 @@ fun VoiceScreen(
         )
 
         Column(Modifier.align(Alignment.CenterStart)) {
+            if (!modelReady) {
+                BasicText(
+                    text = if (store.aiEnabled) "no local model yet" else "assistant is off",
+                    modifier = Modifier.padding(bottom = 12.dp),
+                    style = TextStyle(color = palette.text, fontSize = 26.sp, fontFamily = ff),
+                )
+                BasicText(
+                    text =
+                        if (store.aiEnabled) {
+                            "ask me needs a small on-device model, and none is set up yet. " +
+                                "choose one in settings — it downloads once and stays on your phone."
+                        } else {
+                            "on-device ai is turned off in settings. turn it on to use ask me."
+                        },
+                    modifier = Modifier.padding(bottom = 20.dp),
+                    style = TextStyle(color = palette.muted, fontSize = 16.sp, lineHeight = 24.sp, fontFamily = ff),
+                )
+                ActionButton("open ai settings") { onOpenAiSettings() }
+                BasicText(
+                    text = "not now",
+                    modifier =
+                        Modifier
+                            .padding(top = 18.dp)
+                            .clickable { onClose() }
+                            .padding(4.dp),
+                    style = TextStyle(color = palette.muted, fontSize = 15.sp, letterSpacing = tracked(1.sp), fontFamily = ff),
+                )
+            }
             if (showMicIntro) {
                 BasicText(
                     text = "ask with your voice",

@@ -53,7 +53,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -88,7 +87,9 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.SpanStyle
@@ -218,6 +219,8 @@ fun LauncherScreen(store: LauncherStore) {
     var pickerTarget by remember { mutableStateOf<ShortcutSide?>(null) }
     var showHomeMenu by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    // Voice's "set up model" prompt opens settings directly on the ai page.
+    var settingsStartAtAi by remember { mutableStateOf(false) }
     var showVoice by remember { mutableStateOf(false) }
     var guardApp by remember { mutableStateOf<AppEntry?>(null) }
     var aliasApp by remember { mutableStateOf<AppEntry?>(null) }
@@ -251,6 +254,7 @@ fun LauncherScreen(store: LauncherStore) {
         pickerTarget = null
         showHomeMenu = false
         showSettings = false
+        settingsStartAtAi = false
         showVoice = false
         guardApp = null
         aliasApp = null
@@ -470,11 +474,26 @@ fun LauncherScreen(store: LauncherStore) {
         }
 
         if (showSettings) {
-            SettingsScreen(store = store, onClose = { showSettings = false })
+            SettingsScreen(
+                store = store,
+                startAtAssistant = settingsStartAtAi,
+                onClose = {
+                    showSettings = false
+                    settingsStartAtAi = false
+                },
+            )
         }
 
         if (showVoice) {
-            VoiceScreen(store = store, onClose = { showVoice = false })
+            VoiceScreen(
+                store = store,
+                onClose = { showVoice = false },
+                onOpenAiSettings = {
+                    showVoice = false
+                    settingsStartAtAi = true
+                    showSettings = true
+                },
+            )
         }
 
         guardApp?.let { app ->
@@ -798,6 +817,7 @@ private fun DrawerPage(
     val focusRequester = remember { FocusRequester() }
 
     var query by remember { mutableStateOf("") }
+    var showHidden by remember { mutableStateOf(false) }
     val q = query.trim()
     val searching = q.isNotEmpty()
 
@@ -877,6 +897,7 @@ private fun DrawerPage(
             runCatching { focusRequester.requestFocus() }
         } else {
             focusManager.clearFocus()
+            showHidden = false // tuck the hidden section away again
         }
     }
 
@@ -928,12 +949,6 @@ private fun DrawerPage(
                     Modifier.padding(start = 18.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(
-                        Icons.Filled.Search,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(end = 12.dp),
-                    )
                     Box(Modifier.weight(1f)) {
                         BasicTextField(
                             value = query,
@@ -1088,6 +1103,41 @@ private fun DrawerPage(
                         items(browse, key = { "a/" + it.key }) { app ->
                             AppRow(app, onLaunch, onLongPress)
                         }
+
+                        // Hidden apps live at the end of the list, behind one
+                        // muted count row — in context, zero chrome when empty.
+                        val hiddenApps = apps.filter { store.isHidden(it) }
+                        if (hiddenApps.isNotEmpty()) {
+                            item(key = "hidden-toggle") {
+                                BasicText(
+                                    text =
+                                        if (showHidden) {
+                                            "hidden — tap to tuck away"
+                                        } else {
+                                            "${hiddenApps.size} hidden"
+                                        },
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .defaultMinSize(minHeight = 48.dp)
+                                            .semantics { role = Role.Button }
+                                            .clickable { showHidden = !showHidden }
+                                            .padding(top = 22.dp, bottom = 8.dp),
+                                    style =
+                                        TextStyle(
+                                            color = palette.muted,
+                                            fontSize = 13.sp,
+                                            letterSpacing = tracked(1.sp),
+                                            fontFamily = ff,
+                                        ),
+                                )
+                            }
+                            if (showHidden) {
+                                items(hiddenApps, key = { "h/" + it.key }) { app ->
+                                    AppRow(app, onLaunch, onLongPress, ghosted = true)
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -1125,6 +1175,7 @@ private fun AppRow(
     app: AppEntry,
     onLaunch: (AppEntry) -> Unit,
     onLongPress: (AppEntry) -> Unit,
+    ghosted: Boolean = false,
 ) {
     val palette = LocalPalette.current
     val ff = LocalFontFamily.current
@@ -1147,7 +1198,8 @@ private fun AppRow(
                     onLongClick = { onLongPress(app) },
                     onLongClickLabel = "app options",
                 ).padding(vertical = 11.dp),
-        style = TextStyle(color = palette.text, fontSize = 19.sp, fontFamily = ff),
+        // Hidden apps show ghosted: present, but visibly set aside.
+        style = TextStyle(color = if (ghosted) palette.muted else palette.text, fontSize = 19.sp, fontFamily = ff),
     )
 }
 

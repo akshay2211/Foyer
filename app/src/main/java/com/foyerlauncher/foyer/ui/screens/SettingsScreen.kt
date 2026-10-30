@@ -33,6 +33,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -107,8 +108,9 @@ private enum class SettingsPage {
 fun SettingsScreen(
     store: LauncherStore,
     onClose: () -> Unit,
+    startAtAssistant: Boolean = false,
 ) {
-    var page by remember { mutableStateOf(SettingsPage.ROOT) }
+    var page by remember { mutableStateOf(if (startAtAssistant) SettingsPage.ASSISTANT else SettingsPage.ROOT) }
     var showAiGuide by remember { mutableStateOf(false) }
 
     FoyerMaterialTheme {
@@ -540,6 +542,14 @@ private fun AssistantPage(
                         onValueChange = { store.updateModelUrl(it) },
                         label = { Text("model url") },
                         singleLine = true,
+                        trailingIcon = {
+                            // One-tap clear: emptying the url brings the suggestions back.
+                            if (store.modelUrl.isNotEmpty()) {
+                                IconButton(onClick = { store.updateModelUrl("") }) {
+                                    Icon(Icons.Filled.Close, contentDescription = "clear model url")
+                                }
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
                     )
                     var token by remember { mutableStateOf(store.hfToken) }
