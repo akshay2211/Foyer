@@ -36,10 +36,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.foyerlauncher.foyer.R
 import com.foyerlauncher.foyer.ai.engine.AI_TAG
 import com.foyerlauncher.foyer.ai.engine.AgentTurn
 import com.foyerlauncher.foyer.ai.engine.rememberAssistant
@@ -51,8 +51,9 @@ import com.foyerlauncher.foyer.data.AppEntry
 import com.foyerlauncher.foyer.data.LauncherStore
 import com.foyerlauncher.foyer.data.launchApp
 import com.foyerlauncher.foyer.data.loadLaunchableApps
-import com.foyerlauncher.foyer.ui.components.FoyerGlyph
+import com.foyerlauncher.foyer.ui.components.AssistantDial
 import com.foyerlauncher.foyer.ui.components.GlyphState
+import com.foyerlauncher.foyer.ui.components.IconAction
 import com.foyerlauncher.foyer.ui.theme.LocalFontFamily
 import com.foyerlauncher.foyer.ui.theme.LocalPalette
 import com.foyerlauncher.foyer.ui.theme.tracked
@@ -324,16 +325,13 @@ fun VoiceScreen(
             .windowInsetsPadding(WindowInsets.systemBars)
             .padding(horizontal = 28.dp),
     ) {
-        BasicText(
-            text = "foyer",
-            modifier = Modifier.align(Alignment.TopStart).padding(top = 40.dp),
-            style = TextStyle(color = palette.text, fontSize = 48.sp, fontWeight = FontWeight.Thin, fontFamily = ff),
-        )
-        BasicText(
-            text = "close",
-            modifier = Modifier.align(Alignment.TopEnd).padding(top = 14.dp).clickable { onClose() },
-            style = tagStyle,
-        )
+        IconAction(
+            icon = R.drawable.ic_tabler_x,
+            label = "close",
+            tint = palette.muted,
+            size = 22.dp,
+            modifier = Modifier.align(Alignment.TopEnd).padding(top = 30.dp),
+        ) { onClose() }
 
         Column(Modifier.align(Alignment.CenterStart)) {
             if (!modelReady) {
@@ -441,10 +439,10 @@ fun VoiceScreen(
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            FoyerGlyph(
+            AssistantDial(
                 state = glyphState,
                 amplitude = { micAmp },
-                modifier = Modifier.padding(bottom = 14.dp).size(width = 108.dp, height = 40.dp),
+                modifier = Modifier.padding(bottom = 14.dp).size(96.dp),
             )
             BasicText(
                 text = status,
