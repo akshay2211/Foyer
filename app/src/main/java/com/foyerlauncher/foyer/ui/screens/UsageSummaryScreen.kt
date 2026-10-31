@@ -2,7 +2,6 @@ package com.foyerlauncher.foyer.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,10 +27,12 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.foyerlauncher.foyer.R
 import com.foyerlauncher.foyer.data.AppEntry
 import com.foyerlauncher.foyer.data.LauncherStore
 import com.foyerlauncher.foyer.data.UsageTracker
 import com.foyerlauncher.foyer.data.formatDuration
+import com.foyerlauncher.foyer.ui.components.IconAction
 import com.foyerlauncher.foyer.ui.theme.LocalFontFamily
 import com.foyerlauncher.foyer.ui.theme.LocalPalette
 import com.foyerlauncher.foyer.ui.theme.tracked
@@ -98,18 +99,20 @@ fun UsageSummaryScreen(
             .padding(horizontal = 28.dp),
     ) {
         Row(
-            Modifier.fillMaxWidth().padding(vertical = 14.dp),
+            Modifier.fillMaxWidth().padding(vertical = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             BasicText(
                 "screen time",
                 style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = tracked(2.sp), fontFamily = ff),
             )
-            BasicText(
-                "close",
-                modifier = Modifier.clickable { onClose() },
-                style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = tracked(2.sp), fontFamily = ff),
-            )
+            IconAction(
+                icon = R.drawable.ic_tabler_x,
+                label = "close",
+                tint = palette.muted,
+                size = 22.dp,
+            ) { onClose() }
         }
 
         val s = summary

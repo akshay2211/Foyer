@@ -1,6 +1,7 @@
 package com.foyerlauncher.foyer.ui.components
 
 import androidx.activity.compose.BackHandler
+import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.MutableTransitionState
@@ -10,6 +11,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -39,10 +41,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -166,6 +170,7 @@ fun SheetRow(
     text: String,
     active: Boolean = false,
     value: String? = null,
+    @DrawableRes icon: Int? = null,
     onClick: () -> Unit,
 ) {
     val palette = LocalPalette.current
@@ -183,7 +188,17 @@ fun SheetRow(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        BasicText(text, style = TextStyle(color = palette.text, fontSize = 18.sp, fontFamily = ff))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (icon != null) {
+                Image(
+                    painterResource(icon),
+                    contentDescription = null, // the row text names the action
+                    colorFilter = ColorFilter.tint(palette.text),
+                    modifier = Modifier.padding(end = 14.dp).size(20.dp),
+                )
+            }
+            BasicText(text, style = TextStyle(color = palette.text, fontSize = 18.sp, fontFamily = ff))
+        }
         if (value != null) {
             BasicText(value, style = TextStyle(color = palette.muted, fontSize = 14.sp, fontFamily = ff))
         } else if (active) {
