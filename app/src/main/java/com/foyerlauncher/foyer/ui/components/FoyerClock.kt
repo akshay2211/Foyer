@@ -6,6 +6,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -14,6 +15,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -36,7 +38,9 @@ enum class ClockStyle(
     val label: String,
 ) {
     DIGITAL("digital"),
+    LOCK("bold"),
     ANALOGUE("dial"),
+    MINIMAL("hands"),
     OFF("off"),
     ;
 
@@ -88,7 +92,7 @@ fun AnalogueClockWidget(modifier: Modifier = Modifier) {
     val currentStyle =
         TextStyle(
             color = palette.text,
-            fontSize = 13.sp,
+            fontSize = 17.sp,
             fontWeight = FontWeight.Medium,
             fontFamily = ff,
         )
@@ -110,7 +114,7 @@ fun AnalogueClockWidget(modifier: Modifier = Modifier) {
                 val dir = Offset(kotlin.math.cos(a).toFloat(), kotlin.math.sin(a).toFloat())
                 val distToBubble = ((deg - bubbleAngle) % 360f + 540f) % 360f - 180f
                 if (m % 5 == 0) {
-                    if (kotlin.math.abs(distToBubble) < 11f) continue // the lens owns this spot
+                    if (kotlin.math.abs(distToBubble) < 14f) continue // the lens owns this spot
                     val layout = measurer.measure("%02d".format(m), numeralStyle)
                     drawText(
                         layout,
@@ -119,7 +123,7 @@ fun AnalogueClockWidget(modifier: Modifier = Modifier) {
                                 Offset(layout.size.width / 2f, layout.size.height / 2f),
                     )
                 } else {
-                    if (kotlin.math.abs(distToBubble) < 9f) continue
+                    if (kotlin.math.abs(distToBubble) < 12f) continue
                     drawCircle(
                         color = palette.muted.copy(alpha = 0.32f),
                         radius = r * 0.009f,
@@ -128,13 +132,15 @@ fun AnalogueClockWidget(modifier: Modifier = Modifier) {
                 }
             }
 
-            // The lens: an accent circle on the ring, holding the exact minute.
+            // The lens: an accent circle on the ring, holding the exact minute —
+            // larger than the ring numerals but drawn with a hairline stroke.
+            val lensR = r * 0.19f
             val bc = c + Offset(rRing, 0f)
             drawCircle(
                 color = palette.accent,
-                radius = r * 0.155f,
+                radius = lensR,
                 center = bc,
-                style = Stroke(width = r * 0.016f),
+                style = Stroke(width = r * 0.008f),
             )
             val minuteLayout = measurer.measure("%02d".format(minute), currentStyle)
             drawText(
@@ -152,11 +158,118 @@ fun AnalogueClockWidget(modifier: Modifier = Modifier) {
                     fontFamily = ff,
                 )
             val hourLayout = measurer.measure(hourText, hourStyle)
-            val hourRight = bc.x - r * 0.155f - r * 0.10f // lens edge minus a breath
+            val hourRight = bc.x - lensR - r * 0.10f // lens edge minus a breath
             drawText(
                 hourLayout,
                 topLeft = Offset(hourRight - hourLayout.size.width, c.y - hourLayout.size.height / 2f),
             )
         }
     }
+}
+
+/**
+ * The minimal analogue clock: one hairline circle and two hands, no ticks,
+ * no numerals. The hour hand drifts with the minutes so it never lies.
+ */
+@Composable
+fun MinimalClockWidget(modifier: Modifier = Modifier) {
+    val palette = LocalPalette.current
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = System.currentTimeMillis()
+            delay(10_000)
+        }
+    }
+    val cal = remember(now) { Calendar.getInstance().apply { timeInMillis = now } }
+    val minute = cal.get(Calendar.MINUTE)
+    val hour = cal.get(Calendar.HOUR)
+    val timeFmt = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+    val timeText = timeFmt.format(Date(now))
+
+    Box(
+        modifier
+            .size(172.dp)
+            .semantics { contentDescription = "clock, $timeText" },
+    ) {
+        Canvas(Modifier.matchParentSize()) {
+            val r = size.minDimension / 2f
+            val c = Offset(r, r)
+
+            drawCircle(
+                color = palette.muted.copy(alpha = 0.45f),
+                radius = r * 0.96f,
+                center = c,
+                style = Stroke(width = r * 0.012f),
+            )
+
+            fun hand(
+                deg: Float,
+                length: Float,
+                width: Float,
+                color: androidx.compose.ui.graphics.Color,
+            ) {
+                val a = Math.toRadians(deg.toDouble() - 90.0)
+                val dir = Offset(kotlin.math.cos(a).toFloat(), kotlin.math.sin(a).toFloat())
+                drawLine(
+                    color = color,
+                    start = c - dir * (r * 0.06f), // a short counterweight past centre
+                    end = c + dir * length,
+                    strokeWidth = width,
+                    cap = StrokeCap.Round,
+                )
+            }
+            hand(deg = (hour + minute / 60f) * 30f, length = r * 0.48f, width = r * 0.045f, color = palette.text)
+            hand(deg = minute * 6f, length = r * 0.74f, width = r * 0.028f, color = palette.text)
+
+            drawCircle(color = palette.accent, radius = r * 0.035f, center = c)
+        }
+    }
+}
+
+/** The quiet digital clock: thin h:mm, nothing else. */
+@Composable
+fun DigitalClockWidget(modifier: Modifier = Modifier) {
+    val palette = LocalPalette.current
+    val ff = LocalFontFamily.current
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = System.currentTimeMillis()
+            delay(10_000)
+        }
+    }
+    val timeFmt = remember { SimpleDateFormat("h:mm", Locale.getDefault()) }
+    BasicText(
+        text = timeFmt.format(Date(now)),
+        modifier = modifier,
+        style = TextStyle(color = palette.text, fontSize = 60.sp, fontWeight = FontWeight.Thin, fontFamily = ff),
+    )
+}
+
+/** The lock-screen digital clock: just the time, large and heavy. */
+@Composable
+fun LockClockWidget(modifier: Modifier = Modifier) {
+    val palette = LocalPalette.current
+    val ff = LocalFontFamily.current
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = System.currentTimeMillis()
+            delay(10_000)
+        }
+    }
+    val timeFmt = remember { SimpleDateFormat("h:mm", Locale.getDefault()) }
+    BasicText(
+        text = timeFmt.format(Date(now)),
+        modifier = modifier,
+        style =
+            TextStyle(
+                color = palette.text,
+                fontSize = 88.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = (-2).sp,
+                fontFamily = ff,
+            ),
+    )
 }

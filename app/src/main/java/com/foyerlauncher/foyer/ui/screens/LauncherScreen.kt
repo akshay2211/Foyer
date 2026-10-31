@@ -18,6 +18,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -51,15 +52,10 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -80,13 +76,16 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -103,6 +102,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.foyerlauncher.foyer.LimitNudgeReceiver
+import com.foyerlauncher.foyer.R
 import com.foyerlauncher.foyer.ai.engine.rememberAssistant
 import com.foyerlauncher.foyer.ai.router.AiIntent
 import com.foyerlauncher.foyer.ai.router.Command
@@ -127,11 +127,15 @@ import com.foyerlauncher.foyer.data.webSearch
 import com.foyerlauncher.foyer.ui.components.AnalogueClockWidget
 import com.foyerlauncher.foyer.ui.components.AppIconCache
 import com.foyerlauncher.foyer.ui.components.ClockStyle
+import com.foyerlauncher.foyer.ui.components.DigitalClockWidget
 import com.foyerlauncher.foyer.ui.components.FastScrollStyle
 import com.foyerlauncher.foyer.ui.components.FoyerGlyph
 import com.foyerlauncher.foyer.ui.components.FoyerSheet
 import com.foyerlauncher.foyer.ui.components.GestureUi
 import com.foyerlauncher.foyer.ui.components.GlyphState
+import com.foyerlauncher.foyer.ui.components.IconAction
+import com.foyerlauncher.foyer.ui.components.LockClockWidget
+import com.foyerlauncher.foyer.ui.components.MinimalClockWidget
 import com.foyerlauncher.foyer.ui.components.SheetNote
 import com.foyerlauncher.foyer.ui.components.SheetRow
 import com.foyerlauncher.foyer.ui.components.runGestureAction
@@ -602,7 +606,14 @@ private fun HomePage(
             ) {
                 when (store.clockStyle) {
                     ClockStyle.DIGITAL ->
-                        ClockWidget(
+                        DigitalClockWidget(
+                            modifier =
+                                Modifier
+                                    .padding(top = 56.dp)
+                                    .clickable(onClickLabel = "open clock app") { openClockApp(context) },
+                        )
+                    ClockStyle.LOCK ->
+                        LockClockWidget(
                             modifier =
                                 Modifier
                                     .padding(top = 56.dp)
@@ -610,6 +621,13 @@ private fun HomePage(
                         )
                     ClockStyle.ANALOGUE ->
                         AnalogueClockWidget(
+                            modifier =
+                                Modifier
+                                    .padding(top = 56.dp)
+                                    .clickable(onClickLabel = "open clock app") { openClockApp(context) },
+                        )
+                    ClockStyle.MINIMAL ->
+                        MinimalClockWidget(
                             modifier =
                                 Modifier
                                     .padding(top = 56.dp)
@@ -710,24 +728,19 @@ private fun HomePage(
             }
         }
 
-        // Voice / command entry, bottom-center.
-        BasicText(
-            text = "ask me",
+        // Voice / command entry, bottom-center. The glyph flips to robot-off
+        // while no local model is set up, so the state is visible before tapping.
+        val assistantReady = store.aiEnabled && store.modelDownloaded()
+        IconAction(
+            icon = if (assistantReady) R.drawable.ic_tabler_voice else R.drawable.ic_tabler_robot_off,
+            label = if (assistantReady) "ask me" else "ask me — no model set up",
+            tint = palette.text,
+            size = 28.dp,
             modifier =
                 Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 20.dp)
-                    .clickable { onOpenVoice() }
-                    .padding(8.dp),
-            style =
-                TextStyle(
-                    color = palette.text,
-                    fontSize = 17.sp,
-                    letterSpacing = tracked(1.sp),
-                    fontWeight = FontWeight.Medium,
-                    fontFamily = ff,
-                ),
-        )
+                    .padding(bottom = 18.dp),
+        ) { onOpenVoice() }
 
         // Bottom-corner shortcuts, rotated as vertical edge labels.
         EdgeShortcut(
@@ -745,6 +758,25 @@ private fun HomePage(
     }
 }
 
+/** Glyphs for well-known corner apps; any other assigned app keeps its text label. */
+private fun shortcutIcon(app: AppEntry?): Int? {
+    if (app == null) return null
+    val label = app.label.lowercase()
+    val pkg = app.packageName.lowercase()
+    val hint = "$label $pkg"
+    return when {
+        "camera" in hint -> R.drawable.ic_tabler_camera
+        "whatsapp" in hint -> R.drawable.ic_tabler_brand_whatsapp
+        "gmail" in label || pkg == "com.google.android.gm" -> R.drawable.ic_tabler_brand_gmail
+        "telegram" in hint -> R.drawable.ic_tabler_brand_telegram
+        "play store" in label || pkg == "com.android.vending" -> R.drawable.ic_tabler_brand_google_play
+        // Exact matches only: half of Android's packages contain "google".
+        label == "google" || pkg == "com.google.android.googlequicksearchbox" -> R.drawable.ic_tabler_brand_google
+        "phone" in hint || "dialer" in hint || "dialtacts" in hint -> R.drawable.ic_tabler_phone
+        else -> null
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun EdgeShortcut(
@@ -756,43 +788,44 @@ private fun EdgeShortcut(
     val context = LocalContext.current
     val palette = LocalPalette.current
     val ff = LocalFontFamily.current
-    BasicText(
-        text = (app?.label ?: "set").lowercase(),
-        modifier =
-            modifier
-                .padding(vertical = 18.dp)
-                .rotate(rotation)
-                .combinedClickable(
-                    onClick = { app?.let { launchApp(context, it) } ?: onLongPress() },
-                    onLongClick = onLongPress,
-                ).padding(8.dp),
-        style =
-            TextStyle(
-                color = if (app == null) palette.muted else palette.text,
-                fontSize = 15.sp,
-                letterSpacing = tracked(1.sp),
-                fontFamily = ff,
-            ),
-    )
-}
-
-@Composable
-private fun ClockWidget(modifier: Modifier = Modifier) {
-    val palette = LocalPalette.current
-    val ff = LocalFontFamily.current
-    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            now = System.currentTimeMillis()
-            delay(10_000)
-        }
+    val icon = shortcutIcon(app)
+    if (icon != null && app != null) {
+        // Known role → upright glyph; same gestures as the text label
+        // (tap launches, long-press reassigns), so no tooltip here.
+        Image(
+            painterResource(icon),
+            contentDescription = app.label.lowercase(),
+            colorFilter = ColorFilter.tint(palette.text),
+            modifier =
+                modifier
+                    .padding(vertical = 24.dp, horizontal = 16.dp)
+                    .combinedClickable(
+                        onClick = { launchApp(context, app) },
+                        onLongClick = onLongPress,
+                        onLongClickLabel = "change shortcut",
+                    ).padding(8.dp)
+                    .size(24.dp),
+        )
+    } else {
+        BasicText(
+            text = (app?.label ?: "set").lowercase(),
+            modifier =
+                modifier
+                    .padding(vertical = 18.dp)
+                    .rotate(rotation)
+                    .combinedClickable(
+                        onClick = { app?.let { launchApp(context, it) } ?: onLongPress() },
+                        onLongClick = onLongPress,
+                    ).padding(8.dp),
+            style =
+                TextStyle(
+                    color = if (app == null) palette.muted else palette.text,
+                    fontSize = 15.sp,
+                    letterSpacing = tracked(1.sp),
+                    fontFamily = ff,
+                ),
+        )
     }
-    val timeFmt = remember { SimpleDateFormat("h:mm", Locale.getDefault()) }
-    BasicText(
-        text = timeFmt.format(Date(now)),
-        modifier = modifier,
-        style = TextStyle(color = palette.text, fontSize = 60.sp, fontWeight = FontWeight.Thin, fontFamily = ff),
-    )
 }
 
 // ---- App drawer page ------------------------------------------------------
@@ -815,6 +848,15 @@ private fun DrawerPage(
     val listState = rememberLazyListState()
     val focusManager = LocalFocusManager.current
     val focusRequester = remember { FocusRequester() }
+
+    // Dragging the list dismisses the IME, which otherwise covers half the
+    // results. Drag interactions only: programmatic scrolls (A–Z rail jumps,
+    // query changes) must not steal focus mid-typing.
+    LaunchedEffect(listState) {
+        listState.interactionSource.interactions.collect {
+            if (it is DragInteraction.Start) focusManager.clearFocus()
+        }
+    }
 
     var query by remember { mutableStateOf("") }
     var showHidden by remember { mutableStateOf(false) }
@@ -915,26 +957,22 @@ private fun DrawerPage(
                     .padding(horizontal = 12.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                TextButton(onClick = {
+                IconAction(
+                    icon = R.drawable.ic_tabler_arrow_narrow_left_dashed,
+                    label = "back",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                ) {
                     focusManager.clearFocus()
                     onNavigateHome()
-                }) {
-                    Text(
-                        "back",
-                        style = MaterialTheme.typography.labelLarge.copy(letterSpacing = tracked(2.sp)),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                 }
-                TextButton(onClick = {
+                IconAction(
+                    icon = R.drawable.ic_tabler_settings_2,
+                    label = "settings",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                ) {
                     // Drop the IME before the settings overlay comes up.
                     focusManager.clearFocus()
                     onOpenSettings()
-                }) {
-                    Text(
-                        "settings",
-                        style = MaterialTheme.typography.labelLarge.copy(letterSpacing = tracked(2.sp)),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                 }
             }
 
@@ -973,6 +1011,10 @@ private fun DrawerPage(
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
+                                    // Own render layer: the blinking cursor invalidates
+                                    // draw every ~500ms, and without a layer that
+                                    // re-records the entire window's display list.
+                                    .graphicsLayer()
                                     .focusRequester(focusRequester)
                                     .semantics { contentDescription = "search apps or ask the assistant" }
                                     .padding(vertical = 8.dp),
@@ -988,15 +1030,13 @@ private fun DrawerPage(
                         )
                     }
                     if (query.isNotEmpty()) {
-                        IconButton(onClick = {
+                        IconAction(
+                            icon = R.drawable.ic_tabler_x,
+                            label = "clear search",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        ) {
                             query = ""
                             focusManager.clearFocus()
-                        }) {
-                            Icon(
-                                Icons.Filled.Close,
-                                contentDescription = "clear search",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
                         }
                     }
                 }
@@ -1559,29 +1599,36 @@ private fun AppActionMenu(
 ) {
     FoyerSheet(title = app.label.lowercase(), onDismiss = onDismiss) {
         when {
-            isFavorite -> SheetRow("remove from home", active = true, onClick = onRemove)
-            canAdd -> SheetRow("add to home", onClick = onAdd)
+            isFavorite -> SheetRow("remove from home", active = true, icon = R.drawable.ic_tabler_home_minus, onClick = onRemove)
+            canAdd -> SheetRow("add to home", icon = R.drawable.ic_tabler_home_plus, onClick = onAdd)
             else -> SheetNote("home is full (max $MAX_FAVORITES)")
         }
-        SheetRow(if (isHidden) "unhide app" else "hide app", active = isHidden, onClick = onToggleHide)
+        SheetRow(
+            if (isHidden) "unhide app" else "hide app",
+            active = isHidden,
+            icon = if (isHidden) R.drawable.ic_tabler_eye else R.drawable.ic_tabler_eye_off,
+            onClick = onToggleHide,
+        )
         SheetRow(
             if (isDistracting) "unmark distracting" else "mark distracting",
             active = isDistracting,
+            icon = R.drawable.ic_tabler_flame,
             onClick = onToggleDistracting,
         )
         SheetRow(
             "daily limit",
             active = limitMs != null,
             value = limitMs?.let { formatDuration(it) } ?: if (isDistracting) "${formatDuration(DISTRACTION_THRESHOLD_MS)} default" else "none",
+            icon = R.drawable.ic_tabler_hourglass,
             onClick = onCycleLimit,
         )
         // Taught nicknames: tap one to forget it, or teach a new one.
         aliases.forEach { alias ->
-            SheetRow("alias “$alias”  ·  remove", active = true, onClick = { onRemoveAlias(alias) })
+            SheetRow("alias “$alias”  ·  remove", active = true, icon = R.drawable.ic_tabler_tag_off, onClick = { onRemoveAlias(alias) })
         }
-        SheetRow("add alias", onClick = onAddAlias)
-        SheetRow("app info", onClick = onAppInfo)
-        if (canUninstall) SheetRow("uninstall", onClick = onUninstall)
+        SheetRow("add alias", icon = R.drawable.ic_tabler_tag_plus, onClick = onAddAlias)
+        SheetRow("app info", icon = R.drawable.ic_tabler_info_circle, onClick = onAppInfo)
+        if (canUninstall) SheetRow("uninstall", icon = R.drawable.ic_tabler_trash, onClick = onUninstall)
     }
 }
 
@@ -1633,6 +1680,7 @@ private fun AliasPrompt(
                 modifier =
                     Modifier
                         .fillMaxWidth()
+                        .graphicsLayer() // contain cursor-blink invalidation
                         .focusRequester(focusRequester)
                         .padding(vertical = 6.dp),
                 decorationBox = { inner ->
@@ -1670,9 +1718,9 @@ private fun HomeMenu(
     onDismiss: () -> Unit,
 ) {
     FoyerSheet(title = "home", onDismiss = onDismiss) {
-        SheetRow("clock", active = clockStyle != ClockStyle.OFF, value = clockStyle.label, onClick = onCycleClock)
-        SheetRow(if (focusActive) "end focus" else "focus", active = focusActive, onClick = onFocus)
-        SheetRow("settings", onClick = onOpenSettings)
+        SheetRow("clock", active = clockStyle != ClockStyle.OFF, value = clockStyle.label, icon = R.drawable.ic_tabler_clock, onClick = onCycleClock)
+        SheetRow(if (focusActive) "end focus" else "focus", active = focusActive, icon = R.drawable.ic_tabler_focus_2, onClick = onFocus)
+        SheetRow("settings", icon = R.drawable.ic_tabler_settings_2, onClick = onOpenSettings)
     }
 }
 
@@ -1693,9 +1741,69 @@ private fun AppPicker(
     onDismiss: () -> Unit,
 ) {
     val palette = LocalPalette.current
+    val ff = LocalFontFamily.current
+    var query by remember { mutableStateOf("") }
+    val q = query.trim()
+    // Prefix matches first, then substring matches — same feel as the drawer.
+    val shown =
+        if (q.isEmpty()) {
+            apps
+        } else {
+            apps.filter { it.label.startsWith(q, ignoreCase = true) } +
+                apps.filter { !it.label.startsWith(q, ignoreCase = true) && it.label.contains(q, ignoreCase = true) }
+        }
     FoyerSheet(title = "choose ${side.name.lowercase()} shortcut", onDismiss = onDismiss) {
+        // The same pill as the drawer's search bar, rebuilt foundation-only so
+        // the sheet stays Material-free. It sits at the top of the sheet: the
+        // window is adjustNothing, so the IME covers the sheet's lower half —
+        // matches surface up here.
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 6.dp, bottom = 10.dp)
+                .clip(RoundedCornerShape(28.dp))
+                .background(lerp(palette.background, palette.text, 0.16f))
+                .padding(start = 18.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                Modifier
+                    .weight(1f)
+                    .padding(vertical = 12.dp),
+            ) {
+                if (query.isEmpty()) {
+                    BasicText(
+                        text = "search",
+                        style = TextStyle(color = palette.muted, fontSize = 18.sp, fontFamily = ff),
+                    )
+                }
+                BasicTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    singleLine = true,
+                    textStyle = TextStyle(color = palette.text, fontSize = 18.sp, fontFamily = ff),
+                    cursorBrush = SolidColor(palette.accent),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .graphicsLayer() // contain cursor-blink invalidation
+                            .semantics { contentDescription = "search apps" },
+                )
+            }
+            if (query.isNotEmpty()) {
+                IconAction(
+                    icon = R.drawable.ic_tabler_x,
+                    label = "clear search",
+                    tint = palette.muted,
+                    size = 20.dp,
+                ) { query = "" }
+            }
+        }
+        if (shown.isEmpty()) {
+            SheetNote("no app matches “$q”")
+        }
         LazyColumn(Modifier.fillMaxHeight(0.62f)) {
-            items(apps, key = { it.key }) { app ->
+            items(shown, key = { it.key }) { app ->
                 BasicText(
                     text = app.label,
                     modifier =
@@ -1703,7 +1811,7 @@ private fun AppPicker(
                             .fillMaxWidth()
                             .clickable { onPick(app) }
                             .padding(vertical = 12.dp),
-                    style = TextStyle(color = palette.text, fontSize = 18.sp),
+                    style = TextStyle(color = palette.text, fontSize = 18.sp, fontFamily = ff),
                 )
             }
         }
