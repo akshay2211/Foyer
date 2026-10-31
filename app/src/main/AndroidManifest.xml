@@ -18,6 +18,10 @@
          requested when the user sets a daily limit). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- "set an alarm for 7" / "set a 10 minute timer" via the system clock app
+         (install-time permission, auto-granted; required by ACTION_SET_ALARM). -->
+    <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+
     <!-- Screen-time / anti-distraction (special "usage access" grant). -->
     <uses-permission
         android:name="android.permission.PACKAGE_USAGE_STATS"

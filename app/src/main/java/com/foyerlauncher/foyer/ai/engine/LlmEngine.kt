@@ -10,6 +10,21 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 
+/** The chat template the downloaded model was trained with. */
+enum class ChatTemplate {
+    /** Gemma: a single user turn, no system role. */
+    GEMMA,
+
+    /** ChatML (Qwen): instructions and examples ride in a system turn, the input alone in user. */
+    CHATML,
+    ;
+
+    companion object {
+        /** Detects the template from the model's download URL; Gemma is the default. */
+        fun fromUrl(url: String): ChatTemplate = if (url.contains("qwen", ignoreCase = true)) CHATML else GEMMA
+    }
+}
+
 /**
  * On-device text generation via MediaPipe LLM Inference, backed by whatever
  * `.task` model the user downloaded (Qwen, Gemma, …) — fully local, no network
@@ -27,6 +42,7 @@ import java.io.File
 class LlmEngine(
     context: Context,
     private val modelPath: String,
+    private val template: ChatTemplate = ChatTemplate.GEMMA,
 ) {
     private val appContext = context.applicationContext
 
@@ -63,7 +79,7 @@ class LlmEngine(
         }
 
     /** One-shot generation over a full prompt. */
-    suspend fun generate(prompt: String): String? = withContext(Dispatchers.IO) { generateOneShot(prompt) }
+    suspend fun generate(prompt: String): String? = withContext(Dispatchers.IO) { generateOneShot(wrapUserOnly(prompt)) }
 
     /**
      * Prefix-cached generation: [prefix] is the stable preamble (prefilled once
@@ -79,17 +95,44 @@ class LlmEngine(
                 runCatching { generateCached(prefix, suffix) }
                     .onFailure { Log.w(AI_TAG, "llm prefix-cache failed → one-shot fallback: ${it.message}") }
                     .getOrNull()
-                    ?: generateOneShot(prefix + suffix)
+                    ?: generateOneShot(wrap(prefix, suffix))
             } else {
-                generateOneShot(prefix + suffix)
+                generateOneShot(wrap(prefix, suffix))
             }
+        }
+
+    /**
+     * Template-correct framing. For ChatML the instruction preamble goes in a
+     * *system* turn and the input alone in *user* — the structural fix that
+     * stops a small model from treating prompt examples as the query.
+     */
+    private fun wrap(
+        prefix: String,
+        suffix: String,
+    ): String =
+        when (template) {
+            ChatTemplate.GEMMA -> "<start_of_turn>user\n$prefix$suffix<end_of_turn>\n<start_of_turn>model\n"
+            ChatTemplate.CHATML ->
+                "<|im_start|>system\n$prefix<|im_end|>\n<|im_start|>user\n$suffix<|im_end|>\n<|im_start|>assistant\n"
+        }
+
+    private fun wrapUserOnly(prompt: String): String =
+        when (template) {
+            ChatTemplate.GEMMA -> "<start_of_turn>user\n$prompt<end_of_turn>\n<start_of_turn>model\n"
+            ChatTemplate.CHATML -> "<|im_start|>user\n$prompt<|im_end|>\n<|im_start|>assistant\n"
         }
 
     private fun generateCached(
         prefix: String,
         suffix: String,
     ): String? {
-        val wrappedPrefix = "<start_of_turn>user\n$prefix"
+        val (wrappedPrefix, suffixTail) =
+            when (template) {
+                ChatTemplate.GEMMA ->
+                    "<start_of_turn>user\n$prefix" to "$suffix<end_of_turn>\n<start_of_turn>model\n"
+                ChatTemplate.CHATML ->
+                    "<|im_start|>system\n$prefix<|im_end|>\n<|im_start|>user\n" to "$suffix<|im_end|>\n<|im_start|>assistant\n"
+            }
         if (cachedPrefix != wrappedPrefix || baseSession == null) {
             baseSession?.let { runCatching { it.close() } }
             baseSession =
@@ -101,33 +144,52 @@ class LlmEngine(
         }
         val work = baseSession!!.cloneSession() // reuse the preamble's KV cache
         return try {
-            work.addQueryChunk("$suffix<end_of_turn>\n<start_of_turn>model\n")
+            work.addQueryChunk(suffixTail)
             work.generateResponse()?.clean()
         } finally {
             runCatching { work.close() }
         }
     }
 
-    private fun generateOneShot(prompt: String): String? {
-        val formatted = "<start_of_turn>user\n$prompt<end_of_turn>\n<start_of_turn>model\n"
-        return runCatching { llm.generateResponse(formatted) }
-            .onFailure { Log.w(AI_TAG, "llm generate FAILED: ${it.message}", it) }
+    /**
+     * One-shot through a throwaway session so decoding is (near-)greedy — the
+     * raw engine call has no temperature control and samples at its default,
+     * which made classification and pair extraction visibly random.
+     */
+    private fun generateOneShot(formatted: String): String? =
+        runCatching {
+            val session = LlmInferenceSession.createFromOptions(llm, sessionOptions())
+            try {
+                session.addQueryChunk(formatted)
+                session.generateResponse()?.clean()
+            } finally {
+                runCatching { session.close() }
+            }
+        }.onFailure { Log.w(AI_TAG, "llm session generate failed → raw fallback: ${it.message}") }
             .getOrNull()
-            ?.clean()
-    }
+            ?: runCatching { llm.generateResponse(formatted) }
+                .onFailure { Log.w(AI_TAG, "llm generate FAILED: ${it.message}", it) }
+                .getOrNull()
+                ?.clean()
 
+    // topK=1 is greedy decoding — the temperature value is then irrelevant,
+    // but 0.2 keeps the raw fallback calm too.
     private fun sessionOptions(): LlmInferenceSessionOptions =
         LlmInferenceSessionOptions
             .builder()
-            .setTopK(64)
+            .setTopK(1)
             .setTemperature(0.2f)
             .build()
 
-    /** Strips the stop token and any leaked chat-control tokens. */
+    /** Strips the stop token and any leaked chat-control tokens (both templates). */
     private fun String.clean(): String =
         substringBefore("<end_of_turn>")
+            .substringBefore("<|im_end|>")
             .replace("<start_of_turn>", "")
+            .replace("<|im_start|>assistant\n", "")
+            .replace("<|im_start|>", "")
             .replace("<eos>", "")
+            .replace("<|endoftext|>", "")
             .trim()
 
     fun close() {

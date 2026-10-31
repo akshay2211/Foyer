@@ -271,7 +271,7 @@ private fun toIntent(
             val subject = obj.optString("subject").trim()
             if (text.isNotEmpty() || subject.isNotEmpty()) AiIntent.Email(to, subject, text) else AiIntent.Unknown
         }
-        "navigate" -> obj.optString("to").takeIf { it.isNotBlank() }?.let { AiIntent.Navigate(it.trim()) } ?: AiIntent.Unknown
+        "navigate", "navigation" -> obj.optString("to").takeIf { it.isNotBlank() }?.let { AiIntent.Navigate(it.trim()) } ?: AiIntent.Unknown
         "map" -> obj.optString("query").takeIf { it.isNotBlank() }?.let { AiIntent.ShowMap(it.trim()) } ?: AiIntent.Unknown
         "play" -> obj.optString("query").takeIf { it.isNotBlank() }?.let { AiIntent.PlayMedia(it.trim()) } ?: AiIntent.Unknown
         "capture" -> AiIntent.Capture(video = obj.optString("kind").lowercase().contains("video"))
@@ -377,10 +377,7 @@ private fun AiIntent.build(context: Context): Step? =
                 .validated(context)
                 ?.let { i -> action("timer ${seconds / 60}m", "clock", leaving = false) { startNewTask(context, i) } }
 
-        is AiIntent.Call ->
-            Intent(Intent.ACTION_DIAL, Uri.parse("tel:$number"))
-                .validated(context)
-                ?.let { i -> action("call $number", "dialer", leaving = true) { startNewTask(context, i) } }
+        is AiIntent.Call -> buildCallStep(context, number)
 
         is AiIntent.OpenSetting -> {
             // Prefer the specific screen; if the OEM/version doesn't expose it, fall
@@ -499,7 +496,58 @@ private fun startNewTask(
     intent: Intent,
 ) {
     runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        .onFailure { Log.w(AI_TAG, "execute FAILED: ${intent.action} — ${it.message}") }
 }
+
+/**
+ * Builds the call step, resolving a contact name the same way messaging does:
+ *  - a bare number goes straight to the dialer (prefilled; the user taps call),
+ *  - a name resolves to ranked candidates — one confident match dials it, an
+ *    ambiguous match becomes a "who did you mean…" choice list,
+ *  - no contacts / no permission opens the dialer to pick manually.
+ */
+private fun buildCallStep(
+    context: Context,
+    who: String,
+): Step {
+    val digits = who.filter { it.isDigit() || it == '+' }
+    if (digits.count { it.isDigit() } >= 3) {
+        return action("call $who", "dialer", leaving = true) { startNewTask(context, dialIntent(digits)) }
+    }
+
+    val matches = resolveContacts(context, who)
+    return when {
+        // No permission or no address book — open the dialer to find them.
+        matches.isEmpty() ->
+            action("call $who", "find them in the dialer", leaving = true) {
+                startNewTask(context, Intent(Intent.ACTION_DIAL))
+            }
+
+        matches.size == 1 && matches[0].confident ->
+            action("call ${matches[0].name}", matches[0].number, leaving = true) {
+                startNewTask(context, dialIntent(matches[0].number))
+            }
+
+        else -> {
+            val options =
+                matches.take(4).map { c ->
+                    Command("call ${c.name}", c.number, CommandKind.ACTION) {
+                        startNewTask(context, dialIntent(c.number))
+                    }
+                }
+            Step(
+                title = "who did you mean?",
+                subtitle = "call $who",
+                kind = CommandKind.ACTION,
+                leaving = true,
+                confirm = true,
+                options = options,
+            ) { /* disambiguation only — the chosen option runs */ }
+        }
+    }
+}
+
+private fun dialIntent(number: String): Intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(number)))
 
 /**
  * Builds the messaging step, disambiguating the recipient first:

@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import com.foyerlauncher.foyer.ai.router.ActionPair
 import com.foyerlauncher.foyer.ai.router.ActionRegistry
 import com.foyerlauncher.foyer.ai.router.AiIntent
 import com.foyerlauncher.foyer.ai.router.AppCatalog
@@ -12,9 +13,12 @@ import com.foyerlauncher.foyer.ai.router.CAPABILITIES
 import com.foyerlauncher.foyer.ai.router.Normalizer
 import com.foyerlauncher.foyer.ai.router.Plan
 import com.foyerlauncher.foyer.ai.router.allowedActionsBlock
+import com.foyerlauncher.foyer.ai.router.appScope
 import com.foyerlauncher.foyer.ai.router.fastRoute
 import com.foyerlauncher.foyer.ai.router.fewShotBlock
+import com.foyerlauncher.foyer.ai.router.parsePairs
 import com.foyerlauncher.foyer.ai.router.parsePlan
+import com.foyerlauncher.foyer.ai.router.planFromPairs
 import com.foyerlauncher.foyer.data.AppEntry
 import com.foyerlauncher.foyer.data.LauncherStore
 
@@ -81,10 +85,12 @@ private val DECIDE_PREFIX: String by lazy {
         appendLine()
         appendLine("For \"message\"/\"email\" you compose the text yourself. When opening an app, use one of the installed names listed below.")
         appendLine("To send a message in an app, use ONE \"message\" action (it opens the app itself); do NOT emit \"open_app\" too.")
+        appendLine("A question asking for information (what/how/why/who) maps to \"answer\" with a short answer you compose — never \"navigate\" or \"web\" for a fact you know.")
         appendLine()
         appendLine("Examples:")
         appendLine(STABLE_FEWSHOTS)
         appendLine(""""turn on wifi and open spotify" -> [{"action":"setting","key":"wifi"},{"action":"open_app","app":"Spotify"}]""")
+        appendLine(""""how tall is the eiffel tower" -> {"action":"answer","text":"about 330 metres (1,083 ft)"}""")
     }
 }
 
@@ -102,6 +108,87 @@ private val CONVERSE_PREFIX: String by lazy {
         appendLine(STABLE_FEWSHOTS)
         appendLine(""""how tall is the eiffel tower" -> It's about 330 metres (1,083 ft).""")
         appendLine(""""turn on wifi and open spotify" -> [{"action":"setting","key":"wifi"},{"action":"open_app","app":"Spotify"}]""")
+    }
+}
+
+/**
+ * The judge's verdict on raw input — the explicit first step of every model
+ * turn. Every verdict is logged at INFO on [AI_TAG], so a demo
+ * (`adb logcat -s FoyerAI`) shows the decision the moment the text arrives.
+ */
+enum class InputKind { QUESTION, ACTION, UNCLEAR }
+
+/** Stable classification preamble (KV prefix-cached like the other prefixes). */
+private val CLASSIFY_PREFIX: String by lazy {
+    buildString {
+        appendLine("Classify the phone input. Reply with exactly one word: ACTION or QUESTION.")
+        appendLine("ACTION — the user wants the phone to do something: open, call, message, set, toggle, search, play, navigate, create.")
+        appendLine("QUESTION — the user asks for information, facts, or chats.")
+        appendLine()
+        appendLine("Examples:")
+        appendLine("\"open spotify\" -> ACTION")
+        appendLine("\"how tall is the eiffel tower\" -> QUESTION")
+        appendLine("\"turn on wifi and open spotify\" -> ACTION")
+        appendLine("\"message mom i'm running late\" -> ACTION")
+        appendLine("\"what is the capital of france\" -> QUESTION")
+        appendLine("\"set an alarm for 7 am\" -> ACTION")
+    }
+}
+
+/** Asks the model for a one-word verdict; anything unparseable is [InputKind.UNCLEAR]. */
+suspend fun classifyInput(
+    generate: suspend (String, String) -> String?,
+    query: String,
+): InputKind {
+    val raw = timedGenerate(generate, CLASSIFY_PREFIX, "\"$query\" -> ")?.trim().orEmpty()
+    Log.d(AI_TAG, "classify raw='$raw'")
+    val word = raw.uppercase()
+    return when {
+        word.startsWith("ACTION") -> InputKind.ACTION
+        word.startsWith("QUESTION") -> InputKind.QUESTION
+        "ACTION" in word -> InputKind.ACTION
+        "QUESTION" in word -> InputKind.QUESTION
+        else -> InputKind.UNCLEAR
+    }
+}
+
+/**
+ * Cycle-2 prompt: break an ACTION input into action→value pairs. The model
+ * only names the pairs; [planFromPairs] maps them onto intents in code.
+ */
+private val PAIRS_PREFIX: String by lazy {
+    buildString {
+        appendLine("Break the phone command into action/value pairs. Output ONLY a JSON array, no prose.")
+        appendLine("""Each pair is {"action":"<verb>","value":"<target>"}; message/email pairs also carry "text".""")
+        appendLine("Verbs: open, message, call, email, play, navigate, setting, alarm, timer, web, note.")
+        appendLine("""If an app is named anywhere, the whole command belongs to that app — emit {"action":"open","value":"<app>"} as the FIRST pair.""")
+        appendLine("Copy names, apps and message text VERBATIM from the user's input — never reuse words from the examples.")
+        appendLine()
+        appendLine("Examples:")
+        appendLine(""""message mom hello on whatsapp" -> [{"action":"open","value":"whatsapp"},{"action":"message","value":"mom","text":"hello"}]""")
+        appendLine(""""open spotify" -> [{"action":"open","value":"spotify"}]""")
+        appendLine(""""turn on wifi and open spotify" -> [{"action":"setting","value":"wifi"},{"action":"open","value":"spotify"}]""")
+        appendLine(""""call dad" -> [{"action":"call","value":"dad"}]""")
+        appendLine(""""set an alarm for 7 am" -> [{"action":"alarm","value":"7:00 am"}]""")
+        appendLine(""""play jazz on spotify" -> [{"action":"open","value":"spotify"},{"action":"play","value":"jazz"}]""")
+    }
+}
+
+/** Cycle-2 call: the model names the pairs; empty on a dud reply. */
+suspend fun extractPairs(
+    generate: suspend (String, String) -> String?,
+    query: String,
+): List<ActionPair> {
+    val raw = timedGenerate(generate, PAIRS_PREFIX, "\"$query\" -> ").orEmpty()
+    Log.d(AI_TAG, "pairs raw='$raw'")
+    return parsePairs(raw)
+}
+
+/** Prompt for the question branch: answer only, never JSON. */
+private val ANSWER_PREFIX: String by lazy {
+    buildString {
+        appendLine("You are a concise on-device phone assistant. Answer the user's question with ONE short plain sentence.")
+        appendLine("No JSON. Never write \"User:\" or extra turns. Answer only the last line.")
     }
 }
 
@@ -231,16 +318,41 @@ class Assistant(
         val index = indexFor(apps)
         val text = Normalizer.normalize(query)
         Log.d(AI_TAG, "assistant input=\"$query\" normalized=\"$text\"")
-        // Tier-0: obvious commands never touch the model.
-        fastRoute(text, index)?.let {
-            val plan = resolveInventory(it, apps)
-            Log.d(AI_TAG, "route=DETERMINISTIC llm=false -> $plan")
-            return plan
-        }
+
         if (!ready) ready = prepareFn()
-        Log.d(AI_TAG, "route=SEMANTIC_FALLBACK llm=$ready")
-        val plan = if (ready) decideIntent(generateFn, text, index) else listOf(AiIntent.Web(text))
-        return resolveInventory(plan, apps)
+        if (!ready) {
+            Log.i(AI_TAG, "judge: SKIPPED (model not ready) \"$text\" -> web search")
+            return listOf(AiIntent.Web(text))
+        }
+
+        // The judge runs here too: a typed question becomes an answer, never
+        // a forced action (the decide prompt would shoehorn it into one).
+        val t0 = System.currentTimeMillis()
+        val kind = classifyInput(generateFn, text)
+        Log.i(AI_TAG, "judge: $kind (model, ${System.currentTimeMillis() - t0}ms) \"$text\"")
+        if (kind == InputKind.QUESTION) {
+            val reply = timedGenerate(generateFn, ANSWER_PREFIX, "\"$text\" -> ").orEmpty()
+            Log.d(AI_TAG, "answer reply='$reply'")
+            val answerPlan = resolveInventory(parsePlan(reply, index), apps)
+            if (answerPlan.isNotEmpty()) return answerPlan
+            val clean = sanitizeReply(reply)
+            if (clean.isNotBlank() && !clean.trimStart().startsWith("{")) {
+                Log.i(AI_TAG, "say: \"$clean\"")
+                return listOf(AiIntent.Answer(clean))
+            }
+        }
+        // Cycle 2 — pair extraction (app scope stripped first); cycle 3 — decide.
+        val scope = appScope(text, index)
+        if (scope != null) Log.i(AI_TAG, "scope: app=${scope.app.label} rest=\"${scope.cleaned}\"")
+        val pairs = extractPairs(generateFn, scope?.cleaned ?: text)
+        if (pairs.isNotEmpty()) {
+            val pairPlan = resolveInventory(planFromPairs(pairs, index, scope?.app), apps)
+            Log.i(AI_TAG, "pairs: ${pairs.joinToString(", ")} -> ${pairPlan.ifEmpty { "unmappable, falling back" }}")
+            if (pairPlan.isNotEmpty()) return pairPlan
+        } else {
+            Log.i(AI_TAG, "pairs: none parsed, falling back")
+        }
+        return resolveInventory(decideIntent(generateFn, text, index), apps)
     }
 
     /** Multi-turn conversation: the model can chat, answer, ask, or emit a plan. */
@@ -255,31 +367,109 @@ class Assistant(
 
         // 0. If we asked "did you mean…?", interpret a yes/no/next before anything else.
         resolvePending(text)?.let {
-            Log.d(AI_TAG, "route=CONFIRMATION llm=false")
+            Log.i(AI_TAG, "judge: CONFIRMATION (pending answer, no model) \"$text\"")
             return it
         }
 
         // 1. Tier-0 resolver — no model call. Inventory questions are answered locally here.
         fastRoute(text, index)?.let {
             val plan = resolveInventory(it, apps)
-            Log.d(AI_TAG, "route=DETERMINISTIC llm=false -> $plan")
+            Log.i(AI_TAG, "judge: ACTION (deterministic, no model) \"$text\" -> $plan")
             return turnFromPlan(text, plan)
         }
 
-        // 2. The model.
+        // 2. Everything past this point needs the model.
         if (!ready) ready = prepareFn()
-        if (!ready) return AgentTurn.Do(listOf(AiIntent.Web(text)))
+        if (!ready) {
+            Log.i(AI_TAG, "judge: SKIPPED (model not ready) \"$text\" -> web search")
+            return AgentTurn.Do(listOf(AiIntent.Web(text)))
+        }
 
+        // The judge — the explicit first model step: question or action?
+        val t0 = System.currentTimeMillis()
+        val kind = classifyInput(generateFn, text)
+        Log.i(AI_TAG, "judge: $kind (model, ${System.currentTimeMillis() - t0}ms) \"$text\"")
+
+        // 3. The branch the verdict chose. UNCLEAR still tries to act — the
+        //    action path falls back to open conversation when no plan parses.
+        return when (kind) {
+            InputKind.QUESTION -> answerQuestion(index, apps, text)
+            else -> actOn(index, apps, text)
+        }
+    }
+
+    /** The question branch: answer in one sentence; a JSON reply (misjudge) still executes. */
+    private suspend fun answerQuestion(
+        index: AppIndex,
+        apps: List<AppEntry>,
+        text: String,
+    ): AgentTurn {
+        val convo = history.joinToString("\n")
+        val suffix =
+            buildString {
+                if (convo.isNotBlank()) {
+                    appendLine("Conversation so far:")
+                    appendLine(convo)
+                    appendLine()
+                }
+                append("\"$text\" -> ")
+            }
+        val reply = timedGenerate(generateFn, ANSWER_PREFIX, suffix).orEmpty()
+        Log.d(AI_TAG, "answer reply='$reply'")
+
+        // The judge can be wrong — honour a plan if the model emitted one anyway.
+        val plan = resolveInventory(parsePlan(reply, index), apps)
+        if (plan.isNotEmpty()) {
+            Log.i(AI_TAG, "act: judge said QUESTION but the reply was a plan -> $plan")
+            return turnFromPlan(text, plan)
+        }
+        return sayFrom(text, reply)
+    }
+
+    /** The action branch: pair extraction first, then the full decide prompt, then open conversation. */
+    private suspend fun actOn(
+        index: AppIndex,
+        apps: List<AppEntry>,
+        text: String,
+    ): AgentTurn {
+        // Deterministic app scope: an installed app named anywhere claims the
+        // whole command. Detected in code (the model doesn't know the app list)
+        // and stripped from the text so the model can't mangle it.
+        val scope = appScope(text, index)
+        if (scope != null) Log.i(AI_TAG, "scope: app=${scope.app.label} rest=\"${scope.cleaned}\"")
+
+        // Cycle 2 — the model names action→value pairs; the launcher maps them.
+        val pairs = extractPairs(generateFn, scope?.cleaned ?: text)
+        if (pairs.isNotEmpty()) {
+            val pairPlan = resolveInventory(planFromPairs(pairs, index, scope?.app), apps)
+            Log.i(AI_TAG, "pairs: ${pairs.joinToString(", ")} -> ${pairPlan.ifEmpty { "unmappable, falling back" }}")
+            if (pairPlan.isNotEmpty()) return turnFromPlan(text, pairPlan)
+        } else {
+            Log.i(AI_TAG, "pairs: none parsed, falling back")
+        }
+
+        // Cycle 3 — the full decide prompt.
+        val plan = resolveInventory(decideIntent(generateFn, text, index), apps)
+        if (plan.isNotEmpty()) {
+            Log.i(AI_TAG, "act: $plan")
+            return turnFromPlan(text, plan)
+        }
+
+        Log.i(AI_TAG, "act: no plan parsed -> converse fallback")
         val suffix = buildConverseSuffix(index, text)
         Log.d(AI_TAG, "route=SEMANTIC_FALLBACK llm=true promptChars=${CONVERSE_PREFIX.length + suffix.length}")
         val reply = timedGenerate(generateFn, CONVERSE_PREFIX, suffix).orEmpty()
         Log.d(AI_TAG, "converse reply='$reply'")
+        val fallbackPlan = resolveInventory(parsePlan(reply, index), apps)
+        if (fallbackPlan.isNotEmpty()) return turnFromPlan(text, fallbackPlan)
+        return sayFrom(text, reply)
+    }
 
-        // Parse plan from the RAW reply (JSON extraction tolerates trailing noise);
-        // only sanitise the free-text path.
-        val plan = resolveInventory(parsePlan(reply, index), apps)
-        if (plan.isNotEmpty()) return turnFromPlan(text, plan)
-
+    /** Cleans a free-text reply, records the exchange, and logs what will be spoken. */
+    private fun sayFrom(
+        text: String,
+        reply: String,
+    ): AgentTurn {
         val clean = sanitizeReply(reply)
         val answer =
             when {
@@ -288,6 +478,7 @@ class Assistant(
                 else -> clean
             }
         remember(text, answer)
+        Log.i(AI_TAG, "say: \"$answer\"")
         return AgentTurn.Say(answer)
     }
 
@@ -447,9 +638,9 @@ private fun sanitizeReply(raw: String): String {
 fun rememberAssistant(store: LauncherStore): Assistant? {
     val context = LocalContext.current
     val downloaded = store.modelDownloaded()
-    return remember(store.aiEnabled, downloaded) {
+    return remember(store.aiEnabled, downloaded, store.modelUrl) {
         if (!store.aiEnabled || !downloaded) return@remember null
-        val engine = LlmEngine(context, modelFile(context).path)
+        val engine = LlmEngine(context, modelFile(context).path, ChatTemplate.fromUrl(store.modelUrl))
         // The engine reuses the prefilled preamble via its prefix-cache path.
         Assistant(
             { engine.prepare() },
