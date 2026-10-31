@@ -832,6 +832,17 @@ fun openBrowser(context: Context) {
     }
 }
 
+fun openUrl(
+    context: Context,
+    url: String,
+) {
+    runCatching {
+        context.startActivity(
+            Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    }
+}
+
 fun openClockApp(context: Context) {
     runCatching {
         context.startActivity(

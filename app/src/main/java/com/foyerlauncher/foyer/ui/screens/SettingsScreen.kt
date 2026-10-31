@@ -29,18 +29,12 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -66,24 +60,32 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.foyerlauncher.foyer.LockService
+import com.foyerlauncher.foyer.R
 import com.foyerlauncher.foyer.data.LauncherStore
 import com.foyerlauncher.foyer.data.SUGGESTED_GEMMA_URL
 import com.foyerlauncher.foyer.data.SUGGESTED_QWEN_BALANCED_URL
 import com.foyerlauncher.foyer.data.SUGGESTED_QWEN_SMALL_URL
 import com.foyerlauncher.foyer.data.openAppInfo
 import com.foyerlauncher.foyer.data.openSettings
+import com.foyerlauncher.foyer.data.openUrl
+import com.foyerlauncher.foyer.ui.components.AnalogueClockWidget
 import com.foyerlauncher.foyer.ui.components.ClockStyle
+import com.foyerlauncher.foyer.ui.components.DigitalClockWidget
 import com.foyerlauncher.foyer.ui.components.FastScrollStyle
 import com.foyerlauncher.foyer.ui.components.FoyerGlyph
 import com.foyerlauncher.foyer.ui.components.GestureAction
 import com.foyerlauncher.foyer.ui.components.GlyphState
+import com.foyerlauncher.foyer.ui.components.IconAction
+import com.foyerlauncher.foyer.ui.components.LockClockWidget
+import com.foyerlauncher.foyer.ui.components.MarkdownDocument
+import com.foyerlauncher.foyer.ui.components.MinimalClockWidget
 import com.foyerlauncher.foyer.ui.theme.AccentChoice
 import com.foyerlauncher.foyer.ui.theme.BackgroundTone
 import com.foyerlauncher.foyer.ui.theme.FontChoice
@@ -92,7 +94,6 @@ import com.foyerlauncher.foyer.ui.theme.LocalPalette
 import com.foyerlauncher.foyer.ui.theme.ThemeMode
 import com.foyerlauncher.foyer.ui.theme.accentColor
 import com.foyerlauncher.foyer.ui.theme.toneBase
-import com.foyerlauncher.foyer.ui.theme.tracked
 import kotlinx.coroutines.launch
 
 /** The settings hierarchy: a root hub and one page per section. */
@@ -102,6 +103,8 @@ private enum class SettingsPage {
     GESTURES,
     ASSISTANT,
     DATA,
+    PRIVACY,
+    LICENSES,
 }
 
 @Composable
@@ -152,6 +155,10 @@ fun SettingsScreen(
                         AssistantPage(store, onShowGuide = { showAiGuide = true }) { page = SettingsPage.ROOT }
                     SettingsPage.DATA ->
                         DataPage(store) { page = SettingsPage.ROOT }
+                    SettingsPage.PRIVACY ->
+                        PrivacyPage { page = SettingsPage.ROOT }
+                    SettingsPage.LICENSES ->
+                        LicensesPage { page = SettingsPage.ROOT }
                 }
             }
 
@@ -173,7 +180,7 @@ private fun RootPage(
     val context = LocalContext.current
     var showResetConfirm by remember { mutableStateOf(false) }
 
-    PageScaffold(title = "settings", subtitle = "foyer", onBack = onClose, backIsClose = true) {
+    PageScaffold(title = "settings", onBack = onClose, backIsClose = true) {
         // Re-entry point for the onboarding prompt, visible only while another
         // launcher is the default home.
         var isDefault by remember { mutableStateOf(isDefaultLauncher(context)) }
@@ -240,6 +247,20 @@ private fun RootPage(
                 val aliasNote = if (store.aliases.isEmpty()) "" else " · ${store.aliases.size} aliases"
                 NavRow(shape = shape, title = "backup & aliases", subtitle = "export, import$aliasNote") {
                     onOpen(SettingsPage.DATA)
+                }
+            },
+        )
+
+        GroupLabel("about")
+        SettingsGroup(
+            { shape ->
+                NavRow(shape = shape, title = "privacy", subtitle = "everything stays on the phone") {
+                    onOpen(SettingsPage.PRIVACY)
+                }
+            },
+            { shape ->
+                NavRow(shape = shape, title = "open source", subtitle = "licenses & attributions") {
+                    onOpen(SettingsPage.LICENSES)
                 }
             },
         )
@@ -359,6 +380,21 @@ private fun AppearancePage(
 
         GroupLabel("clock")
         Segmented(ClockStyle.entries, store.clockStyle, { it.label }) { store.chooseClockStyle(it) }
+        // Live preview of the chosen clock, exactly as the home screen draws it.
+        if (store.clockStyle != ClockStyle.OFF) {
+            Box(
+                Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 6.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                when (store.clockStyle) {
+                    ClockStyle.DIGITAL -> DigitalClockWidget()
+                    ClockStyle.LOCK -> LockClockWidget()
+                    ClockStyle.ANALOGUE -> AnalogueClockWidget()
+                    ClockStyle.MINIMAL -> MinimalClockWidget()
+                    ClockStyle.OFF -> Unit
+                }
+            }
+        }
 
         GroupLabel("fast scroll")
         Segmented(FastScrollStyle.entries, store.fastScrollStyle, { it.label }) { store.chooseFastScroll(it) }
@@ -545,9 +581,11 @@ private fun AssistantPage(
                         trailingIcon = {
                             // One-tap clear: emptying the url brings the suggestions back.
                             if (store.modelUrl.isNotEmpty()) {
-                                IconButton(onClick = { store.updateModelUrl("") }) {
-                                    Icon(Icons.Filled.Close, contentDescription = "clear model url")
-                                }
+                                IconAction(
+                                    icon = R.drawable.ic_tabler_x,
+                                    label = "clear model url",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                ) { store.updateModelUrl("") }
                             }
                         },
                         modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
@@ -679,7 +717,11 @@ private fun DataPage(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
-                                TextButton(onClick = { store.removeAlias(alias) }) { Text("remove") }
+                                IconAction(
+                                    icon = R.drawable.ic_tabler_trash,
+                                    label = "remove “$alias”",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                ) { store.removeAlias(alias) }
                             }
                         }
                     }.toTypedArray(),
@@ -712,6 +754,102 @@ private fun DataPage(
     }
 }
 
+@Composable
+private fun PrivacyPage(onBack: () -> Unit) {
+    val context = LocalContext.current
+    // The bundled copy of docs/privacy.md — the same file the website publishes.
+    val policy =
+        remember {
+            runCatching {
+                context.assets
+                    .open("privacy.md")
+                    .bufferedReader()
+                    .use { it.readText() }
+            }.getOrDefault("everything stays on the phone — read the full policy online.")
+        }
+
+    PageScaffold(title = "privacy", onBack = onBack, subtitle = "everything stays on the phone") {
+        MarkdownDocument(markdown = policy, skipFirstHeading = true)
+
+        GroupLabel("more")
+        SettingsGroup(
+            { shape ->
+                NavRow(shape, "read online", "the same document, on the website ↗", chevron = false) {
+                    openUrl(context, "https://foyerlauncher.com/docs/privacy/")
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun LicensesPage(onBack: () -> Unit) {
+    val context = LocalContext.current
+    val version =
+        remember {
+            runCatching {
+                context.packageManager.getPackageInfo(context.packageName, 0).versionName
+            }.getOrNull() ?: "?"
+        }
+
+    PageScaffold(title = "open source", onBack = onBack, subtitle = "licenses & attributions") {
+        GroupLabel("foyer")
+        SettingsGroup(
+            { shape ->
+                NavRow(shape, "foyer is open source", "GPL-3.0 · github.com/akshay2211/Foyer ↗", chevron = false) {
+                    openUrl(context, "https://github.com/akshay2211/Foyer")
+                }
+            },
+            { shape ->
+                RowSurface(shape = shape, onClick = null) {
+                    Column(Modifier.weight(1f)) {
+                        Text("version", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            version,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
+                    }
+                }
+            },
+        )
+
+        GroupLabel("built with")
+        SettingsGroup(
+            { shape ->
+                NavRow(shape, "tabler icons", "MIT · every icon in foyer ↗", chevron = false) {
+                    openUrl(context, "https://tabler.io/icons")
+                }
+            },
+            { shape ->
+                NavRow(shape, "jetpack compose & androidx", "Apache 2.0 · ui toolkit and platform libraries ↗", chevron = false) {
+                    openUrl(context, "https://developer.android.com/jetpack/androidx")
+                }
+            },
+            { shape ->
+                NavRow(shape, "kotlin", "Apache 2.0 · language and standard library ↗", chevron = false) {
+                    openUrl(context, "https://kotlinlang.org")
+                }
+            },
+            { shape ->
+                NavRow(shape, "mediapipe tasks genai", "Apache 2.0 · runs the assistant model on-device ↗", chevron = false) {
+                    openUrl(context, "https://github.com/google-ai-edge/mediapipe")
+                }
+            },
+            { shape ->
+                NavRow(shape, "json-java (org.json)", "Public Domain · backup file format ↗", chevron = false) {
+                    openUrl(context, "https://github.com/stleary/JSON-java")
+                }
+            },
+        )
+        Caption(
+            "assistant models you download (gemma, qwen, …) are published under their authors' " +
+                "own licenses, shown on each model's page before you download it.",
+        )
+    }
+}
+
 // ---- Scaffolding & building blocks ------------------------------------------
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -734,19 +872,12 @@ private fun PageScaffold(
                 title = { Text(title) },
                 subtitle = subtitle?.let { { Text(it) } },
                 navigationIcon = {
-                    if (backIsClose) {
-                        TextButton(onClick = onBack) {
-                            Text(
-                                "back",
-                                style = MaterialTheme.typography.labelLarge.copy(letterSpacing = tracked(2.sp)),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    } else {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "back")
-                        }
-                    }
+                    IconAction(
+                        icon = if (backIsClose) R.drawable.ic_tabler_x else R.drawable.ic_tabler_arrow_narrow_left_dashed,
+                        label = if (backIsClose) "close" else "back",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        onClick = onBack,
+                    )
                 },
                 scrollBehavior = scrollBehavior,
             )
@@ -849,7 +980,7 @@ private fun NavRow(
         }
         if (chevron) {
             Icon(
-                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                painterResource(R.drawable.ic_tabler_chevron_right),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -966,7 +1097,7 @@ private fun Swatch(
     ) {
         if (selected) {
             Icon(
-                Icons.Filled.Check,
+                painterResource(R.drawable.ic_tabler_check),
                 contentDescription = null,
                 tint = if (color.luminance() > 0.5f) androidx.compose.ui.graphics.Color.Black else androidx.compose.ui.graphics.Color.White,
                 modifier = Modifier.size(18.dp),

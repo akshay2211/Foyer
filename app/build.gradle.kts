@@ -26,6 +26,33 @@ dokka {
     }
 }
 
+// docs/privacy.md is the single source for the privacy policy: the website
+// publishes it (foyerlauncher.com/docs/privacy/) and this task bundles the
+// same file into the APK for the in-app page.
+abstract class BundlePolicyTask : DefaultTask() {
+    @get:InputFile
+    abstract val source: RegularFileProperty
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun run() {
+        source.get().asFile.copyTo(outputDir.get().file("privacy.md").asFile, overwrite = true)
+    }
+}
+
+val bundlePrivacyPolicy =
+    tasks.register<BundlePolicyTask>("bundlePrivacyPolicy") {
+        source.set(rootProject.layout.projectDirectory.file("docs/privacy.md"))
+    }
+
+androidComponents {
+    onVariants { variant ->
+        variant.sources.assets?.addGeneratedSourceDirectory(bundlePrivacyPolicy, BundlePolicyTask::outputDir)
+    }
+}
+
 android {
     namespace = "com.foyerlauncher.foyer"
     compileSdk {
@@ -73,7 +100,6 @@ dependencies {
     implementation(libs.androidx.foundation)
     implementation(libs.androidx.animation)
     implementation(libs.androidx.material3) // settings surfaces only; home stays foundation
-    implementation(libs.androidx.material.icons.core)
     implementation(libs.tasks.genai)
     implementation(libs.androidx.ui.tooling.preview)
     debugImplementation(libs.androidx.ui.tooling)
