@@ -9,6 +9,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -46,6 +47,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
@@ -64,6 +66,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -77,11 +80,15 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -123,6 +130,7 @@ import com.foyerlauncher.foyer.data.openAppInfo
 import com.foyerlauncher.foyer.data.openClockApp
 import com.foyerlauncher.foyer.data.playSearch
 import com.foyerlauncher.foyer.data.requestUninstall
+import com.foyerlauncher.foyer.data.sectionOf
 import com.foyerlauncher.foyer.data.webSearch
 import com.foyerlauncher.foyer.ui.components.AnalogueClockWidget
 import com.foyerlauncher.foyer.ui.components.AppIconCache
@@ -146,6 +154,7 @@ import com.foyerlauncher.foyer.ui.theme.LocalPalette
 import com.foyerlauncher.foyer.ui.theme.matteGrain
 import com.foyerlauncher.foyer.ui.theme.tracked
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -153,11 +162,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
-
-private fun sectionOf(label: String): Char {
-    val c = label.firstOrNull()?.uppercaseChar() ?: '#'
-    return if (c in 'A'..'Z') c else '#'
-}
 
 @Composable
 fun LauncherScreen(store: LauncherStore) {
@@ -185,6 +189,7 @@ fun LauncherScreen(store: LauncherStore) {
                 ) {
                     val serial = if (user == Process.myUserHandle()) 0L else um.getSerialNumberForUser(user)
                     store.pruneApp(packageName, serial)
+                    AppIconCache.invalidate(packageName)
                     reload()
                 }
 
@@ -196,7 +201,12 @@ fun LauncherScreen(store: LauncherStore) {
                 override fun onPackageChanged(
                     packageName: String,
                     user: UserHandle,
-                ) = reload()
+                ) {
+                    // An update can change the icon itself (redesign, adaptive
+                    // icon tweak) — the cache has no other way to find out.
+                    AppIconCache.invalidate(packageName)
+                    reload()
+                }
 
                 override fun onPackagesAvailable(
                     packageNames: Array<out String>,
@@ -681,24 +691,25 @@ private fun HomePage(
                 }
             }
 
-            // Favorites, centered in whatever space the header leaves; the
-            // bottom padding keeps them clear of "ask me" and the shortcuts,
-            // and the scroll is a safety net for many favorites on small
-            // screens — invisible when everything fits.
-            Column(
+            // Favorites, truly centered in whatever space the header leaves —
+            // a Box + CenterStart, not a weighted Spacer either side: a
+            // weight(_, fill = false) child only ever gets pushed to the
+            // *start* of its allotted share (Column's default top-alignment
+            // within that slot), so unused room inside its own share sits
+            // below it rather than being split between the spacers — two
+            // equal-weight spacers around it does not actually center it.
+            // The bottom padding keeps it clear of "ask me" and the
+            // shortcuts; the scroll is a safety net for many favorites on
+            // small screens — invisible when everything fits.
+            Box(
                 Modifier
                     .weight(1f)
                     .fillMaxWidth()
                     .padding(end = 24.dp, bottom = 72.dp),
+                contentAlignment = Alignment.CenterStart,
             ) {
-                // Optically a third down the remaining space, not dead centre —
-                // the weights collapse before the list ever gets clipped.
-                Spacer(Modifier.weight(0.36f))
                 Column(
-                    modifier =
-                        Modifier
-                            .weight(4f, fill = false)
-                            .verticalScroll(rememberScrollState()),
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
                     if (store.favorites.isEmpty()) {
@@ -724,7 +735,6 @@ private fun HomePage(
                         }
                     }
                 }
-                Spacer(Modifier.weight(0.64f))
             }
         }
 
@@ -830,9 +840,17 @@ private fun EdgeShortcut(
 
 // ---- App drawer page ------------------------------------------------------
 
+/**
+ * `internal`, not `private`: app/src/debug/.../MarketingPreviewActivity calls
+ * this directly to screenshot the drawer in isolation. Changing this
+ * signature (param added/removed/reordered, a callback renamed) must also
+ * update that call site — the compiler enforces the types but not the
+ * semantics, and the debug file is easy to forget since it's not reachable
+ * from any production code path.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun DrawerPage(
+internal fun DrawerPage(
     apps: List<AppEntry>,
     store: LauncherStore,
     onLaunchApp: (AppEntry) -> Unit,
@@ -848,6 +866,16 @@ private fun DrawerPage(
     val listState = rememberLazyListState()
     val focusManager = LocalFocusManager.current
     val focusRequester = remember { FocusRequester() }
+
+    // Icon-preview fast scroll wants every icon ready before the finger ever
+    // touches the rail; warm the cache in the background as soon as the
+    // drawer's app list is available. A no-op per app once already cached, so
+    // this is safe to re-key on style too (switching modes mid-session).
+    LaunchedEffect(apps, store.fastScrollStyle) {
+        if (store.fastScrollStyle == FastScrollStyle.INTERACTIVE) {
+            AppIconCache.warmAll(context, apps)
+        }
+    }
 
     // Dragging the list dismisses the IME, which otherwise covers half the
     // results. Drag interactions only: programmatic scrolls (A–Z rail jumps,
@@ -1326,6 +1354,7 @@ private fun AlphabetScroller(
     val palette = LocalPalette.current
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
+    val focusManager = LocalFocusManager.current
 
     val letters = remember { ('A'..'Z').toList() + '#' }
     val indexForLetter =
@@ -1338,120 +1367,152 @@ private fun AlphabetScroller(
             map
         }
 
-    fun targetIndex(letter: Char): Int? {
-        indexForLetter[letter]?.let { return it }
-        val li = letters.indexOf(letter)
-        for (j in li + 1 until letters.size) indexForLetter[letters[j]]?.let { return it }
-        for (j in li - 1 downTo 0) indexForLetter[letters[j]]?.let { return it }
-        return null
-    }
-
     var railHeight by remember { mutableIntStateOf(0) }
     var isDragging by remember { mutableStateOf(false) }
     var activeLetter by remember { mutableStateOf<Char?>(null) }
     var pointerY by remember { mutableFloatStateOf(0f) }
+    // Explicit "latest wins": without this, every pointer-move during a drag
+    // (dozens per second) launches its own scrollToItem coroutine with
+    // nothing cancelling the ones before it — relying on scrollToItem's own
+    // mutex to preempt them is implicit and wasteful (allocates + cancels a
+    // coroutine per stale call instead of never starting it).
+    var scrollJob: Job? by remember { mutableStateOf(null) }
 
-    val currentSection by remember(apps, leadingItemCount) {
+    // Each letter's *actual* rendered center Y, in the rail's own coordinate
+    // space (same origin pointerY uses) — not a formula estimate. A Column
+    // with Arrangement.SpaceBetween does not place items at even i/(n-1)
+    // fractions of its height once each item's own size is accounted for;
+    // that estimate was off by up to half a letter's height, worse toward
+    // the rail's ends, which is exactly where the icon and the highlighted
+    // letter visibly drifted apart. Measuring removes the estimate entirely.
+    val letterYs = remember(letters) { mutableStateListOf(*FloatArray(letters.size).toTypedArray()) }
+
+    // The actual app at the top of the viewport, refreshed continuously as
+    // the list scrolls — not just when the touched letter bucket changes, so
+    // scrubbing within one letter's many apps still updates the icon.
+    // currentSection is read far more often (every letter's active check,
+    // every recomposition) than it changes, so it's derived from the same
+    // lookup rather than repeating the index math in a second derivedStateOf.
+    val currentApp by remember(apps, leadingItemCount) {
         derivedStateOf {
             val idx = listState.firstVisibleItemIndex - leadingItemCount
-            apps.getOrNull(idx.coerceAtLeast(0))?.let { sectionOf(it.label) }
+            apps.getOrNull(idx.coerceAtLeast(0))
         }
     }
+    val currentSection = currentApp?.let { sectionOf(it.label) }
 
+    // The highlighted letter, the arc bulge, and the icon's vertical position
+    // all key off the finger's raw position against the *measured* letter
+    // centers, so they can never disagree with each other. The scroll target
+    // (and so the icon's *content*) is separate: it tracks continuously
+    // through the real app list, proportional to app count, not letter
+    // count — this is what makes the icon change per app, not per letter,
+    // even though letter density is uneven.
     fun updateFromY(y: Float) {
-        if (railHeight <= 0) return
-        val frac = (y / railHeight).coerceIn(0f, 1f)
-        val li = (frac * letters.size).toInt().coerceIn(0, letters.size - 1)
-        val letter = letters[li]
-        activeLetter = letter
-        pointerY = y.coerceIn(0f, railHeight.toFloat())
-        targetIndex(letter)?.let { ti -> scope.launch { listState.scrollToItem(ti + leadingItemCount) } }
+        if (railHeight <= 0 || apps.isEmpty()) return
+        val clampedY = y.coerceIn(0f, railHeight.toFloat())
+        pointerY = clampedY
+        activeLetter =
+            letters.getOrNull(
+                letterYs.indices.minByOrNull { kotlin.math.abs(letterYs[it] - clampedY) } ?: 0,
+            )
+        val frac = (clampedY / railHeight).coerceIn(0f, 1f)
+        val ti = (frac * apps.size).toInt().coerceIn(0, apps.size - 1)
+        scrollJob?.cancel()
+        scrollJob = scope.launch { listState.scrollToItem(ti + leadingItemCount) }
     }
 
     val context = LocalContext.current
     val ff = LocalFontFamily.current
 
-    // What the finger is on right now: the landing app plus the two after it.
-    val previewApps =
-        remember(activeLetter, isDragging, apps) {
-            if (!isDragging || activeLetter == null) {
-                emptyList()
-            } else {
-                targetIndex(activeLetter!!)?.let { ti -> apps.drop(ti).take(3) } ?: emptyList()
-            }
-        }
-    // Icon of the landing app only — loaded lazily, cached, scrub-time only (#4).
+    // peek() is instant once warmAll() has run (the common case by the time
+    // the finger touches the rail); icon() is only a fallback for the rare
+    // app not yet cached.
     var previewIcon by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
-    LaunchedEffect(previewApps.firstOrNull()?.key, style) {
+    LaunchedEffect(currentApp?.key, style) {
         previewIcon = null
         if (style == FastScrollStyle.INTERACTIVE) {
-            previewApps.firstOrNull()?.let { previewIcon = AppIconCache.icon(context, it) }
+            currentApp?.let { previewIcon = AppIconCache.peek(it) ?: AppIconCache.icon(context, it) }
         }
     }
 
-    Box(modifier) {
+    // fillMaxWidth so BottomCenter below centers on the whole drawer, not
+    // just this narrow right-edge strip — the rail itself stays pinned to
+    // the edge via its own CenterEnd alignment regardless.
+    Box(modifier.fillMaxWidth()) {
         val bubbleVisible = isDragging && activeLetter != null
         val bubbleAlpha by animateFloatAsState(
             targetValue = if (bubbleVisible) 1f else 0f,
             label = "bubbleAlpha",
         )
-        if (bubbleAlpha > 0.01f && style == FastScrollStyle.INTERACTIVE) {
-            // Preview card: big letter, the landing app (icon + name), and the
-            // next two apps of the section for context.
-            val cardOffsetX = with(density) { (-236).dp.roundToPx() }
-            val cardHalf = with(density) { 44.dp.toPx() }
-            Column(
+        if (bubbleAlpha > 0.01f && style == FastScrollStyle.SIMPLE) {
+            // Just the letter — no icon, no app names, the rail's original look.
+            val badgeHalf = with(density) { 28.dp.toPx() }
+            Box(
                 Modifier
                     .align(Alignment.TopEnd)
-                    .offset { IntOffset(x = cardOffsetX, y = (pointerY - cardHalf).roundToInt().coerceAtLeast(0)) }
-                    .alpha(bubbleAlpha)
-                    .width(200.dp)
+                    .offset {
+                        IntOffset(
+                            x = with(density) { (-72).dp.roundToPx() },
+                            y = (pointerY - badgeHalf).roundToInt().coerceAtLeast(0),
+                        )
+                    }.alpha(bubbleAlpha)
+                    .size(56.dp)
                     .clip(RoundedCornerShape(18.dp))
                     .background(palette.background)
-                    .border(1.dp, palette.muted.copy(alpha = 0.35f), RoundedCornerShape(18.dp))
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                    .border(1.dp, palette.muted.copy(alpha = 0.35f), RoundedCornerShape(18.dp)),
+                contentAlignment = Alignment.Center,
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    BasicText(
-                        text = (activeLetter ?: ' ').toString(),
-                        style = TextStyle(color = palette.accent, fontSize = 30.sp, fontWeight = FontWeight.Medium, fontFamily = ff),
-                    )
-                    previewApps.firstOrNull()?.let { target ->
-                        previewIcon?.let { icon ->
-                            Image(
-                                bitmap = icon,
-                                contentDescription = null,
-                                modifier = Modifier.padding(start = 12.dp).size(30.dp),
-                            )
-                        }
-                        BasicText(
-                            text = target.label.lowercase(),
-                            modifier = Modifier.padding(start = 10.dp),
-                            style = TextStyle(color = palette.text, fontSize = 16.sp, fontFamily = ff),
-                            maxLines = 1,
-                        )
-                    }
-                }
-                previewApps.drop(1).forEach { next ->
-                    BasicText(
-                        text = next.label.lowercase(),
-                        modifier = Modifier.padding(top = 5.dp),
-                        style = TextStyle(color = palette.muted, fontSize = 13.sp, fontFamily = ff),
-                        maxLines = 1,
-                    )
-                }
+                BasicText(
+                    text = (activeLetter ?: ' ').toString(),
+                    style = TextStyle(color = palette.accent, fontSize = 28.sp, fontWeight = FontWeight.Medium, fontFamily = ff),
+                )
+            }
+        }
+        if (bubbleAlpha > 0.01f && style == FastScrollStyle.INTERACTIVE) {
+            // Just the current app's icon — no box, no letter. Grayscale
+            // keeps it in the rail's monochrome language even though the
+            // source icon is full color. Fixed at bottom-center: it used to
+            // track the finger up and down the rail, which meant glancing at
+            // it meant chasing it: now it's one stable place to look while
+            // the finger does the scrubbing.
+            previewIcon?.let { icon ->
+                Image(
+                    bitmap = icon,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    colorFilter = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }),
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 40.dp)
+                            .alpha(bubbleAlpha)
+                            .size(52.dp)
+                            .clip(CircleShape),
+                )
             }
         }
 
+        // Top/bottom breathing room: padding sits inside the measured+gesture
+        // area (before onSizeChanged/pointerInput), so "A" at the rail's visual
+        // top and the drag math agree on where the rail actually starts.
         val railModifier =
             Modifier
                 .align(Alignment.CenterEnd)
                 .fillMaxHeight()
                 .width(30.dp)
+                .padding(vertical = 36.dp)
                 .onSizeChanged { railHeight = it.height }
                 .pointerInput(apps) {
                     detectVerticalDragGestures(
                         onDragStart = { offset ->
+                            // The search field's IME would otherwise sit on top
+                            // of (and cover) the rows the rail is jumping to —
+                            // this is the rail's own gesture, not a drag on the
+                            // list itself, so the list's own dismiss-on-drag
+                            // (DrawerPage's DragInteraction.Start collector)
+                            // never sees it.
+                            focusManager.clearFocus()
                             isDragging = true
                             updateFromY(offset.y)
                         },
@@ -1463,96 +1524,80 @@ private fun AlphabetScroller(
                         },
                     )
                 }.pointerInput(apps) {
-                    detectTapGestures { offset -> updateFromY(offset.y) }
+                    detectTapGestures { offset ->
+                        focusManager.clearFocus()
+                        updateFromY(offset.y)
+                    }
                 }.semantics {
                     contentDescription = "fast scroll, A to Z"
                     currentSection?.let { stateDescription = "section $it" }
                 }
 
-        when (style) {
-            FastScrollStyle.INTERACTIVE ->
-                Column(
-                    railModifier,
-                    verticalArrangement = Arrangement.SpaceBetween,
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    letters.forEach { c ->
-                        val active = if (isDragging) c == activeLetter else c == currentSection
-                        val enabled = indexForLetter.containsKey(c)
-                        val targetColor =
-                            when {
-                                active -> palette.accent
-                                enabled -> palette.muted
-                                else -> palette.muted.copy(alpha = 0.35f)
-                            }
-                        val color by animateColorAsState(targetColor, label = "letterColor")
-                        val scale by animateFloatAsState(if (active) 1.5f else 1f, label = "letterScale")
-                        BasicText(
-                            text = c.toString(),
-                            modifier =
-                                Modifier.graphicsLayer {
-                                    scaleX = scale
-                                    scaleY = scale
-                                },
-                            style =
-                                TextStyle(
-                                    color = color,
-                                    fontSize = 10.sp,
-                                    fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
-                                    textAlign = TextAlign.Center,
-                                ),
-                        )
-                    }
-                }
+        // Icon-preview mode only: a fisheye arc so the touched letter and its
+        // neighbors slide left, out from under the finger — the finger covers
+        // the rail's right edge, so the letters need somewhere else to be
+        // seen. Falloff is read *inside* graphicsLayer (deferred to the draw
+        // phase), so dragging animates smoothly without recomposing all 27
+        // letters on every pixel of movement.
+        val arcInfluencePx = with(density) { 250.dp.toPx() }
+        val arcMaxPx = with(density) { 115.dp.toPx() }
+        // A symmetric ease-in-out bezier, not the page-transition "emphasized"
+        // curve — that one is one-directional (slow start, hard stop), which
+        // distorts a bulge that needs to rise and fall the same way on both
+        // sides of the touch point. (x2, y2) mirrors (x1, y1) through
+        // (0.5, 0.5), which is what keeps the two sides symmetric.
+        val arcEasing = remember { CubicBezierEasing(0.42f, 0f, 0.58f, 1f) }
 
-            FastScrollStyle.SIMPLE ->
-                Box(railModifier) {
-                    // A hairline with a small handle; the letter whispers beside it
-                    // only while dragging. Zero visual noise otherwise.
-                    Box(
-                        Modifier
-                            .align(Alignment.CenterEnd)
-                            .padding(end = 13.dp)
-                            .fillMaxHeight()
-                            .width(2.dp)
-                            .background(palette.muted.copy(alpha = 0.25f)),
-                    )
-                    val handleFrac =
-                        when {
-                            isDragging && railHeight > 0 -> pointerY / railHeight
-                            else -> {
-                                val section = currentSection
-                                if (section != null) letters.indexOf(section).toFloat() / letters.size else 0f
-                            }
-                        }
-                    Box(
-                        Modifier
-                            .align(Alignment.TopEnd)
-                            .offset {
-                                IntOffset(
-                                    x = with(density) { (-9).dp.roundToPx() },
-                                    y = ((railHeight - with(density) { 14.dp.roundToPx() }) * handleFrac.coerceIn(0f, 1f)).roundToInt(),
-                                )
-                            }.size(width = 10.dp, height = 14.dp)
-                            .clip(RoundedCornerShape(3.dp))
-                            .background(if (isDragging) palette.accent else palette.muted.copy(alpha = 0.6f)),
-                    )
-                    if (isDragging && activeLetter != null) {
-                        BasicText(
-                            text = activeLetter.toString(),
-                            modifier =
-                                Modifier
-                                    .align(Alignment.TopEnd)
-                                    .offset {
-                                        IntOffset(
-                                            x = with(density) { (-34).dp.roundToPx() },
-                                            y = (pointerY - with(density) { 10.dp.toPx() }).roundToInt().coerceAtLeast(0),
-                                        )
-                                    },
-                            style = TextStyle(color = palette.muted, fontSize = 15.sp, fontWeight = FontWeight.Medium, fontFamily = ff),
-                        )
+        // Both styles show the same always-visible A–Z column; they only
+        // differ in what appears next to the finger while dragging (the
+        // icon-forward bubble for INTERACTIVE, a bare letter badge for
+        // SIMPLE) and, in INTERACTIVE, the arc above.
+        Column(
+            railModifier,
+            verticalArrangement = Arrangement.SpaceBetween,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            letters.forEachIndexed { i, c ->
+                val active = if (isDragging) c == activeLetter else c == currentSection
+                val enabled = indexForLetter.containsKey(c)
+                val targetColor =
+                    when {
+                        active -> palette.accent
+                        enabled -> palette.muted
+                        else -> palette.muted.copy(alpha = 0.35f)
                     }
-                }
+                val color by animateColorAsState(targetColor, label = "letterColor")
+                val scale by animateFloatAsState(if (active) 1.5f else 1f, label = "letterScale")
+                BasicText(
+                    text = c.toString(),
+                    modifier =
+                        Modifier
+                            // The letter's real rendered center, measured after
+                            // layout — not a formula estimate — so the arc's
+                            // falloff and updateFromY's nearest-letter search
+                            // agree on the exact same position this text
+                            // actually occupies on screen.
+                            .onGloballyPositioned { coords ->
+                                letterYs[i] = coords.positionInParent().y + coords.size.height / 2f
+                            }.graphicsLayer {
+                                scaleX = scale
+                                scaleY = scale
+                                if (style == FastScrollStyle.INTERACTIVE && isDragging) {
+                                    val letterY = letterYs.getOrElse(i) { 0f }
+                                    val dist = kotlin.math.abs(letterY - pointerY)
+                                    val t = (1f - (dist / arcInfluencePx).coerceIn(0f, 1f))
+                                    translationX = -arcEasing.transform(t) * arcMaxPx
+                                }
+                            },
+                    style =
+                        TextStyle(
+                            color = color,
+                            fontSize = 10.sp,
+                            fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+                            textAlign = TextAlign.Center,
+                        ),
+                )
+            }
         }
     }
 }
@@ -1576,8 +1621,9 @@ private fun Scrim(
     )
 }
 
+/** `internal` for MarketingPreviewActivity — see the note on DrawerPage above. */
 @Composable
-private fun AppActionMenu(
+internal fun AppActionMenu(
     app: AppEntry,
     isFavorite: Boolean,
     canAdd: Boolean,
