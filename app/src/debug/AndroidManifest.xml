@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!-- Debug-only: renders a chosen real screen full-bleed (intent extra
+             "screen" = sheet | drawer | appearance | ai) for marketing
+             screenshots. Never compiled into a release build. -->
+        <activity
+            android:name=".marketing.MarketingPreviewActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Foyer" />
+    </application>
+
+</manifest>

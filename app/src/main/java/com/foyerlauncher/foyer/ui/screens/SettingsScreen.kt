@@ -306,8 +306,14 @@ private fun RootPage(
     }
 }
 
+/**
+ * `internal`, not `private`: app/src/debug/.../MarketingPreviewActivity calls
+ * this (and AssistantPage below) directly to screenshot settings pages in
+ * isolation. A signature change here must also update that call site — easy
+ * to forget since it's not reachable from any production code path.
+ */
 @Composable
-private fun AppearancePage(
+internal fun AppearancePage(
     store: LauncherStore,
     onBack: () -> Unit,
 ) {
@@ -493,8 +499,9 @@ private fun GesturesPage(
     }
 }
 
+/** `internal` for MarketingPreviewActivity — see the note on AppearancePage above. */
 @Composable
-private fun AssistantPage(
+internal fun AssistantPage(
     store: LauncherStore,
     onShowGuide: () -> Unit,
     onBack: () -> Unit,
@@ -854,7 +861,7 @@ private fun LicensesPage(onBack: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun PageScaffold(
+internal fun PageScaffold(
     title: String,
     onBack: () -> Unit,
     subtitle: String? = null,
@@ -898,13 +905,13 @@ private fun PageScaffold(
 
 /** M3 Expressive grouped list: rows in one visual card, 2dp seams between them. */
 @Composable
-private fun SettingsGroup(vararg rows: @Composable (shape: Shape) -> Unit) {
+internal fun SettingsGroup(vararg rows: @Composable (shape: Shape) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         rows.forEachIndexed { index, row -> row(groupShape(index, rows.size)) }
     }
 }
 
-private fun groupShape(
+internal fun groupShape(
     index: Int,
     count: Int,
 ): Shape {
@@ -919,7 +926,7 @@ private fun groupShape(
 }
 
 @Composable
-private fun GroupSurface(
+internal fun GroupSurface(
     shape: Shape,
     content: @Composable () -> Unit,
 ) {
@@ -932,7 +939,7 @@ private fun GroupSurface(
 }
 
 @Composable
-private fun RowSurface(
+internal fun RowSurface(
     shape: Shape,
     onClick: (() -> Unit)?,
     content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit,
@@ -958,7 +965,7 @@ private fun RowSurface(
 }
 
 @Composable
-private fun NavRow(
+internal fun NavRow(
     shape: Shape,
     title: String,
     subtitle: String? = null,
@@ -1055,7 +1062,7 @@ private fun RadioRow(
 }
 
 @Composable
-private fun <T> Segmented(
+internal fun <T> Segmented(
     options: List<T>,
     selected: T,
     label: (T) -> String,
@@ -1073,7 +1080,7 @@ private fun <T> Segmented(
 }
 
 @Composable
-private fun Swatch(
+internal fun Swatch(
     color: androidx.compose.ui.graphics.Color,
     selected: Boolean,
     description: String,
@@ -1107,7 +1114,7 @@ private fun Swatch(
 }
 
 @Composable
-private fun GroupLabel(text: String) {
+internal fun GroupLabel(text: String) {
     Text(
         text,
         style = MaterialTheme.typography.labelLarge,
@@ -1117,7 +1124,7 @@ private fun GroupLabel(text: String) {
 }
 
 @Composable
-private fun Caption(text: String) {
+internal fun Caption(text: String) {
     Text(
         text,
         style = MaterialTheme.typography.bodySmall,
