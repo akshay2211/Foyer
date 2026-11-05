@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.pm.LauncherApps
 import android.os.Build
 import android.os.Process
+import android.os.UserHandle
 import android.os.UserManager
 
 /**
@@ -41,6 +42,13 @@ fun loadLaunchableApps(context: Context): List<AppEntry> {
     return um.userProfiles
         .flatMap { user ->
             val serial = if (user == me) 0L else um.getSerialNumberForUser(user)
+            // -1 is Android's documented sentinel for "no such user" — a
+            // profile mid-removal can still show up in userProfiles for one
+            // query while serial lookups already return this. Treat it like
+            // a locked/quiet profile (no apps this pass) rather than caching
+            // an AppEntry keyed on an unresolvable serial, which favorites/
+            // aliases/icon lookups would never be able to match again.
+            if (serial < 0L) return@flatMap emptyList()
             la.getActivityList(null, user).mapNotNull { ai ->
                 if (ai.applicationInfo.packageName == self) return@mapNotNull null
                 val label = ai.label.toString().trim()
@@ -54,5 +62,33 @@ fun loadLaunchableApps(context: Context): List<AppEntry> {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) it.category = ai.applicationInfo.category
                 }
             }
-        }.sortedBy { it.label.lowercase() }
+        }.sortedWith(compareBy({ if (sectionOf(it.label) == '#') 1 else 0 }, { it.label.lowercase() }))
 }
+
+/**
+ * 'A'–'Z' if [label] starts with a letter, otherwise '#' — the drawer A–Z
+ * rail's overflow bucket for digits, symbols, and non-Latin scripts. The
+ * single source of truth for this classification: the sort order above and
+ * the rail's own section lookups (LauncherScreen.kt) both call this, so they
+ * can't silently drift apart the way two independently-written copies of the
+ * same rule eventually do. The sort puts '#' labels *after* Z on purpose —
+ * plain ASCII order would put digits before letters, scattering them at the
+ * list's start while the rail shows '#' last, so dragging to '#' would jump
+ * to the top instead of wherever those apps actually are.
+ */
+fun sectionOf(label: String): Char {
+    val c = label.firstOrNull()?.uppercaseChar() ?: return '#'
+    return if (c in 'A'..'Z') c else '#'
+}
+
+/**
+ * Resolves a stored [AppEntry.userSerial] back to the real profile it names
+ * — null if that profile no longer exists (removed, or mid-removal). Shared
+ * by every call site that needs a [UserHandle] for a [LauncherApps] call
+ * (launching an app, loading its icon): each previously reimplemented this
+ * same "0L means the personal profile, otherwise look up the serial" check.
+ */
+fun resolveUserHandle(
+    um: UserManager,
+    userSerial: Long,
+): UserHandle? = if (userSerial == 0L) Process.myUserHandle() else um.getUserForSerialNumber(userSerial)

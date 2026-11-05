@@ -768,7 +768,7 @@ fun launchApp(
     if (app.userSerial != 0L) {
         runCatching {
             val um = context.getSystemService(Context.USER_SERVICE) as UserManager
-            val user = um.getUserForSerialNumber(app.userSerial) ?: return
+            val user = resolveUserHandle(um, app.userSerial) ?: return
             val la = context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as LauncherApps
             la.startMainActivity(ComponentName(app.packageName, app.activityName), user, null, null)
         }
