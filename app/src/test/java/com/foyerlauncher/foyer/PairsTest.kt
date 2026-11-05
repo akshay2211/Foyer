@@ -114,4 +114,21 @@ class PairsTest {
         assertEquals("Spotify", (plan[0] as AiIntent.OpenApp).app.label)
         assertEquals("jazz", (plan[1] as AiIntent.PlayMedia).query)
     }
+
+    @Test fun scoped_message_dedupes_an_open_pair_regardless_of_its_casing() {
+        // scoped.label.lowercase() is always lowercase ("whatsapp"); the model
+        // never sees the app name (it's stripped from its input text), so if it
+        // still hallucinates an "open" pair it may use any casing ("WhatsApp").
+        // That must still collapse into one Message, not survive as a duplicate.
+        val whatsapp = app("WhatsApp")
+        val plan =
+            planFromPairs(
+                listOf(ActionPair("open", "WhatsApp"), ActionPair("message", "mummy", "hello")),
+                index,
+                whatsapp,
+            )
+        val msg = plan.single() as AiIntent.Message
+        assertEquals("mummy", msg.to)
+        assertEquals("hello", msg.text)
+    }
 }

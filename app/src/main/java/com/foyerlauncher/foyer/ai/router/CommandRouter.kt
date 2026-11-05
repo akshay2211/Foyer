@@ -500,6 +500,55 @@ private fun startNewTask(
 }
 
 /**
+ * Resolves [who] against contacts and branches three ways — shared by
+ * [buildCallStep] and [buildMessageStep], which differ only in what each
+ * branch actually does (dial vs. compose) and how many digits count as
+ * "this is already a number, skip contact lookup entirely" ([minDigits] — a
+ * bare number is more likely typed/spoken for a call than for a message, so
+ * the call path accepts a shorter run before trusting it's a real number).
+ */
+private fun resolveContactStep(
+    context: Context,
+    who: String,
+    minDigits: Int,
+    bareNumber: (digits: String) -> Step,
+    noMatch: () -> Step,
+    oneConfidentMatch: (ContactMatch) -> Step,
+    disambiguate: (List<ContactMatch>) -> Step,
+): Step {
+    val digits = who.filter { it.isDigit() || it == '+' }
+    if (digits.count { it.isDigit() } >= minDigits) return bareNumber(digits)
+
+    val matches = resolveContacts(context, who)
+    return when {
+        matches.isEmpty() -> noMatch()
+        matches.size == 1 && matches[0].confident -> oneConfidentMatch(matches[0])
+        else -> disambiguate(matches)
+    }
+}
+
+/** A "who did you mean?" disambiguation step shared by call and message. */
+private fun disambiguationStep(
+    subtitle: String,
+    matches: List<ContactMatch>,
+    optionTitle: (ContactMatch) -> String,
+    onPick: (ContactMatch) -> Unit,
+): Step {
+    val options =
+        matches.take(4).map { c ->
+            Command(optionTitle(c), c.number, CommandKind.ACTION) { onPick(c) }
+        }
+    return Step(
+        title = "who did you mean?",
+        subtitle = subtitle,
+        kind = CommandKind.ACTION,
+        leaving = true,
+        confirm = true,
+        options = options,
+    ) { /* disambiguation only — the chosen option runs */ }
+}
+
+/**
  * Builds the call step, resolving a contact name the same way messaging does:
  *  - a bare number goes straight to the dialer (prefilled; the user taps call),
  *  - a name resolves to ranked candidates — one confident match dials it, an
@@ -509,43 +558,28 @@ private fun startNewTask(
 private fun buildCallStep(
     context: Context,
     who: String,
-): Step {
-    val digits = who.filter { it.isDigit() || it == '+' }
-    if (digits.count { it.isDigit() } >= 3) {
-        return action("call $who", "dialer", leaving = true) { startNewTask(context, dialIntent(digits)) }
-    }
-
-    val matches = resolveContacts(context, who)
-    return when {
-        // No permission or no address book — open the dialer to find them.
-        matches.isEmpty() ->
+): Step =
+    resolveContactStep(
+        context,
+        who,
+        minDigits = 3,
+        bareNumber = { digits -> action("call $who", "dialer", leaving = true) { startNewTask(context, dialIntent(digits)) } },
+        noMatch = {
             action("call $who", "find them in the dialer", leaving = true) {
                 startNewTask(context, Intent(Intent.ACTION_DIAL))
             }
-
-        matches.size == 1 && matches[0].confident ->
-            action("call ${matches[0].name}", matches[0].number, leaving = true) {
-                startNewTask(context, dialIntent(matches[0].number))
-            }
-
-        else -> {
-            val options =
-                matches.take(4).map { c ->
-                    Command("call ${c.name}", c.number, CommandKind.ACTION) {
-                        startNewTask(context, dialIntent(c.number))
-                    }
-                }
-            Step(
-                title = "who did you mean?",
-                subtitle = "call $who",
-                kind = CommandKind.ACTION,
-                leaving = true,
-                confirm = true,
-                options = options,
-            ) { /* disambiguation only — the chosen option runs */ }
-        }
-    }
-}
+        },
+        oneConfidentMatch = { m ->
+            action("call ${m.name}", m.number, leaving = true) { startNewTask(context, dialIntent(m.number)) }
+        },
+        disambiguate = { matches ->
+            disambiguationStep(
+                "call $who",
+                matches,
+                optionTitle = { c -> "call ${c.name}" },
+            ) { c -> startNewTask(context, dialIntent(c.number)) }
+        },
+    )
 
 private fun dialIntent(number: String): Intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(number)))
 
@@ -562,43 +596,24 @@ private fun buildMessageStep(
     app: String,
     to: String,
     text: String,
-): Step {
-    val digits = to.filter { it.isDigit() || it == '+' }
-    if (digits.count { it.isDigit() } >= 5) {
-        return action("message $to", "“$text”", leaving = true) { composeMessage(context, app, digits, text) }
-    }
-
-    val matches = resolveContacts(context, to)
-    return when {
-        // No permission or no address book — hand off to the app's picker.
-        matches.isEmpty() ->
-            action("message $to", "“$text”", leaving = true) { composeMessage(context, app, null, text) }
-
-        // Exactly one strong match — safe to send straight through.
-        matches.size == 1 && matches[0].confident ->
-            action("message ${matches[0].name}", "“$text”", leaving = true) {
-                composeMessage(context, app, matches[0].number, text)
-            }
-
-        // Ambiguous — ask which person.
-        else -> {
-            val options =
-                matches.take(4).map { c ->
-                    Command("message ${c.name}", c.number, CommandKind.ACTION) {
-                        composeMessage(context, app, c.number, text)
-                    }
-                }
-            Step(
-                title = "who did you mean?",
-                subtitle = "“$text”",
-                kind = CommandKind.ACTION,
-                leaving = true,
-                confirm = true,
-                options = options,
-            ) { /* disambiguation only — the chosen option runs */ }
-        }
-    }
-}
+): Step =
+    resolveContactStep(
+        context,
+        to,
+        minDigits = 5,
+        bareNumber = { digits -> action("message $to", "“$text”", leaving = true) { composeMessage(context, app, digits, text) } },
+        noMatch = { action("message $to", "“$text”", leaving = true) { composeMessage(context, app, null, text) } },
+        oneConfidentMatch = { m ->
+            action("message ${m.name}", "“$text”", leaving = true) { composeMessage(context, app, m.number, text) }
+        },
+        disambiguate = { matches ->
+            disambiguationStep(
+                "“$text”",
+                matches,
+                optionTitle = { c -> "message ${c.name}" },
+            ) { c -> composeMessage(context, app, c.number, text) }
+        },
+    )
 
 /**
  * Opens a chat with the given [number] (or the app's picker when null) with

@@ -20,8 +20,23 @@ enum class ChatTemplate {
     ;
 
     companion object {
-        /** Detects the template from the model's download URL; Gemma is the default. */
-        fun fromUrl(url: String): ChatTemplate = if (url.contains("qwen", ignoreCase = true)) CHATML else GEMMA
+        /**
+         * Detects the template from the model's download URL. Falls back to
+         * Gemma framing for anything that names neither family — logged,
+         * since a wrong guess here reproduces the exact "model treats the
+         * prompt's own examples as the live query" failure mode a correct
+         * template exists to prevent, and Foyer is bring-your-own-model: any
+         * URL the user pastes is a candidate, not just Gemma/Qwen's own.
+         */
+        fun fromUrl(url: String): ChatTemplate =
+            when {
+                url.contains("qwen", ignoreCase = true) -> CHATML
+                url.contains("gemma", ignoreCase = true) -> GEMMA
+                else -> {
+                    Log.w(AI_TAG, "llm: model URL names neither Gemma nor Qwen ($url) — defaulting to Gemma framing, which may be wrong")
+                    GEMMA
+                }
+            }
     }
 }
 

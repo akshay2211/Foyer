@@ -98,16 +98,25 @@ fun planFromPairs(
     scoped: AppEntry? = null,
 ): Plan {
     if (pairs.isEmpty()) return emptyList()
+    // Always lowercase: `scoped` is a resolved AppEntry whose label the model
+    // never sees (it's stripped from the model's input text), so a model
+    // emitting its own "open" pair for the same app has no reason to match
+    // scoped.label's exact casing — compare both sides the same way or the
+    // dedup below silently fails and the open step survives as a duplicate.
     val appScope =
         scoped?.label?.lowercase()
-            ?: pairs.firstOrNull { it.action == "open" || it.action == "open_app" }?.value.orEmpty()
+            ?: pairs
+                .firstOrNull { it.action == "open" || it.action == "open_app" }
+                ?.value
+                ?.lowercase()
+                .orEmpty()
     val hasComms = pairs.any { it.action == "message" || it.action == "email" }
     val hasCall = pairs.any { it.action == "call" }
     val plan = mutableListOf<AiIntent>()
     for (p in pairs) {
         when (p.action) {
             "open", "open_app" -> {
-                if (hasComms && p.value == appScope) continue // messaging opens the app itself
+                if (hasComms && p.value.lowercase() == appScope) continue // messaging opens the app itself
                 if (hasCall && p.value.lowercase() in PHONE_APP_WORDS) continue // calling opens the dialer itself
                 if (p.value.isBlank()) return emptyList()
                 val r = index.lookup(p.value)
