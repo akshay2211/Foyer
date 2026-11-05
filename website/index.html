@@ -13,6 +13,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+  <script>document.documentElement.classList.add("js");</script>
 </head>
 <body>
 
@@ -31,16 +32,16 @@
 <section class="hero" id="top">
   <div class="hero-grid">
     <div class="hero-copy">
-      <h1>a quiet home for your phone</h1>
-      <p class="hero-sub">
+      <h1 id="hero-head">a quiet home for your phone</h1>
+      <p class="hero-sub rise">
         foyer replaces your Android home screen with a calm, plain-text list
         of your apps — and a private assistant you simply tell what to do.
       </p>
-      <div class="hero-actions">
+      <div class="hero-actions rise">
         <a class="button" href="https://github.com/akshay2211/Foyer">get foyer — it's free</a>
         <a class="ghost" href="#show">see how it works</a>
       </div>
-      <p class="hero-fine">free · open source · no ads · nothing leaves your phone</p>
+      <p class="hero-fine rise">free · open source · no ads · nothing leaves your phone</p>
     </div>
     <div class="hero-phone rise in">
       <div class="phone">
@@ -87,72 +88,78 @@
   </div>
 </section>
 
-<!-- features: small proof beside text -->
-<section id="features" class="features">
-  <h2>less phone, on purpose</h2>
+<!-- features: a pinned reel — scroll drives the cards sideways -->
+<section id="features" class="reel">
+  <div class="reel-pin">
+    <h2 class="rise">less phone, on purpose</h2>
 
-  <div class="module rise">
-    <div class="panel phone"><img src="assets/shot-home.png" alt="Foyer's home screen: the analogue clock, the date, and today's screen time in plain text" width="280" height="623" loading="lazy"></div>
-    <div class="module-text">
-      <h3>your screen time, under the clock</h3>
-      <p>The first thing the home screen tells you is how long you've been on the phone today. Not an app you open — just quietly there.</p>
-    </div>
-  </div>
+    <div class="reel-track" id="reel-track">
+      <article class="card">
+        <div class="panel phone"><img src="assets/shot-home.png" alt="Foyer's home screen: the analogue clock, the date, and today's screen time in plain text" width="280" height="623" loading="lazy"></div>
+        <div class="card-text">
+          <h3>your screen time, under the clock</h3>
+          <p>The first thing the home screen tells you is how long you've been on the phone today. Not an app you open — just quietly there.</p>
+        </div>
+      </article>
 
-  <div class="module rise">
-    <div class="panel phone"><img src="assets/shot-sheet.png" alt="The long-press sheet for an app: remove from home, hide, mark distracting, daily limit" width="280" height="623" loading="lazy"></div>
-    <div class="module-text">
-      <h3>limits that ask, not forbid</h3>
-      <p>Give instagram twenty minutes a day. When they're spent, foyer pauses the launch and asks. One conscious tap buys five more.</p>
-      <p>A notification nudges you when the budget runs out mid-scroll.</p>
-    </div>
-  </div>
+      <article class="card">
+        <div class="panel phone"><img src="assets/shot-sheet.png" alt="The long-press sheet for an app: remove from home, hide, mark distracting, daily limit" width="280" height="623" loading="lazy"></div>
+        <div class="card-text">
+          <h3>limits that ask, not forbid</h3>
+          <p>Give instagram twenty minutes a day. When they're spent, foyer pauses the launch and asks. One conscious tap buys five more.</p>
+          <p>A notification nudges you when the budget runs out mid-scroll.</p>
+        </div>
+      </article>
 
-  <div class="module rise">
-    <div class="panel phone"><img src="assets/shot-drawer.png" alt="The app drawer: a plain text list with an A to Z rail on the right edge" width="280" height="623" loading="lazy"></div>
-    <div class="module-text">
-      <h3>every app is one swipe and a letter away</h3>
-      <p>The drawer is a text list with an A–Z rail. Search opens the keyboard by itself; aliases you teach ("insta") rank first.</p>
-    </div>
-  </div>
+      <article class="card">
+        <div class="panel phone"><img src="assets/shot-drawer.png" alt="The app drawer: a plain text list with an A to Z rail on the right edge" width="280" height="623" loading="lazy"></div>
+        <div class="card-text">
+          <h3>every app is one swipe and a letter away</h3>
+          <p>The drawer is a text list with an A–Z rail. Search opens the keyboard by itself; aliases you teach ("insta") rank first.</p>
+        </div>
+      </article>
 
-  <div class="module rise">
-    <div class="panel phone"><img src="assets/shot-appearance.png" alt="Appearance settings: theme, accent swatches, fonts and curated background tones" width="280" height="623" loading="lazy"></div>
-    <div class="module-text">
-      <h3>curated, not customised to death</h3>
-      <p>Three fonts, four accents, five background tones, true black to cream. Every pairing keeps its contrast; there is no wallpaper circus.</p>
-    </div>
-  </div>
+      <article class="card">
+        <div class="panel phone"><img src="assets/shot-appearance.png" alt="Appearance settings: theme, accent swatches, fonts and curated background tones" width="280" height="623" loading="lazy"></div>
+        <div class="card-text">
+          <h3>curated, not customised to death</h3>
+          <p>Three fonts, four accents, five background tones, true black to cream. Every pairing keeps its contrast; there is no wallpaper circus.</p>
+        </div>
+      </article>
 
-  <div class="module rise">
-    <div class="panel phone"><img src="assets/shot-ai.png" alt="The AI settings page: bring your own model, with one-tap Qwen and Gemma suggestions" width="280" height="623" loading="lazy"></div>
-    <div class="module-text">
-      <h3>bring your own brain</h3>
-      <p>Foyer ships no model. Paste a MediaPipe .task link or tap a suggestion. Qwen 2.5 downloads with no account at all, and runs locally, forever.</p>
+      <article class="card">
+        <div class="panel phone"><img src="assets/shot-ai.png" alt="The AI settings page: bring your own model, with one-tap Qwen and Gemma suggestions" width="280" height="623" loading="lazy"></div>
+        <div class="card-text">
+          <h3>bring your own brain</h3>
+          <p>Foyer ships no model. Paste a MediaPipe .task link or tap a suggestion. Qwen 2.5 downloads with no account at all, and runs locally, forever.</p>
+        </div>
+      </article>
     </div>
+
+    <div class="reel-progress" aria-hidden="true"><span id="reel-bar"></span></div>
   </div>
 </section>
 
 <!-- the letter -->
 <section id="letter" class="letter">
-  <div class="letter-inner rise">
-    <img src="assets/icon.png" alt="the foyer mark" width="44" height="44">
-    <p>I built foyer because my home screen had become a casino floor: forty coloured icons, each engineered to be tapped. I wanted the room you pass through on the way out, not the room you get stuck in.</p>
-    <p>Then the assistant question came up, and every answer on the market was a microphone wired to someone's server. That felt wrong for the most personal screen you own. So foyer's assistant is a small open model that <mark>lives entirely on your phone</mark> — you download it once, from whoever you trust, and nothing you say ever leaves the device.</p>
-    <p>The whole launcher is GPL-3.0 on GitHub. Read every line; that's the point.</p>
-    <p class="sign">akshay sharma</p>
-    <p class="role">maker of foyer</p>
+  <div class="letter-inner">
+    <img class="rise" src="assets/icon.png" alt="the foyer mark" width="44" height="44">
+    <p class="rise">I built foyer because my home screen had become a casino floor: forty coloured icons, each engineered to be tapped. I wanted the room you pass through on the way out, not the room you get stuck in.</p>
+    <p class="rise">Then the assistant question came up, and every answer on the market was a microphone wired to someone's server. That felt wrong for the most personal screen you own. So foyer's assistant is a small open model that <mark>lives entirely on your phone</mark> — you download it once, from whoever you trust, and nothing you say ever leaves the device.</p>
+    <p class="rise">The whole launcher is GPL-3.0 on GitHub. Read every line; that's the point.</p>
+    <p class="sign rise">akshay sharma</p>
+    <p class="role rise">maker of foyer</p>
   </div>
 </section>
 
 <!-- proof: the quiet row -->
-<section class="proof rise">
-  <span class="lead-in">nothing to hide —</span>
-  <b>free forever</b>
-  <b>no ads</b>
-  <b>no account</b>
-  <b>no tracking</b>
-  <b>works in airplane mode</b>
+<section class="proof">
+  <span class="lead-in rise">nothing to hide —</span>
+  <b class="rise">free forever</b>
+  <b class="rise">no ads</b>
+  <b class="rise">no account</b>
+  <b class="rise">no tracking</b>
+  <b class="rise">works in airplane mode</b>
 </section>
 
 
@@ -188,7 +195,7 @@
 
 <!-- cta -->
 <section id="cta" class="cta" aria-label="get foyer">
-  <div class="tile-side frag"><div data-ui class="tile-ui">
+  <div class="tile-side frag rise"><div data-ui class="tile-ui">
     <p class="ui-clock">7:48</p>
     <p class="ui-date">wednesday, oct 29</p>
     <p class="ui-stat">1h 25m today</p>
@@ -199,7 +206,7 @@
     <a class="button" href="https://github.com/akshay2211/Foyer/releases">download the app</a>
     <p class="tile-fine">hosted on github while the play store listing is on its way — same app, straight from the source.</p>
   </div>
-  <div class="tile-side flat"></div>
+  <div class="tile-side flat rise"></div>
 </section>
 
 <footer class="footer">

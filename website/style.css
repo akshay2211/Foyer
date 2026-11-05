@@ -217,26 +217,71 @@ h1, h2, h3 {
 .show-head.in { left: var(--margin); color: var(--ink); }
 .show-head.out { right: var(--margin); color: var(--field-ink); }
 
-/* ---- features: small proof beside text --------------------------------- */
+/* ---- features: the reel — vertical scroll drives the cards sideways ----
+   (the niagara move: a pinned screen, a horizontal track, a scrub bar)
+   without JS or on phones the track is a plain swipeable row */
 
-.features { padding: 180px 0 60px; }
-.features > h2 {
-  font-size: 28px;
-  margin: 0 0 64px 22%;
-  letter-spacing: -0.02em;
-}
-.module {
+.reel { padding: 120px 0 60px; }
+.reel-pin { padding: 0 var(--margin); }
+.reel-pin h2 { font-size: 28px; letter-spacing: -0.02em; margin: 0 0 44px 0; }
+.reel-track {
   display: flex;
-  gap: 28px;
-  align-items: flex-start;
-  max-width: 640px;
-  margin: 0 0 120px 22%;
+  gap: 18px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  padding-bottom: 8px;
 }
-.module .panel { width: 300px; flex: none; }
-.module .module-text { width: 250px; }
-.module h3 { font-size: 18px; font-weight: 500; letter-spacing: -0.01em; line-height: 1.25; margin-bottom: 10px; }
-.module p { font-size: 15px; color: var(--muted); line-height: 1.5; }
-.module p + p { margin-top: 8px; }
+.reel-track::-webkit-scrollbar { display: none; }
+.card {
+  flex: 0 0 min(660px, 86vw);
+  scroll-snap-align: center;
+  display: grid;
+  grid-template-columns: 236px 1fr;
+  gap: 32px;
+  align-items: center;
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 32px 36px;
+}
+.card .panel { width: 236px; }
+.card h3 { font-size: clamp(19px, 1.5vw, 23px); font-weight: 500; letter-spacing: -0.01em; line-height: 1.25; margin-bottom: 12px; }
+.card p { font-size: 15px; color: var(--muted); line-height: 1.5; max-width: 34ch; }
+.card p + p { margin-top: 8px; }
+
+.reel-progress {
+  margin-top: 28px;
+  width: min(320px, 46vw);
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.reel-progress span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+}
+
+/* the pinned mode — switched on by JS only on wide screens with motion allowed */
+.reel-on .reel { padding: 0; }
+.reel-on .reel-pin {
+  position: sticky;
+  top: 0;
+  height: 100svh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.reel-on .reel-track { overflow: visible; scroll-snap-type: none; will-change: transform; }
+.reel-on .card {
+  opacity: 0.4;
+  transform: scale(0.97);
+  transition: opacity 450ms ease, transform 450ms cubic-bezier(0.2, 0, 0, 1);
+}
+.reel-on .card.is-active { opacity: 1; transform: none; }
 
 /* ---- about: the letter -------------------------------------------------- */
 
@@ -293,7 +338,7 @@ h1, h2, h3 {
 
 /* ---- cta: the action tile ------------------------------------------------ */
 
-.cta { display: flex; gap: 12px; align-items: stretch; }
+.cta { display: flex; gap: 12px; align-items: stretch; overflow: clip; }
 .cta > * { border-radius: var(--radius); height: 360px; }
 .tile-side { flex: 1 1 14%; min-width: 0; }
 .tile-side.frag { overflow: hidden; margin-left: -12px; border-top-left-radius: 0; border-bottom-left-radius: 0; background: #000; }
@@ -331,14 +376,24 @@ h1, h2, h3 {
 
 /* ---- motion ----------------------------------------------------------------- */
 
-.rise { opacity: 0; transform: translateY(24px); transition: opacity 600ms ease, transform 600ms cubic-bezier(0.2, 0, 0, 1); }
-.rise.in { opacity: 1; transform: none; }
+/* entrances only hide content once JS is known to be running */
+.js .rise { opacity: 0; transform: translateY(24px); transition: opacity 600ms ease, transform 600ms cubic-bezier(0.2, 0, 0, 1); }
+.js .rise.in { opacity: 1; transform: none; }
+
+/* hero headline words, wrapped by JS */
+.w { display: inline-block; opacity: 0; transform: translateY(0.55em); transition: opacity 500ms ease, transform 500ms cubic-bezier(0.2, 0, 0, 1); }
+.w.in { opacity: 1; transform: none; }
+
+/* scroll-linked layers (JS writes transforms; these just promote them) */
+.hero-phone .phone, .show-head { will-change: transform; }
+
 .drift img { animation: drift 22s ease-in-out infinite alternate; }
 @keyframes drift { from { transform: scale(1); } to { transform: scale(1.07); } }
 
 @media (prefers-reduced-motion: reduce) {
-  .rise { opacity: 1; transform: none; transition: none; }
+  .js .rise, .w { opacity: 1; transform: none; transition: none; }
   .drift img { animation: none; }
+  .reel-on .card { opacity: 1; transform: none; transition: none; }
   html { scroll-behavior: auto; }
 }
 
@@ -359,11 +414,14 @@ h1, h2, h3 {
   .show-head.in { bottom: 16px; }
   .show-head.out { bottom: auto; top: 16px; }
 
-  .features > h2, .module { margin-left: 16px; margin-right: 16px; }
-  .module { flex-direction: column; margin-bottom: 64px; }
-  .module .panel { width: 100%; }
-  .module .module-text { width: auto; }
-  .module h3 { font-size: 17px; }
+  /* the reel stays a thumb-swiped row on phones; no pinning */
+  .reel { padding-top: 96px; }
+  .reel-pin { padding: 0 16px; }
+  .reel-pin h2 { margin-bottom: 28px; }
+  .card { flex: 0 0 82vw; grid-template-columns: 1fr; gap: 20px; padding: 24px 20px; }
+  .card .panel { width: min(220px, 60vw); margin: 0 auto; }
+  .card h3 { font-size: 17px; }
+  .reel-progress { width: 56vw; }
 
   .letter { padding: 96px 24px; }
   .letter img { width: 40px; height: 40px; }

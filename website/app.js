@@ -151,14 +151,123 @@
     });
   }
 
-  /* ---- entrances ----------------------------------------------------------- */
+  /* ---- motion layer ---------------------------------------------------------
+     the transition architecture borrows from niagaralauncher.com:
+     a pinned feature reel scrubbed sideways by vertical scroll, a progress
+     bar, staggered entrances, and scroll-linked hero / headline moves.
+     transform + opacity only; all of it stands down for reduced motion. */
+
+  var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+  /* entrances: stagger siblings inside their own section, not globally */
   var io = new IntersectionObserver(function (entries) {
     entries.forEach(function (e) {
       if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
     });
   }, { threshold: 0.18 });
-  document.querySelectorAll(".rise").forEach(function (el, i) {
-    el.style.transitionDelay = (i % 3) * 70 + "ms";
+  var groupCounts = new Map();
+  document.querySelectorAll(".rise").forEach(function (el) {
+    var group = el.parentElement;
+    var i = groupCounts.get(group) || 0;
+    groupCounts.set(group, i + 1);
+    el.style.transitionDelay = Math.min(i, 6) * 80 + "ms";
     io.observe(el);
   });
+
+  /* hero headline: word-by-word rise on load */
+  var heroHead = document.getElementById("hero-head");
+  if (heroHead && !reduceMotion.matches) {
+    var words = heroHead.textContent.trim().split(/\s+/);
+    heroHead.textContent = "";
+    words.forEach(function (word, i) {
+      var span = document.createElement("span");
+      span.className = "w";
+      span.textContent = word;
+      span.style.transitionDelay = i * 60 + "ms";
+      heroHead.appendChild(span);
+      if (i < words.length - 1) heroHead.appendChild(document.createTextNode(" "));
+    });
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        heroHead.querySelectorAll(".w").forEach(function (w) { w.classList.add("in"); });
+      });
+    });
+  }
+
+  /* the reel: pin the section, let vertical scroll drive the track sideways */
+  var reel = document.querySelector(".reel");
+  var track = document.getElementById("reel-track");
+  var bar = document.getElementById("reel-bar");
+  var cards = track ? [].slice.call(track.querySelectorAll(".card")) : [];
+  var wide = window.matchMedia("(min-width: 761px)");
+  var reelOn = false, travel = 0;
+
+  function reelSetup() {
+    reelOn = wide.matches && !reduceMotion.matches && track && cards.length > 1;
+    document.documentElement.classList.toggle("reel-on", reelOn);
+    if (!reelOn) {
+      if (reel) reel.style.height = "";
+      if (track) track.style.transform = "";
+      cards.forEach(function (c) { c.classList.remove("is-active"); });
+      return;
+    }
+    track.style.transform = "";
+    travel = track.scrollWidth - track.clientWidth;
+    reel.style.height = window.innerHeight + travel + "px";
+    reelFrame();
+  }
+
+  function reelFrame() {
+    if (!reelOn || travel <= 0) return;
+    var p = (window.scrollY - reel.offsetTop) / travel;
+    p = Math.max(0, Math.min(1, p));
+    track.style.transform = "translate3d(" + (-p * travel).toFixed(1) + "px,0,0)";
+    if (bar) bar.style.width = (p * 100).toFixed(2) + "%";
+    var active = Math.round(p * (cards.length - 1));
+    cards.forEach(function (c, i) { c.classList.toggle("is-active", i === active); });
+  }
+
+  /* fallback: when the row is swiped natively, the bar still tracks it */
+  if (track) track.addEventListener("scroll", function () {
+    if (reelOn || !bar) return;
+    var max = track.scrollWidth - track.clientWidth;
+    if (max > 0) bar.style.width = (track.scrollLeft / max * 100).toFixed(2) + "%";
+  }, { passive: true });
+
+  /* scroll-linked layers: hero phone drift, "you say, / it does." slide */
+  var heroPhone = document.querySelector(".hero-phone .phone");
+  var show = document.querySelector(".show");
+  var headIn = document.querySelector(".show-head.in");
+  var headOut = document.querySelector(".show-head.out");
+
+  function scrollFrame() {
+    if (reduceMotion.matches) return;
+    reelFrame();
+    if (heroPhone && window.scrollY < window.innerHeight * 1.5) {
+      heroPhone.style.transform = "translateY(" + (window.scrollY * -0.06).toFixed(1) + "px)";
+    }
+    if (show && headIn && headOut) {
+      var r = show.getBoundingClientRect();
+      if (r.top < window.innerHeight && r.bottom > 0) {
+        var p = Math.max(0, Math.min(1, (window.innerHeight - r.top) / (window.innerHeight * 0.9)));
+        headIn.style.transform = "translateX(" + ((p - 1) * 70).toFixed(1) + "px)";
+        headOut.style.transform = "translateX(" + ((1 - p) * 70).toFixed(1) + "px)";
+        headIn.style.opacity = headOut.style.opacity = Math.min(1, p * 1.6).toFixed(2);
+      }
+    }
+  }
+
+  var ticking = false;
+  function onScroll() {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(function () { ticking = false; scrollFrame(); });
+  }
+
+  window.addEventListener("scroll", onScroll, { passive: true });
+  window.addEventListener("resize", reelSetup);
+  wide.addEventListener("change", reelSetup);
+  reduceMotion.addEventListener("change", reelSetup);
+  if (document.readyState === "complete") { reelSetup(); scrollFrame(); }
+  else window.addEventListener("load", function () { reelSetup(); scrollFrame(); });
 })();
