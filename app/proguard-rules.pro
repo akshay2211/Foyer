@@ -6,6 +6,10 @@
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
 
+# Collapse every obfuscated class into the root package: shorter names,
+# smaller dex string pool, and nothing about the original structure leaks.
+-repackageclasses
+
 # MediaPipe tasks-genai references compile-time-only annotations (AutoValue,
 # protobuf build annotations) that are absent at runtime by design.
 # Please add these rules to your existing keep rules in order to suppress warnings.

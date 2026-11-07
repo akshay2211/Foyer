@@ -112,10 +112,28 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            // The MediaPipe LLM runtime ships ~103MB of native libs across
+            // four ABIs, but no 32-bit or x86 phone can actually run an
+            // on-device model — release is arm64-only so those devices
+            // never install an app whose core feature can't work. Debug
+            // keeps every ABI for emulators.
+            ndk {
+                abiFilters += "arm64-v8a"
+            }
             if (uploadStoreFile != null) {
                 signingConfig = signingConfigs.getByName("upload")
             }
         }
+    }
+    androidResources {
+        // The UI is English-only; drop the ~85 locales AndroidX libraries carry.
+        localeFilters += "en"
+    }
+    dependenciesInfo {
+        // Play-only encrypted dependency blob; useless to anyone else and
+        // F-Droid strips it — leave it out of both artifact types.
+        includeInApk = false
+        includeInBundle = false
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
