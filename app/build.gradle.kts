@@ -119,6 +119,9 @@ android {
             // keeps every ABI for emulators.
             ndk {
                 abiFilters += "arm64-v8a"
+                // Native symbols ride along inside the bundle so Play can
+                // symbolicate MediaPipe crashes/ANRs instead of raw addresses.
+                debugSymbolLevel = "SYMBOL_TABLE"
             }
             if (uploadStoreFile != null) {
                 signingConfig = signingConfigs.getByName("upload")

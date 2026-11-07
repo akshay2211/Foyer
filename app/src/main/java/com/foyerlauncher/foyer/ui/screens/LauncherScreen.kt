@@ -696,8 +696,6 @@ private fun HomePage(
                     )
                 }
             }
-
-
             // Favorites, sitting high in whatever space the header leaves —
             // a Box + BiasAlignment, not a weighted Spacer either side: a
             // weight(_, fill = false) child only ever gets pushed to the
