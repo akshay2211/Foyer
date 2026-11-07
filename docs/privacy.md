@@ -1,7 +1,10 @@
-# privacy
+# Privacy Policy
 
-Everything stays on the phone. This page is the complete list of what Foyer
-does with data — it's short because there is almost nothing to say.
+Foyer is developed by Redigit. Everything stays on the phone. This page is
+the complete list of what Foyer does with data — it's short because there is
+almost nothing to say.
+
+*Effective date: November 7, 2026.*
 
 ## Network
 
@@ -9,6 +12,9 @@ The **only** network call Foyer ever makes is the model download you
 explicitly start, from the URL you chose. There is no server, no account, no
 analytics, no telemetry, no crash reporting. The assistant works in airplane
 mode.
+
+Foyer collects no personal data and shares none — there is nowhere for it to
+go.
 
 ## Permissions
 
@@ -23,6 +29,9 @@ Every permission is requested at the point of use, with the reason visible:
 | Set alarm | "set an alarm / timer" commands, handed to the system clock app | never — a harmless install-time grant, Android shows no prompt |
 | Accessibility service | the lock-screen gesture **only** — it processes no events and reads no screen content | when you pick the lock gesture |
 
+Voice audio and contact lookups are processed on the device and are never
+transmitted, stored, or shared.
+
 ## What's stored, where
 
 All state lives in local app storage: favorites, hidden apps, aliases,
@@ -32,3 +41,15 @@ system file picker; they never leave the device by Foyer's hand.
 
 Screen-time numbers are read live from Android's own `UsageStatsManager` and
 are not copied or uploaded anywhere.
+
+## Deleting your data
+
+Uninstalling Foyer removes everything, because nothing exists off-device.
+The only exception is a backup file you exported yourself — delete it like
+any other file.
+
+## Changes and contact
+
+If this policy ever changes, the new version appears here and in the app,
+with an updated effective date. Questions about privacy or this policy:
+[akshay@redigit.io](mailto:akshay@redigit.io).
