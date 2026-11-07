@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -34,6 +35,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
@@ -357,6 +359,7 @@ fun VoiceScreen(
                     modifier =
                         Modifier
                             .padding(top = 18.dp)
+                            .clip(RoundedCornerShape(12.dp))
                             .clickable { onClose() }
                             .padding(4.dp),
                     style = TextStyle(color = palette.muted, fontSize = 15.sp, letterSpacing = tracked(1.sp), fontFamily = ff),
@@ -383,6 +386,7 @@ fun VoiceScreen(
                     modifier =
                         Modifier
                             .padding(top = 18.dp)
+                            .clip(RoundedCornerShape(12.dp))
                             .clickable { onClose() }
                             .padding(4.dp),
                     style = TextStyle(color = palette.muted, fontSize = 15.sp, letterSpacing = tracked(1.sp), fontFamily = ff),

@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -26,6 +27,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -126,7 +128,7 @@ fun OnboardingScreen(onDone: () -> Unit) {
         }
         BasicText(
             text = if (becameDefault) "start" else "skip for now",
-            modifier = Modifier.clickable { onDone() }.padding(vertical = 10.dp),
+            modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable { onDone() }.padding(vertical = 10.dp),
             style = TextStyle(color = palette.muted, fontSize = 16.sp, letterSpacing = tracked(1.sp), fontFamily = ff),
         )
     }

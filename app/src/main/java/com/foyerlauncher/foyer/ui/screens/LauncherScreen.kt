@@ -72,6 +72,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
@@ -620,6 +621,7 @@ private fun HomePage(
                             modifier =
                                 Modifier
                                     .padding(top = 56.dp)
+                                    .clip(RoundedCornerShape(12.dp))
                                     .clickable(onClickLabel = "open clock app") { openClockApp(context) },
                         )
                     ClockStyle.LOCK ->
@@ -627,6 +629,7 @@ private fun HomePage(
                             modifier =
                                 Modifier
                                     .padding(top = 56.dp)
+                                    .clip(RoundedCornerShape(12.dp))
                                     .clickable(onClickLabel = "open clock app") { openClockApp(context) },
                         )
                     ClockStyle.ANALOGUE ->
@@ -634,6 +637,7 @@ private fun HomePage(
                             modifier =
                                 Modifier
                                     .padding(top = 56.dp)
+                                    .clip(RoundedCornerShape(12.dp))
                                     .clickable(onClickLabel = "open clock app") { openClockApp(context) },
                         )
                     ClockStyle.MINIMAL ->
@@ -641,6 +645,7 @@ private fun HomePage(
                             modifier =
                                 Modifier
                                     .padding(top = 56.dp)
+                                    .clip(RoundedCornerShape(12.dp))
                                     .clickable(onClickLabel = "open clock app") { openClockApp(context) },
                         )
                     ClockStyle.OFF -> Spacer(Modifier.height(56.dp))
@@ -667,6 +672,7 @@ private fun HomePage(
                     modifier =
                         Modifier
                             .padding(top = 14.dp)
+                            .clip(RoundedCornerShape(12.dp))
                             .clickable(onClickLabel = if (hasUsage) "open screen time summary" else "grant usage access") {
                                 if (hasUsage) onOpenUsage() else UsageTracker.openAccessSettings(context)
                             },
@@ -691,13 +697,15 @@ private fun HomePage(
                 }
             }
 
-            // Favorites, truly centered in whatever space the header leaves —
-            // a Box + CenterStart, not a weighted Spacer either side: a
+
+            // Favorites, sitting high in whatever space the header leaves —
+            // a Box + BiasAlignment, not a weighted Spacer either side: a
             // weight(_, fill = false) child only ever gets pushed to the
             // *start* of its allotted share (Column's default top-alignment
             // within that slot), so unused room inside its own share sits
-            // below it rather than being split between the spacers — two
-            // equal-weight spacers around it does not actually center it.
+            // below it rather than being split between the spacers. The
+            // vertical bias of -0.6 splits the free space 20% above / 80%
+            // below (bias maps -1..1 onto 0..100% of the slack).
             // The bottom padding keeps it clear of "ask me" and the
             // shortcuts; the scroll is a safety net for many favorites on
             // small screens — invisible when everything fits.
@@ -706,7 +714,7 @@ private fun HomePage(
                     .weight(1f)
                     .fillMaxWidth()
                     .padding(end = 24.dp, bottom = 72.dp),
-                contentAlignment = Alignment.CenterStart,
+                contentAlignment = BiasAlignment(horizontalBias = -1f, verticalBias = -0.6f),
             ) {
                 Column(
                     modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -724,6 +732,7 @@ private fun HomePage(
                                 modifier =
                                     Modifier
                                         .defaultMinSize(minHeight = 48.dp)
+                                        .clip(RoundedCornerShape(12.dp))
                                         .combinedClickable(
                                             onClick = { onLaunchFavorite(app) },
                                             onClickLabel = "open",
@@ -809,6 +818,7 @@ private fun EdgeShortcut(
             modifier =
                 modifier
                     .padding(vertical = 24.dp, horizontal = 16.dp)
+                    .clip(CircleShape)
                     .combinedClickable(
                         onClick = { launchApp(context, app) },
                         onLongClick = onLongPress,
@@ -823,6 +833,7 @@ private fun EdgeShortcut(
                 modifier
                     .padding(vertical = 18.dp)
                     .rotate(rotation)
+                    .clip(RoundedCornerShape(12.dp))
                     .combinedClickable(
                         onClick = { app?.let { launchApp(context, it) } ?: onLongPress() },
                         onLongClick = onLongPress,
@@ -1181,6 +1192,7 @@ private fun DrawerPage(
                                             .fillMaxWidth()
                                             .defaultMinSize(minHeight = 48.dp)
                                             .semantics { role = Role.Button }
+                                            .clip(RoundedCornerShape(12.dp))
                                             .clickable { showHidden = !showHidden }
                                             .padding(top = 22.dp, bottom = 8.dp),
                                     style =
@@ -1252,6 +1264,7 @@ private fun AppRow(
             Modifier
                 .fillMaxWidth()
                 .defaultMinSize(minHeight = 48.dp)
+                .clip(RoundedCornerShape(12.dp))
                 .combinedClickable(
                     onClick = { onLaunch(app) },
                     onClickLabel = "open",
@@ -1295,6 +1308,7 @@ private fun FallbackRow(
         modifier =
             Modifier
                 .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
                 .clickable { onClick() }
                 .padding(vertical = 11.dp),
         style = TextStyle(color = palette.muted, fontSize = 18.sp, fontFamily = ff),
@@ -1311,6 +1325,7 @@ private fun CommandRow(
     Column(
         Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
             .clickable {
                 onBeforeRun()
                 command.run()
@@ -1846,6 +1861,7 @@ private fun AppPicker(
                     modifier =
                         Modifier
                             .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
                             .clickable { onPick(app) }
                             .padding(vertical = 12.dp),
                     style = TextStyle(color = palette.text, fontSize = 18.sp, fontFamily = ff),

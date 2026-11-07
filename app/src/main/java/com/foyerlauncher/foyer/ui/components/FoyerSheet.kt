@@ -183,7 +183,8 @@ fun SheetRow(
                 .semantics {
                     role = Role.Button
                     if (active) stateDescription = "on"
-                }.clickable { onClick() }
+                }.clip(RoundedCornerShape(12.dp))
+                .clickable { onClick() }
                 .padding(vertical = 13.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,

@@ -59,6 +59,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -475,6 +476,7 @@ private fun GesturesPage(
                         Row(
                             Modifier
                                 .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
                                 .selectable(selected = action == current, role = androidx.compose.ui.semantics.Role.RadioButton) {
                                     when (which) {
                                         "up" -> store.chooseSwipeUp(action)
@@ -1029,6 +1031,7 @@ private fun SwitchRow(
         modifier =
             Modifier
                 .fillMaxWidth()
+                .clip(shape)
                 .toggleable(value = checked, role = androidx.compose.ui.semantics.Role.Switch) { onToggle() },
     ) {
         Row(
@@ -1065,6 +1068,7 @@ private fun RadioRow(
         modifier =
             Modifier
                 .fillMaxWidth()
+                .clip(shape)
                 .selectable(selected = selected, role = androidx.compose.ui.semantics.Role.RadioButton, onClick = onSelect),
     ) {
         Row(
@@ -1119,7 +1123,8 @@ internal fun Swatch(
             .background(color, CircleShape)
             .semantics {
                 contentDescription = description
-            }.selectable(selected = selected, role = androidx.compose.ui.semantics.Role.RadioButton, onClick = onClick),
+            }.clip(CircleShape)
+            .selectable(selected = selected, role = androidx.compose.ui.semantics.Role.RadioButton, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         if (selected) {
