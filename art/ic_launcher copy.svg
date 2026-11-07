@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="512" height="512">
-  <!-- Foyer launcher icon: deconstructed geometric "F" matching the FOYER wordmark
-       (full-bleed square, Play Store / composite source) -->
-  <rect width="108" height="108" fill="#131313"/>
-  <g stroke="#FFF" stroke-width="4.5" fill="none">
-    <path d="M44.5,33 H71"/>
-    <path d="M66,49 H40.25 V77"/>
-  </g>
-</svg>
