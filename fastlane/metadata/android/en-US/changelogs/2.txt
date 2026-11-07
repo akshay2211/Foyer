@@ -1,0 +1,8 @@
+foyer 1.0 — first release.
+
+• a quiet, text-first home: favorites as plain text, no grid, no widgets
+• ask me — an assistant that runs entirely on your phone; bring your own model, nothing leaves the device
+• screen time under the clock, per-app limits, focus mode
+• app hiding, aliases, gestures, work-profile support, backup you own
+
+less phone, on purpose.
