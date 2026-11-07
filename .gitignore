@@ -9,3 +9,6 @@
 .cxx
 local.properties
 /.taste-skill
+*.jks
+*.keystore
+/app/release/

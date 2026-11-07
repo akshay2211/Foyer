@@ -69,6 +69,21 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // Upload-key credentials live in ~/.gradle/gradle.properties (never in the
+    // repo); release builds fall back to unsigned when they're absent so
+    // contributors and CI can still compile.
+    val uploadStoreFile = providers.gradleProperty("FOYER_UPLOAD_STORE_FILE").orNull
+    if (uploadStoreFile != null) {
+        signingConfigs {
+            create("upload") {
+                storeFile = file(uploadStoreFile)
+                storePassword = providers.gradleProperty("FOYER_UPLOAD_STORE_PASSWORD").get()
+                keyAlias = providers.gradleProperty("FOYER_UPLOAD_KEY_ALIAS").get()
+                keyPassword = providers.gradleProperty("FOYER_UPLOAD_KEY_PASSWORD").get()
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -77,6 +92,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            if (uploadStoreFile != null) {
+                signingConfig = signingConfigs.getByName("upload")
+            }
         }
     }
     compileOptions {
