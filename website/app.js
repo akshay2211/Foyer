@@ -151,6 +151,26 @@
     });
   }
 
+  /* ---- cta tile: the visitor's own clock, same format as the app's digital
+     clock ("h:mm", no leading zero, no am/pm) and home-screen date line
+     ("EEEE, MMM d" lowercase + screen time, one line, middle-dotted). ------- */
+  var tileClock = document.getElementById("tile-clock");
+  var tileDate = document.getElementById("tile-date");
+  if (tileClock && tileDate) {
+    var DAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+    var MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+    var tickTile = function () {
+      var now = new Date();
+      var h = now.getHours() % 12 || 12;
+      var m = now.getMinutes();
+      tileClock.textContent = h + ":" + (m < 10 ? "0" : "") + m;
+      tileDate.textContent =
+        DAYS[now.getDay()] + ", " + MONTHS[now.getMonth()] + " " + now.getDate() + " · 1h 25m today";
+    };
+    tickTile();
+    setInterval(tickTile, 10000);
+  }
+
   /* ---- motion layer ---------------------------------------------------------
      the transition architecture borrows from niagaralauncher.com:
      a pinned feature reel scrubbed sideways by vertical scroll, a progress
