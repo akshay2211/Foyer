@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose.compiler)
@@ -53,6 +55,22 @@ androidComponents {
     }
 }
 
+// ---- Versioning ------------------------------------------------------------
+// app/version.properties is the single source of truth: versionName is a
+// human decision, edited by hand; versionCode holds the code the *next*
+// release will carry and moves forward on its own after every signed release
+// build (see the doLast below), so no Play upload can ever reuse a code.
+val versionPropsFile = layout.projectDirectory.file("version.properties")
+val appVersion =
+    Properties().apply {
+        versionPropsFile.asFile.inputStream().use { load(it) }
+    }
+
+// Upload-key credentials live in ~/.gradle/gradle.properties (never in the
+// repo); release builds fall back to unsigned when they're absent so
+// contributors and CI can still compile.
+val uploadStoreFile = providers.gradleProperty("FOYER_UPLOAD_STORE_FILE").orNull
+
 android {
     namespace = "com.foyerlauncher.foyer"
     compileSdk {
@@ -63,16 +81,12 @@ android {
         applicationId = "com.foyerlauncher.foyer"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = appVersion.getProperty("versionCode").trim().toInt()
+        versionName = appVersion.getProperty("versionName").trim()
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    // Upload-key credentials live in ~/.gradle/gradle.properties (never in the
-    // repo); release builds fall back to unsigned when they're absent so
-    // contributors and CI can still compile.
-    val uploadStoreFile = providers.gradleProperty("FOYER_UPLOAD_STORE_FILE").orNull
     if (uploadStoreFile != null) {
         signingConfigs {
             create("upload") {
@@ -106,6 +120,24 @@ android {
     }
     testOptions {
         unitTests.isReturnDefaultValues = true // android.util.Log no-ops in local tests
+    }
+}
+
+// After a signed release build, advance versionCode in version.properties so
+// the next build can't reuse a code Play has already seen. doLast on the
+// anchor tasks fires only when the whole build succeeded, so failed builds
+// don't burn codes — and without the upload key nothing bumps at all.
+if (uploadStoreFile != null) {
+    tasks.matching { it.name == "bundleRelease" || it.name == "assembleRelease" }.configureEach {
+        // Plain File local: the action below is serialized by the configuration
+        // cache, which forbids references back into the build script.
+        val propsFile = versionPropsFile.asFile
+        doLast {
+            val props = Properties().apply { propsFile.inputStream().use { load(it) } }
+            val built = props.getProperty("versionCode").trim().toInt()
+            propsFile.writeText("versionCode=${built + 1}\nversionName=${props.getProperty("versionName").trim()}\n")
+            logger.lifecycle("Signed release built as versionCode $built; version.properties advanced to ${built + 1}.")
+        }
     }
 }
 
