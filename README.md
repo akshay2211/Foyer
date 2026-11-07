@@ -1,13 +1,18 @@
 <p align="center">
-  <img src="art/ic_launcher_512.png" width="96" alt="Foyer icon"/>
+  <img src="art/readme_banner.png" width="100%" alt="Foyer: the app drawer, home screen, and appearance settings, in matte dark theme"/>
 </p>
-
-<h1 align="center">foyer</h1>
 
 <p align="center">
   a quiet, text-first Android launcher with a fully on-device AI assistant.<br/>
   <a href="https://foyerlauncher.com">foyerlauncher.com</a>
 </p>
+
+<p align="center">
+  <a href="https://github.com/akshay2211/Foyer/actions/workflows/ci.yml"><img src="https://github.com/akshay2211/Foyer/actions/workflows/ci.yml/badge.svg" alt="CI status"/></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue.svg" alt="License: GPL-3.0"/></a>
+  <a href="#building"><img src="https://img.shields.io/badge/min%20sdk-24-success.svg" alt="Min SDK 24"/></a>
+</p>
+<p align="center"><sub>Shown in matte dark — light theme, three other clock styles, and the live demo are at <a href="https://foyerlauncher.com">foyerlauncher.com</a>.</sub></p>
 
 ---
 
@@ -88,6 +93,11 @@ Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the
 ground rules (DCO sign-off required) and
 [docs/DESIGN_GUIDE.md](docs/DESIGN_GUIDE.md) for the design principles that
 pull requests are reviewed against.
+
+## Security
+
+Found a vulnerability? Please don't open a public issue — see
+[SECURITY.md](SECURITY.md) for how to report it privately.
 
 ## License
 
