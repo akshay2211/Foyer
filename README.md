@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="art/readme_banner_value.png" width="100%" alt="Most phones: a busy icon grid with widgets and notification badges. Foyer: a plain text list. Less phone, on purpose."/>
+  <img src="art/feature_graphic_play.png" width="100%" alt="Foyer — less phone, on purpose. A quiet, text-first launcher with an on-device AI assistant, shown on a phone with a plain text app list."/>
 </p>
 
 <p align="center">
