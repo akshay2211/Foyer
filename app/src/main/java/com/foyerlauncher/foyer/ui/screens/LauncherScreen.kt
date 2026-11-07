@@ -840,17 +840,9 @@ private fun EdgeShortcut(
 
 // ---- App drawer page ------------------------------------------------------
 
-/**
- * `internal`, not `private`: app/src/debug/.../MarketingPreviewActivity calls
- * this directly to screenshot the drawer in isolation. Changing this
- * signature (param added/removed/reordered, a callback renamed) must also
- * update that call site — the compiler enforces the types but not the
- * semantics, and the debug file is easy to forget since it's not reachable
- * from any production code path.
- */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-internal fun DrawerPage(
+private fun DrawerPage(
     apps: List<AppEntry>,
     store: LauncherStore,
     onLaunchApp: (AppEntry) -> Unit,
@@ -1621,9 +1613,8 @@ private fun Scrim(
     )
 }
 
-/** `internal` for MarketingPreviewActivity — see the note on DrawerPage above. */
 @Composable
-internal fun AppActionMenu(
+private fun AppActionMenu(
     app: AppEntry,
     isFavorite: Boolean,
     canAdd: Boolean,

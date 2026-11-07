@@ -1,6 +1,7 @@
 package com.foyerlauncher.foyer.ai.engine
 
 import android.content.Context
+import android.net.Uri
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -9,7 +10,7 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 
-/** Where the downloaded model lives. */
+/** Where the active model lives — downloaded or copied in from local storage. */
 fun modelFile(context: Context): File = File(context.filesDir, "llm/model.task")
 
 /**
@@ -101,5 +102,26 @@ object ModelDownloader {
                 Log.d(AI_TAG, "model downloaded: ${dest.path} (${dest.length()} bytes)")
                 Unit
             }.onFailure { Log.w(AI_TAG, "model download failed: ${it.message}", it) }
+        }
+
+    /** Copies a model file the user already has on-device (picked via SAF) into place. */
+    suspend fun installLocal(
+        context: Context,
+        uri: Uri,
+        dest: File,
+    ): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                dest.parentFile?.mkdirs()
+                val part = File(dest.path + ".part")
+                val input =
+                    context.contentResolver.openInputStream(uri)
+                        ?: throw IOException("couldn't open that file")
+                input.use { inStream -> part.outputStream().use { out -> inStream.copyTo(out) } }
+                if (dest.exists()) dest.delete()
+                if (!part.renameTo(dest)) throw IOException("could not finalize model file")
+                Log.d(AI_TAG, "model installed from local file: ${dest.path} (${dest.length()} bytes)")
+                Unit
+            }.onFailure { Log.w(AI_TAG, "local model install failed: ${it.message}", it) }
         }
 }

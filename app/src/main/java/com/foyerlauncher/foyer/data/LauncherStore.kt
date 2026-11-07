@@ -82,6 +82,7 @@ private const val KEY_ACCENT = "accent"
 private const val KEY_FONT = "font"
 private const val KEY_AI = "ai_enabled"
 private const val KEY_MODEL_URL = "model_url"
+private const val KEY_MODEL_LABEL = "model_label"
 private const val KEY_HF_TOKEN = "hf_token"
 
 // Product decision (2026-10-28): Foyer never ships or hosts a model — users
@@ -98,6 +99,15 @@ const val SUGGESTED_QWEN_SMALL_URL =
     "https://huggingface.co/litert-community/Qwen2.5-0.5B-Instruct/resolve/main/Qwen2.5-0.5B-Instruct_multi-prefill-seq_q8_ekv1280.task"
 const val SUGGESTED_QWEN_BALANCED_URL =
     "https://huggingface.co/litert-community/Qwen2.5-1.5B-Instruct/resolve/main/Qwen2.5-1.5B-Instruct_multi-prefill-seq_q8_ekv4096.task"
+
+/** A friendly name for a downloaded model: matches a known suggestion, else its filename. */
+private fun suggestionLabel(url: String): String =
+    when (url) {
+        SUGGESTED_GEMMA_URL -> "gemma 3 · 1b"
+        SUGGESTED_QWEN_SMALL_URL -> "qwen 2.5 · 0.5b · light"
+        SUGGESTED_QWEN_BALANCED_URL -> "qwen 2.5 · 1.5b · balanced"
+        else -> url.substringAfterLast('/').substringBefore('?').ifBlank { "custom model" }
+    }
 
 /**
  * Stable identity for an app across sessions. Personal-profile apps keep the
@@ -250,6 +260,12 @@ class LauncherStore(
     var modelUrl by mutableStateOf(prefs.getString(KEY_MODEL_URL, "") ?: "")
         private set
 
+    // Human-readable name for whichever model is actually installed (download
+    // or local pick) — empty until one is ready. Shown in settings so "which
+    // model is this" never requires remembering a URL.
+    var modelLabel by mutableStateOf(prefs.getString(KEY_MODEL_LABEL, "") ?: "")
+        private set
+
     // Optional — only needed for gated URLs. Empty for a public/self-hosted model.
     var hfToken by mutableStateOf(prefs.getString(KEY_HF_TOKEN, "") ?: "")
         private set
@@ -327,8 +343,46 @@ class LauncherStore(
         isDownloading = false
         result
             .onSuccess {
+                modelLabel = suggestionLabel(modelUrl)
+                prefs.edit { putString(KEY_MODEL_LABEL, modelLabel) }
                 selfTestModel() // prove it answers before calling setup done
             }.onFailure { downloadError = it.message ?: "download failed" }
+    }
+
+    /** Copies in a model the user already has on-device, picked via SAF. */
+    suspend fun installLocalModel(
+        uri: Uri,
+        displayName: String,
+    ) {
+        if (isDownloading) return
+        isDownloading = true
+        downloadError = null
+        selfTestResult = null
+        val result = ModelDownloader.installLocal(context, uri, modelFile(context))
+        isDownloading = false
+        result
+            .onSuccess {
+                modelUrl = ""
+                modelLabel = displayName
+                prefs.edit {
+                    putString(KEY_MODEL_URL, "")
+                    putString(KEY_MODEL_LABEL, displayName)
+                }
+                selfTestModel()
+            }.onFailure { downloadError = it.message ?: "couldn't install that file" }
+    }
+
+    /** Drops the installed model and its saved url/label so setup starts fresh. */
+    fun clearModel() {
+        modelFile(context).delete()
+        modelUrl = ""
+        modelLabel = ""
+        selfTestResult = null
+        downloadError = null
+        prefs.edit {
+            putString(KEY_MODEL_URL, "")
+            putString(KEY_MODEL_LABEL, "")
+        }
     }
 
     private inline fun <reified T : Enum<T>> enumFromPrefs(

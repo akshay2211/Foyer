@@ -1,5 +1,8 @@
 package com.foyerlauncher.foyer.ui.screens
 
+import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -306,14 +309,8 @@ private fun RootPage(
     }
 }
 
-/**
- * `internal`, not `private`: app/src/debug/.../MarketingPreviewActivity calls
- * this (and AssistantPage below) directly to screenshot settings pages in
- * isolation. A signature change here must also update that call site — easy
- * to forget since it's not reachable from any production code path.
- */
 @Composable
-internal fun AppearancePage(
+private fun AppearancePage(
     store: LauncherStore,
     onBack: () -> Unit,
 ) {
@@ -499,14 +496,21 @@ private fun GesturesPage(
     }
 }
 
-/** `internal` for MarketingPreviewActivity — see the note on AppearancePage above. */
 @Composable
-internal fun AssistantPage(
+private fun AssistantPage(
     store: LauncherStore,
     onShowGuide: () -> Unit,
     onBack: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val localModelPicker =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri != null) {
+                val name = queryDisplayName(context, uri) ?: uri.lastPathSegment ?: "local model"
+                scope.launch { store.installLocalModel(uri, name) }
+            }
+        }
 
     PageScaffold(title = "ai assistant", onBack = onBack) {
         SettingsGroup(
@@ -528,7 +532,7 @@ internal fun AssistantPage(
                         { shape ->
                             NavRow(
                                 shape = shape,
-                                title = "model installed",
+                                title = store.modelLabel.ifBlank { "model installed" },
                                 subtitle =
                                     when {
                                         store.isSelfTesting -> "testing…"
@@ -540,10 +544,17 @@ internal fun AssistantPage(
                         },
                     )
                     if (!store.isSelfTesting) {
-                        FilledTonalButton(
-                            onClick = { scope.launch { store.selfTestModel() } },
-                            modifier = Modifier.padding(top = 10.dp),
-                        ) { Text("test model") }
+                        Row(
+                            Modifier.padding(top = 10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            FilledTonalButton(onClick = { scope.launch { store.selfTestModel() } }) {
+                                Text("test model")
+                            }
+                            // Drops the installed file and clears its saved url/label,
+                            // falling through to the picker below for a different model.
+                            TextButton(onClick = { store.clearModel() }) { Text("change model") }
+                        }
                     }
                 }
 
@@ -632,10 +643,19 @@ internal fun AssistantPage(
                         )
                     }
 
-                    Button(
-                        onClick = { scope.launch { store.downloadModel() } },
-                        modifier = Modifier.padding(top = 14.dp),
-                    ) { Text("download & set up") }
+                    Row(
+                        Modifier.padding(top = 14.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Button(onClick = { scope.launch { store.downloadModel() } }) {
+                            Text("download & set up")
+                        }
+                        // Already have a .task file on-device (synced, previously
+                        // downloaded elsewhere) — skip the network entirely.
+                        TextButton(onClick = { localModelPicker.launch(arrayOf("*/*")) }) {
+                            Text("choose from device")
+                        }
+                    }
                     store.downloadError?.let { Caption("error: $it") }
                 }
             }
@@ -1134,3 +1154,15 @@ internal fun Caption(text: String) {
 }
 
 private fun mb(bytes: Long): String = if (bytes <= 0L) "…" else "${bytes / 1_000_000} MB"
+
+/** The picked file's own name (e.g. "qwen2.5-0.5b.task"), falling back to the uri's last segment. */
+private fun queryDisplayName(
+    context: Context,
+    uri: Uri,
+): String? =
+    runCatching {
+        context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            val col = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (col >= 0 && cursor.moveToFirst()) cursor.getString(col) else null
+        }
+    }.getOrNull()

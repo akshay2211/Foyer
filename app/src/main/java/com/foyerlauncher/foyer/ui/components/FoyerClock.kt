@@ -32,6 +32,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import kotlin.time.Duration.Companion.milliseconds
 
 /** Which clock the home screen shows (#15). Cycled in settings / home menu. */
 enum class ClockStyle(
@@ -48,6 +49,17 @@ enum class ClockStyle(
 }
 
 /**
+ * Debug-only clock override for marketing screenshots — when set, every clock
+ * widget below renders this instant instead of the real time, so digital,
+ * bold, dial and hands all screenshot showing the same chosen time. Null (the
+ * default) means real time; only app/src/debug/.../MarketingPreviewActivity
+ * ever sets it.
+ */
+var marketingClockOverrideMillis: Long? = null
+
+private fun clockNowMillis(): Long = marketingClockOverrideMillis ?: System.currentTimeMillis()
+
+/**
  * The dial clock (#15), final form:
  *
  *  - the hour sits large just left of the lens, nested against it on the
@@ -62,11 +74,11 @@ enum class ClockStyle(
 fun AnalogueClockWidget(modifier: Modifier = Modifier) {
     val palette = LocalPalette.current
     val ff = LocalFontFamily.current
-    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var now by remember { mutableLongStateOf(clockNowMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
-            now = System.currentTimeMillis()
-            delay(10_000)
+            now = clockNowMillis()
+            delay(10_000.milliseconds)
         }
     }
     val cal = remember(now) { Calendar.getInstance().apply { timeInMillis = now } }
@@ -174,11 +186,11 @@ fun AnalogueClockWidget(modifier: Modifier = Modifier) {
 @Composable
 fun MinimalClockWidget(modifier: Modifier = Modifier) {
     val palette = LocalPalette.current
-    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var now by remember { mutableLongStateOf(clockNowMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
-            now = System.currentTimeMillis()
-            delay(10_000)
+            now = clockNowMillis()
+            delay(10_000.milliseconds)
         }
     }
     val cal = remember(now) { Calendar.getInstance().apply { timeInMillis = now } }
@@ -232,11 +244,11 @@ fun MinimalClockWidget(modifier: Modifier = Modifier) {
 fun DigitalClockWidget(modifier: Modifier = Modifier) {
     val palette = LocalPalette.current
     val ff = LocalFontFamily.current
-    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var now by remember { mutableLongStateOf(clockNowMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
-            now = System.currentTimeMillis()
-            delay(10_000)
+            now = clockNowMillis()
+            delay(10_000.milliseconds)
         }
     }
     val timeFmt = remember { SimpleDateFormat("h:mm", Locale.getDefault()) }
@@ -252,11 +264,11 @@ fun DigitalClockWidget(modifier: Modifier = Modifier) {
 fun LockClockWidget(modifier: Modifier = Modifier) {
     val palette = LocalPalette.current
     val ff = LocalFontFamily.current
-    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var now by remember { mutableLongStateOf(clockNowMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
-            now = System.currentTimeMillis()
-            delay(10_000)
+            now = clockNowMillis()
+            delay(10_000.milliseconds)
         }
     }
     val timeFmt = remember { SimpleDateFormat("h:mm", Locale.getDefault()) }
