@@ -66,6 +66,12 @@ val appVersion =
         versionPropsFile.asFile.inputStream().use { load(it) }
     }
 
+// Artifacts carry their identity in the filename — foyer-1.0-1-release.aab,
+// not app-release.aab — so Play uploads and local archives stay tellable apart.
+base.archivesName.set(
+    "foyer-${appVersion.getProperty("versionName").trim()}-${appVersion.getProperty("versionCode").trim()}",
+)
+
 // Upload-key credentials live in ~/.gradle/gradle.properties (never in the
 // repo); release builds fall back to unsigned when they're absent so
 // contributors and CI can still compile.
