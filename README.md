@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="art/readme_banner.png" width="100%" alt="Foyer: the app drawer, home screen, and appearance settings, in matte dark theme"/>
+  <img src="art/readme_banner_value.png" width="100%" alt="Most phones: a busy icon grid with widgets and notification badges. Foyer: a plain text list. Less phone, on purpose."/>
 </p>
 
 <p align="center">
