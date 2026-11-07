@@ -105,6 +105,15 @@ h1, h2, h3 {
 }
 .phone img { border-radius: 26px; width: 100%; height: auto; }
 
+/* two small phones side by side — same theme, light vs dark */
+.panel.pair { display: flex; gap: 10px; }
+.panel.pair .phone { flex: 1 1 0; padding: 6px; border-radius: 22px; }
+.panel.pair .phone img { border-radius: 16px; }
+
+/* four clock styles as one 2x2 grid, in place of a single panel */
+.panel.grid4 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.panel.grid4 img { border-radius: 14px; width: 100%; height: auto; display: block; }
+
 .visually-hidden {
   position: absolute; width: 1px; height: 1px; overflow: hidden;
   clip: rect(0 0 0 0); white-space: nowrap;
