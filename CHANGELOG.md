@@ -3,6 +3,13 @@
 All notable changes to Foyer, newest first. Versions follow
 `versionName (versionCode)` as uploaded to Google Play.
 
+## 1.0 (2) — 2026-11-08
+
+- Removed the lock-screen gesture and with it the accessibility service and
+  the `BIND_ACCESSIBILITY_SERVICE` permission — Foyer now requests nothing
+  that Play's accessibility-API policy applies to. A gesture previously set
+  to "lock screen" quietly falls back to its default.
+
 ## 1.0 (1) — 2026-11-07
 
 First release. Less phone, on purpose.

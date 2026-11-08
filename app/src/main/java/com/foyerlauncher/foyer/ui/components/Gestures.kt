@@ -1,9 +1,6 @@
 package com.foyerlauncher.foyer.ui.components
 
 import android.content.Context
-import android.content.Intent
-import android.provider.Settings
-import com.foyerlauncher.foyer.LockService
 import com.foyerlauncher.foyer.data.expandNotifications
 import com.foyerlauncher.foyer.data.openBrowser
 
@@ -21,7 +18,6 @@ enum class GestureAction(
     QUICK_SETTINGS("quick settings"),
     BROWSER("browser"),
     VOICE("ask me"),
-    LOCK_SCREEN("lock screen"),
     ;
 
     fun next(): GestureAction = entries[(ordinal + 1) % entries.size]
@@ -45,15 +41,6 @@ fun runGestureAction(
         GestureAction.NOTIFICATIONS -> expandNotifications(context)
         GestureAction.QUICK_SETTINGS -> expandQuickSettings(context)
         GestureAction.BROWSER -> openBrowser(context)
-        GestureAction.LOCK_SCREEN ->
-            if (!LockService.lock()) {
-                // Service not running (or pre-P): take the user to enable it.
-                runCatching {
-                    context.startActivity(
-                        Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                    )
-                }
-            }
     }
 }
 

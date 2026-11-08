@@ -40,7 +40,7 @@ nothing.
   daily limits with a conscious 5-minute bypass, mark-as-distracting,
   focus mode with a countdown, and a usage summary screen.
 - **Stays out of your way** — app hiding, user-taught aliases, work/private
-  profile support, gestures (swipe, double-tap, lock screen), curated
+  profile support, gestures (swipe, double-tap), curated
   background tones, digital or analogue clock, backup/restore to a JSON
   file you own.
 
@@ -50,8 +50,7 @@ Everything stays on the phone. No network calls except the model download
 you explicitly start. No analytics, no accounts, no notification access.
 The only permissions requested are explained at the point of use
 (microphone for voice, usage access for screen-time features, notifications
-for the limit-reached nudge, an optional accessibility service used solely
-for the lock-screen gesture).
+for the limit-reached nudge).
 
 ## Architecture
 
@@ -62,7 +61,7 @@ pipeline — a deterministic router first, the model as semantic fallback:
 
 ```
 com.foyerlauncher.foyer/
-├── MainActivity, LockService        # manifest components
+├── MainActivity                     # manifest components
 ├── ui/      screens, components, theme
 ├── data/    LauncherStore, Apps, UsageTracker
 └── ai/      router/  (deterministic: FastRouter, CommandRouter, AppIndex…)

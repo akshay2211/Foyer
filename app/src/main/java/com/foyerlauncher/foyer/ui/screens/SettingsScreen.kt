@@ -70,7 +70,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import com.foyerlauncher.foyer.LockService
 import com.foyerlauncher.foyer.R
 import com.foyerlauncher.foyer.data.LauncherStore
 import com.foyerlauncher.foyer.data.SUGGESTED_GEMMA_URL
@@ -428,36 +427,6 @@ private fun GesturesPage(
             },
         )
 
-        val usesLock =
-            store.swipeUpAction == GestureAction.LOCK_SCREEN ||
-                store.swipeDownAction == GestureAction.LOCK_SCREEN ||
-                store.doubleTapAction == GestureAction.LOCK_SCREEN
-        if (usesLock) {
-            if (LockService.isEnabled()) {
-                Caption("lock screen service · enabled")
-            } else {
-                GroupLabel("lock screen")
-                SettingsGroup(
-                    { shape ->
-                        NavRow(
-                            shape = shape,
-                            title = "enable accessibility service",
-                            subtitle = "required for the lock gesture ↗",
-                            chevron = false,
-                        ) {
-                            runCatching {
-                                context.startActivity(
-                                    android.content
-                                        .Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
-                                )
-                            }
-                        }
-                    },
-                )
-                Caption("foyer's service performs the system lock action and nothing else — it reads no screen content.")
-            }
-        }
     }
 
     picker?.let { which ->

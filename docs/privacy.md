@@ -27,7 +27,6 @@ Every permission is requested at the point of use, with the reason visible:
 | Notifications | the limit-reached nudge | when you set a daily limit |
 | Contacts | resolving "message mom" to a number | first message command |
 | Set alarm | "set an alarm / timer" commands, handed to the system clock app | never — a harmless install-time grant, Android shows no prompt |
-| Accessibility service | the lock-screen gesture **only** — it processes no events and reads no screen content | when you pick the lock gesture |
 
 Voice audio and contact lookups are processed on the device and are never
 transmitted, stored, or shared.

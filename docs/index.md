@@ -15,7 +15,7 @@ nothing.
 
 ```
 com.foyerlauncher.foyer/
-├── MainActivity, LockService        # manifest components
+├── MainActivity                     # manifest components
 ├── ui/      screens, components, theme
 ├── data/    LauncherStore, AppEntry, UsageTracker
 └── ai/      router/  (deterministic: FastRouter, CommandRouter, AppIndex…)

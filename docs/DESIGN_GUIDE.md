@@ -42,7 +42,7 @@ assistant.
   app index.
 - Work/private profile apps, backup/restore to a user-chosen JSON file,
   curated background tones, digital/analogue clock, gestures (swipe up/down,
-  double tap, lock screen via accessibility service).
+  double tap).
 
 ### Inspiration backlog (not implemented, not committed to)
 
@@ -55,7 +55,7 @@ assistant.
 
 ```
 com.foyerlauncher.foyer/
-├── MainActivity, LockService      # manifest components stay at the root
+├── MainActivity                   # manifest components stay at the root
 ├── ui/screens, ui/components, ui/theme
 ├── data/                          # LauncherStore, Apps, UsageTracker
 └── ai/
@@ -107,8 +107,9 @@ com.foyerlauncher.foyer/
   deterministic router or improve the prompt instead.
 - **Don't** block the main thread with package queries, prefs migration, or
   file IO.
-- **Don't** add persistent foreground services. The one service (`LockService`)
-  is an accessibility service that processes no events; keep it that honest.
+- **Don't** add persistent foreground services — and no accessibility service:
+  one existed solely for a lock-screen gesture and was removed to stay clear
+  of Play's accessibility-API policy; don't reintroduce one lightly.
 - **Don't** introduce gestures that fight system back/home navigation.
 - **Don't** clutter the home surface: no widgets, no icon grids, no
   wallpaper rendering of our own.

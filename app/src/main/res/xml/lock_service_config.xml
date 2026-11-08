@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Minimal config: the service handles no events and reads no content; it
-     exists solely to perform GLOBAL_ACTION_LOCK_SCREEN for the lock gesture. -->
-<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:accessibilityEventTypes="typeWindowStateChanged"
-    android:accessibilityFeedbackType="feedbackGeneric"
-    android:canRetrieveWindowContent="false"
-    android:description="@string/lock_service_description"
-    android:notificationTimeout="100" />
