@@ -426,7 +426,6 @@ private fun GesturesPage(
                 NavRow(shape, "double tap", store.doubleTapAction.label) { picker = "tap" }
             },
         )
-
     }
 
     picker?.let { which ->
