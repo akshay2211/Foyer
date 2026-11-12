@@ -116,8 +116,11 @@ fun AnalogueClockWidget(modifier: Modifier = Modifier) {
             .semantics { contentDescription = "clock, $timeText" },
     ) {
         Canvas(Modifier.matchParentSize()) {
-            val r = size.minDimension / 2f
-            val c = Offset(r, r)
+            val half = size.minDimension / 2f
+            val c = Offset(half, half)
+            // The lens sits on the ring and reaches 0.19r + half a hairline past
+            // it; r must leave that much headroom or its right edge clips.
+            val r = half / (0.86f + 0.19f + 0.004f)
             val rRing = r * 0.86f // the minutes ring
 
             for (m in 0 until 60) {
