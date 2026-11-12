@@ -3,12 +3,13 @@
 All notable changes to Foyer, newest first. Versions follow
 `versionName (versionCode)` as uploaded to Google Play.
 
-## 1.0 (2) — 2026-11-08
+## 1.0.1 (2) — 2026-11-12
 
 - Removed the lock-screen gesture and with it the accessibility service and
   the `BIND_ACCESSIBILITY_SERVICE` permission — Foyer now requests nothing
   that Play's accessibility-API policy applies to. A gesture previously set
   to "lock screen" quietly falls back to its default.
+- Fixed the dial clock's minute lens clipping at the widget's right edge.
 
 ## 1.0 (1) — 2026-11-07
 
