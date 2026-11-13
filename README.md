@@ -6,23 +6,11 @@
   a quiet, text-first Android launcher with a fully on-device AI assistant.<br/>
   <a href="https://foyerlauncher.com">foyerlauncher.com</a>
 </p>
-
 <p align="center">
   <a href="https://github.com/akshay2211/Foyer/actions/workflows/ci.yml"><img src="https://github.com/akshay2211/Foyer/actions/workflows/ci.yml/badge.svg" alt="CI status"/></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue.svg" alt="License: GPL-3.0"/></a>
   <a href="#building"><img src="https://img.shields.io/badge/min%20sdk-24-success.svg" alt="Min SDK 24"/></a>
 </p>
-<p align="center">
-  <img src="marketing/out/play/01-home.png" width="16%" alt="Home screen: a thin clock, today's screen time, and a plain-text list of favourite apps"/>
-  <img src="marketing/out/play/02-say.png" width="16%" alt="The assistant: you type 'turn on wifi and open spotify' and Foyer runs both steps"/>
-  <img src="marketing/out/play/03-drawer.png" width="16%" alt="App drawer: text search matching 'in' with an a-to-z fast-scroll rail"/>
-  <img src="marketing/out/play/04-clocks.png" width="16%" alt="The four clock styles: digital, bold, rotating dial, and plain hands"/>
-  <img src="marketing/out/play/05-appearance.png" width="16%" alt="Appearance settings: accent swatches, three fonts, and background tones"/>
-  <img src="marketing/out/play/06-light.png" width="16%" alt="The same home screen in the full light theme"/>
-</p>
-<p align="center"><sub>The app UI above is rebuilt in HTML from the same design tokens, not screenshotted — the <a href="https://foyerlauncher.com">live demo</a> runs it for real.</sub></p>
-
----
 
 Foyer is a minimal home screen in the spirit of Niagara Launcher and
 Minimalist Phone — plain-text app list, no icon grid, no widgets, no noise —
@@ -51,6 +39,18 @@ nothing.
   profile support, gestures (swipe, double-tap), curated
   background tones, digital or analogue clock, backup/restore to a JSON
   file you own.
+
+<p align="center">
+  <img src="marketing/out/play/01-home.png" width="16%" alt="Home screen: a thin clock, today's screen time, and a plain-text list of favourite apps"/>
+  <img src="marketing/out/play/02-say.png" width="16%" alt="The assistant: you type 'turn on wifi and open spotify' and Foyer runs both steps"/>
+  <img src="marketing/out/play/03-drawer.png" width="16%" alt="App drawer: text search matching 'in' with an a-to-z fast-scroll rail"/>
+  <img src="marketing/out/play/04-clocks.png" width="16%" alt="The four clock styles: digital, bold, rotating dial, and plain hands"/>
+  <img src="marketing/out/play/05-appearance.png" width="16%" alt="Appearance settings: accent swatches, three fonts, and background tones"/>
+  <img src="marketing/out/play/06-light.png" width="16%" alt="The same home screen in the full light theme"/>
+</p>
+<p align="center"><sub>The app UI above is rebuilt in HTML from the same design tokens, not screenshotted — the <a href="https://foyerlauncher.com">live demo</a> runs it for real.</sub></p>
+
+---
 
 ## Privacy
 

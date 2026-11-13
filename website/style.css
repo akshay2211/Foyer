@@ -196,19 +196,105 @@ h1, h2, h3 {
 .phone .key-vol { top: 20%; height: 12%; }
 .phone .key-pwr { top: 35%; height: 6%; }
 
-/* two small phones side by side — same theme, light vs dark */
-.panel.pair { display: flex; gap: 10px; }
-.panel.pair .phone { flex: 1 1 0; padding: 4px; border-width: 2px; border-radius: 14px; }
-.panel.pair .phone::after { width: 5px; height: 5px; top: 8px; }
-.panel.pair .phone img { border-radius: 9px; }
-.panel.pair .phone .key { right: -4px; width: 2px; }
+/* ---- reel fragments: pieces of the app rebuilt in HTML, like the hero.
+   Each card shows only the component it talks about — no screenshots. ---- */
 
-/* four clock styles as one 2x2 grid, each in its own small frame */
-.panel.grid4 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.panel.grid4 .phone { padding: 3px; border-width: 2px; border-radius: 13px; }
-.panel.grid4 .phone::after { width: 5px; height: 5px; top: 7px; }
-.panel.grid4 .phone .key { right: -4px; width: 2px; }
-.panel.grid4 .phone img { border-radius: 9px; width: 100%; height: auto; display: block; }
+.rf {
+  font-family: Roboto, "Helvetica Neue", system-ui, sans-serif; /* taste-skill-ignore: the app's own UI font, like the hero fragment */
+  background: #0d0d10;
+  color: #ececec;
+  border-radius: 13px;
+  height: 500px;
+  padding: 26px 24px;
+  overflow: hidden;
+  position: relative;
+}
+.rf .rf-label { font-size: 10px; letter-spacing: 0.22em; color: #737377; }
+
+/* screen time under the clock */
+.rf-time { display: flex; flex-direction: column; align-items: center; padding-top: 84px; }
+.rf-time .rf-clock { font-size: 52px; font-weight: 100; letter-spacing: 0.05em; color: #c9c9c9; line-height: 1; }
+.rf-time .rf-date { margin-top: 16px; font-size: 12.5px; color: #9a9a9e; letter-spacing: 0.02em; }
+.rf-time .rf-today {
+  margin-top: 12px; font-size: 12.5px; letter-spacing: 0.02em; color: #ececec;
+  border-bottom: 2px solid var(--accent); padding-bottom: 4px;
+}
+.rf-time .rf-faves {
+  margin-top: auto; margin-bottom: 30px; align-self: flex-start;
+  display: grid; gap: 14px; font-size: 15px; color: #6a6a6e;
+}
+
+/* the long-press limits sheet (light, like the app's) */
+.rf-sheet { background: #ececec; color: #1a1a1c; padding: 16px 22px 18px; display: flex; flex-direction: column; }
+.rf-sheet .rf-handle { width: 40px; height: 4px; border-radius: 2px; background: #c2c2c6; margin: 0 auto 14px; }
+.rf-sheet .rf-app { font-size: 12.5px; color: #77777b; letter-spacing: 0.04em; }
+.rf-sheet .rf-row { display: flex; align-items: center; gap: 14px; padding: 13.5px 0; font-size: 15px; }
+.rf-sheet .rf-row svg { flex: none; stroke: #3a3a3e; }
+.rf-sheet .rf-row .val { margin-left: auto; font-size: 13px; color: #77777b; }
+.rf-sheet .rf-row .val.on { color: var(--accent); font-weight: 500; }
+.rf-sheet .rf-bar { margin: auto auto 0; width: 64px; height: 3px; border-radius: 2px; background: #b5b3ae; }
+
+/* a piece of the drawer, with the a–z rail */
+.rf-drawer { padding-right: 46px; }
+.rf-drawer .rf-search {
+  background: #1b1b1f; color: #8a8a8e; border-radius: 999px;
+  padding: 10px 16px; font-size: 14.5px; width: fit-content; min-width: 118px;
+}
+.rf-drawer .rf-search b { color: #ececec; font-weight: 400; }
+.rf-drawer .rf-label { margin-top: 24px; }
+.rf-drawer .rf-apps { margin-top: 16px; display: grid; gap: 17px; font-size: 16.5px; }
+.rf-drawer .rf-apps .dim { color: #55555a; }
+.rf-drawer .rf-apps .dim b { color: #ececec; font-weight: 400; }
+.rf-drawer .rail {
+  position: absolute; right: 14px; top: 24px; bottom: 24px;
+  display: flex; flex-direction: column; justify-content: space-between; align-items: center;
+  font-size: 9px; color: #5c5c60;
+}
+.rf-drawer .rail .near { color: #9a9a9e; font-size: 11px; }
+.rf-drawer .rail .on { color: var(--accent); font-size: 13px; font-weight: 600; }
+
+/* appearance controls — dark half over light half, true black to cream */
+.rf-split { padding: 0; display: flex; flex-direction: column; }
+.rf-split .half { flex: 1 1 50%; padding: 24px 22px; }
+.rf-split .half.light { background: #f3f1ec; color: #1a1a1c; }
+.rf-split .half.light .rf-label { color: #8a8a84; }
+.rf-split .dots { margin-top: 14px; display: flex; gap: 13px; align-items: center; }
+.rf-split .dot { width: 26px; height: 26px; border-radius: 50%; position: relative; }
+.rf-split .dot.sel::after { content: ""; position: absolute; inset: -5px; border: 2px solid var(--accent); border-radius: 50%; }
+.rf-split .frow { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; font-size: 15px; }
+.rf-split .radio { width: 16px; height: 16px; border: 2px solid #5c5c60; border-radius: 50%; }
+.rf-split .radio.sel { border-color: var(--accent); background: radial-gradient(circle, var(--accent) 0 4px, transparent 4.5px); }
+.rf-split .half.light .radio { border-color: #b5b3ae; }
+
+/* the four clock faces, each on its own tile */
+.rf-clocks { background: none; padding: 0; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 10px; }
+.rf-clocks .face {
+  background: #0d0d10; border-radius: 13px; position: relative;
+  display: flex; align-items: center; justify-content: center;
+}
+.rf-clocks .ck-digital { font-size: 26px; font-weight: 100; letter-spacing: 0.05em; color: #c9c9c9; }
+.rf-clocks .ck-bold { font-size: 33px; font-weight: 500; color: #e8e8e8; }
+.rf-clocks .tag {
+  position: absolute; bottom: 13px; left: 0; right: 0; text-align: center;
+  font-family: "Bricolage Grotesque", system-ui, sans-serif;
+  font-size: 10px; letter-spacing: 0.14em; color: #737377;
+}
+
+/* the ai settings, rebuilt */
+.rf-ai .ai-title { font-size: 24px; font-weight: 300; }
+.rf-ai .acard {
+  background: #1a1a1e; border-radius: 14px; padding: 14px 16px; margin-top: 10px;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+.rf-ai .acard b { display: block; font-size: 14.5px; font-weight: 500; }
+.rf-ai .acard .sub { display: block; font-size: 12px; color: #9a9a9e; margin-top: 3px; }
+.rf-ai .toggle { flex: none; width: 40px; height: 24px; border-radius: 12px; background: var(--accent); position: relative; }
+.rf-ai .toggle::after { content: ""; position: absolute; right: 3px; top: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; }
+.rf-ai .rf-label { margin-top: 20px; }
+.rf-ai .actions { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
+.rf-ai .btn { background: #ececec; color: #1a1a1c; border-radius: 999px; padding: 8px 14px; font-size: 12.5px; font-weight: 500; white-space: nowrap; }
+.rf-ai .link { color: var(--accent); font-size: 12.5px; font-weight: 500; white-space: nowrap; }
+.rf-ai .chev { color: #9a9a9e; font-size: 18px; }
 
 .visually-hidden {
   position: absolute; width: 1px; height: 1px; overflow: hidden;

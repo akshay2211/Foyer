@@ -129,7 +129,12 @@
 
     <div class="reel-track" id="reel-track">
       <article class="card">
-        <div class="panel phone"><img src="assets/shot-home.png" alt="Foyer's home screen: the digital clock, the date, and today's screen time in plain text" width="280" height="623" loading="lazy"></div>
+        <div class="panel"><div class="rf rf-time" role="img" aria-label="The home clock, rebuilt: 11:11 above the date, with today's screen time right under it and a few favourite apps below">
+          <p class="rf-clock">11:11</p>
+          <p class="rf-date">saturday, nov 7</p>
+          <p class="rf-today">1h 34m today</p>
+          <div class="rf-faves" aria-hidden="true"><span>calendar</span><span>gemini</span><span>whatsapp</span></div>
+        </div></div>
         <div class="card-text">
           <h3>your screen time, under the clock</h3>
           <p>The first thing the home screen tells you is how long you've been on the phone today. Not an app you open, just quietly there.</p>
@@ -137,7 +142,18 @@
       </article>
 
       <article class="card">
-        <div class="panel phone"><img src="assets/shot-sheet.png" alt="The long-press sheet for an app: remove from home, hide, mark distracting, daily limit" width="280" height="623" loading="lazy"></div>
+        <div class="panel"><div class="rf rf-sheet" role="img" aria-label="The long-press sheet for instagram: remove from home, hide app, mark distracting, a 20-minute daily limit, add alias, app info, uninstall">
+          <span class="rf-handle"></span>
+          <p class="rf-app">instagram</p>
+          <div class="rf-row"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12 12 5l7 7M7 10v9h10v-9"/></svg>remove from home</div>
+          <div class="rf-row"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="3"/><path d="M4 4l16 16"/></svg>hide app</div>
+          <div class="rf-row"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c2 4 6 5 6 10a6 6 0 0 1-12 0c0-5 4-6 6-10z"/></svg>mark distracting</div>
+          <div class="rf-row"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h10l-4 6v4l4 6H7l4-6v-4L7 4z"/></svg>daily limit<span class="val on">20m</span></div>
+          <div class="rf-row"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10V5a1 1 0 0 1 1-1h5l9 9-6 6-9-9z"/><circle cx="8" cy="8" r="1"/></svg>add alias</div>
+          <div class="rf-row"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>app info</div>
+          <div class="rf-row"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/></svg>uninstall</div>
+          <span class="rf-bar"></span>
+        </div></div>
         <div class="card-text">
           <h3>limits that ask, not forbid</h3>
           <p>Give instagram twenty minutes a day. When they're spent, foyer pauses the launch and asks. One conscious tap buys five more.</p>
@@ -146,7 +162,22 @@
       </article>
 
       <article class="card">
-        <div class="panel phone"><img src="assets/shot-drawer.png" alt="The app drawer: a plain text list with an A to Z rail on the right edge" width="280" height="623" loading="lazy"></div>
+        <div class="panel"><div class="rf rf-drawer" role="img" aria-label="A piece of the app drawer: searching 'in' bolds the match in instagram, linkedin and pinterest, with an a to z rail down the right edge">
+          <p class="rf-search"><b>in</b>sta</p>
+          <p class="rf-label">best match</p>
+          <div class="rf-apps">
+            <span><b>insta</b>gram</span>
+            <span class="dim">l<b>in</b>kedin</span>
+            <span class="dim">p<b>in</b>terest</span>
+          </div>
+          <p class="rf-label">frequently used</p>
+          <div class="rf-apps">
+            <span>whatsapp</span>
+            <span>youtube</span>
+            <span>camera</span>
+          </div>
+          <div class="rail" aria-hidden="true"><span>a</span><span>b</span><span>c</span><span>d</span><span>e</span><span>f</span><span>g</span><span class="near">h</span><span class="on">i</span><span class="near">j</span><span>k</span><span>l</span><span>m</span><span>n</span><span>o</span><span>p</span><span>q</span><span>r</span><span>s</span><span>t</span><span>u</span><span>v</span><span>w</span><span>x</span><span>y</span><span>z</span></div>
+        </div></div>
         <div class="card-text">
           <h3>every app is one swipe and a letter away</h3>
           <p>The drawer is a text list with an A–Z rail. Search opens the keyboard by itself; aliases you teach ("insta") rank first.</p>
@@ -154,10 +185,31 @@
       </article>
 
       <article class="card">
-        <div class="panel pair">
-          <div class="phone"><img src="assets/shot-appearance.png" alt="Appearance settings in light theme: theme, accent swatches, fonts and curated background tones" width="140" height="311" loading="lazy"></div>
-          <div class="phone"><img src="assets/shot-appearance-dark.png" alt="The same appearance settings in matte dark theme" width="140" height="311" loading="lazy"></div>
-        </div>
+        <div class="panel"><div class="rf rf-split" role="img" aria-label="Appearance controls: accent swatches and font choices on the dark theme, background tones from true black to cream on the light one">
+          <div class="half">
+            <p class="rf-label">accent</p>
+            <div class="dots">
+              <span class="dot" style="background:#ececec"></span>
+              <span class="dot sel" style="background:#d93036"></span>
+              <span class="dot" style="background:#3a6bf0"></span>
+              <span class="dot" style="background:#2a9d61"></span>
+            </div>
+            <p class="rf-label" style="margin-top:22px">font</p>
+            <div class="frow"><span>inter</span><span class="radio sel"></span></div>
+            <div class="frow" style="font-family:'Courier New',monospace"><span>mono</span><span class="radio"></span></div>
+          </div>
+          <div class="half light">
+            <p class="rf-label">background</p>
+            <div class="dots">
+              <span class="dot" style="background:#101013"></span>
+              <span class="dot sel" style="background:#000"></span>
+              <span class="dot" style="background:#1a140e"></span>
+              <span class="dot" style="background:#fdfdfb;border:1px solid #d9d7d2"></span>
+              <span class="dot" style="background:#f2e9d8"></span>
+            </div>
+            <div class="frow" style="font-family:Georgia,serif;margin-top:24px"><span>serif</span><span class="radio"></span></div>
+          </div>
+        </div></div>
         <div class="card-text">
           <h3>curated, not customised to death</h3>
           <p>Three fonts, four accents, five background tones, true black to cream. Every pairing keeps its contrast; there is no wallpaper circus.</p>
@@ -165,12 +217,29 @@
       </article>
 
       <article class="card">
-        <div class="panel grid4">
-          <div class="phone"><img src="assets/shot-clock-digital.png" alt="Digital clock style on the home screen" loading="lazy"></div>
-          <div class="phone"><img src="assets/shot-clock-bold.png" alt="Bold clock style on the home screen" loading="lazy"></div>
-          <div class="phone"><img src="assets/shot-clock-dial.png" alt="Rotating dial clock style on the home screen" loading="lazy"></div>
-          <div class="phone"><img src="assets/shot-clock-hands.png" alt="Plain hands clock style on the home screen" loading="lazy"></div>
-        </div>
+        <div class="panel"><div class="rf rf-clocks" role="img" aria-label="The four clock styles, each rebuilt on its own tile: digital, bold, a rotating dial, and plain hands, all reading 11:11">
+          <div class="face"><p class="ck-digital">11:11</p><span class="tag">digital</span></div>
+          <div class="face"><p class="ck-bold">11:11</p><span class="tag">bold</span></div>
+          <div class="face">
+            <svg width="92" height="92" viewBox="0 0 100 100" aria-hidden="true">
+              <circle cx="70.0" cy="15.4" r="0.7" fill="#5c5c60"/><circle cx="73.5" cy="17.6" r="0.7" fill="#5c5c60"/><circle cx="76.8" cy="20.3" r="0.7" fill="#5c5c60"/><circle cx="79.7" cy="23.2" r="0.7" fill="#5c5c60"/><circle cx="84.6" cy="30.0" r="0.7" fill="#5c5c60"/><circle cx="86.5" cy="33.7" r="0.7" fill="#5c5c60"/><circle cx="88.0" cy="37.6" r="0.7" fill="#5c5c60"/><circle cx="89.1" cy="41.7" r="0.7" fill="#5c5c60"/><circle cx="90.0" cy="50.0" r="0.7" fill="#5c5c60"/><circle cx="89.8" cy="54.2" r="0.7" fill="#5c5c60"/><circle cx="89.1" cy="58.3" r="0.7" fill="#5c5c60"/><circle cx="88.0" cy="62.4" r="0.7" fill="#5c5c60"/><circle cx="84.6" cy="70.0" r="0.7" fill="#5c5c60"/><circle cx="82.4" cy="73.5" r="0.7" fill="#5c5c60"/><circle cx="79.7" cy="76.8" r="0.7" fill="#5c5c60"/><circle cx="76.8" cy="79.7" r="0.7" fill="#5c5c60"/><circle cx="70.0" cy="84.6" r="0.7" fill="#5c5c60"/><circle cx="66.3" cy="86.5" r="0.7" fill="#5c5c60"/><circle cx="62.4" cy="88.0" r="0.7" fill="#5c5c60"/><circle cx="58.3" cy="89.1" r="0.7" fill="#5c5c60"/><circle cx="50.0" cy="90.0" r="0.7" fill="#5c5c60"/><circle cx="45.8" cy="89.8" r="0.7" fill="#5c5c60"/><circle cx="41.7" cy="89.1" r="0.7" fill="#5c5c60"/><circle cx="37.6" cy="88.0" r="0.7" fill="#5c5c60"/><circle cx="30.0" cy="84.6" r="0.7" fill="#5c5c60"/><circle cx="26.5" cy="82.4" r="0.7" fill="#5c5c60"/><circle cx="23.2" cy="79.7" r="0.7" fill="#5c5c60"/><circle cx="20.3" cy="76.8" r="0.7" fill="#5c5c60"/><circle cx="15.4" cy="70.0" r="0.7" fill="#5c5c60"/><circle cx="13.5" cy="66.3" r="0.7" fill="#5c5c60"/><circle cx="12.0" cy="62.4" r="0.7" fill="#5c5c60"/><circle cx="10.9" cy="58.3" r="0.7" fill="#5c5c60"/><circle cx="10.0" cy="50.0" r="0.7" fill="#5c5c60"/><circle cx="10.2" cy="45.8" r="0.7" fill="#5c5c60"/><circle cx="10.9" cy="41.7" r="0.7" fill="#5c5c60"/><circle cx="12.0" cy="37.6" r="0.7" fill="#5c5c60"/><circle cx="15.4" cy="30.0" r="0.7" fill="#5c5c60"/><circle cx="17.6" cy="26.5" r="0.7" fill="#5c5c60"/><circle cx="20.3" cy="23.2" r="0.7" fill="#5c5c60"/><circle cx="23.2" cy="20.3" r="0.7" fill="#5c5c60"/><circle cx="30.0" cy="15.4" r="0.7" fill="#5c5c60"/><circle cx="33.7" cy="13.5" r="0.7" fill="#5c5c60"/><circle cx="37.6" cy="12.0" r="0.7" fill="#5c5c60"/><circle cx="41.7" cy="10.9" r="0.7" fill="#5c5c60"/><circle cx="50.0" cy="10.0" r="0.7" fill="#5c5c60"/><circle cx="54.2" cy="10.2" r="0.7" fill="#5c5c60"/><circle cx="58.3" cy="10.9" r="0.7" fill="#5c5c60"/><circle cx="62.4" cy="12.0" r="0.7" fill="#5c5c60"/>
+              <text x="66.3" y="15.5" text-anchor="middle" font-size="5.6" fill="#737377">00</text><text x="82.4" y="28.5" text-anchor="middle" font-size="5.6" fill="#737377">05</text><text x="89.8" y="47.8" text-anchor="middle" font-size="5.6" fill="#737377">10</text><text x="86.5" y="68.3" text-anchor="middle" font-size="5.6" fill="#737377">15</text><text x="73.5" y="84.4" text-anchor="middle" font-size="5.6" fill="#737377">20</text><text x="54.2" y="91.8" text-anchor="middle" font-size="5.6" fill="#737377">25</text><text x="33.7" y="88.5" text-anchor="middle" font-size="5.6" fill="#737377">30</text><text x="17.6" y="75.5" text-anchor="middle" font-size="5.6" fill="#737377">35</text><text x="10.2" y="56.2" text-anchor="middle" font-size="5.6" fill="#737377">40</text><text x="13.5" y="35.7" text-anchor="middle" font-size="5.6" fill="#737377">45</text><text x="26.5" y="19.6" text-anchor="middle" font-size="5.6" fill="#737377">50</text><text x="45.8" y="12.2" text-anchor="middle" font-size="5.6" fill="#737377">55</text>
+              <text x="60" y="57" text-anchor="middle" font-size="21" font-weight="500" fill="#e4e4e4">11</text>
+              <circle cx="90" cy="50" r="8" fill="#0d0d10" stroke="#ce3339" stroke-width="1.2"/>
+              <text x="90" y="52.4" text-anchor="middle" font-size="7" fill="#e4e4e4">11</text>
+            </svg>
+            <span class="tag">dial</span>
+          </div>
+          <div class="face">
+            <svg width="92" height="92" viewBox="0 0 100 100" aria-hidden="true">
+              <circle cx="50" cy="50" r="40" fill="none" stroke="#3b3b3f" stroke-width="1"/>
+              <path d="M50 50 40.9 30" stroke="#e0e0e0" stroke-width="2.6" stroke-linecap="round"/>
+              <path d="M50 50 79.2 37" stroke="#e0e0e0" stroke-width="1.8" stroke-linecap="round"/>
+              <circle cx="50" cy="50" r="2.2" fill="#ce3339"/>
+            </svg>
+            <span class="tag">hands</span>
+          </div>
+        </div></div>
         <div class="card-text">
           <h3>four ways to tell time</h3>
           <p>Digital, bold, a rotating dial, or plain hands. Cycle the home screen clock from settings, or straight from the home menu.</p>
@@ -178,7 +247,23 @@
       </article>
 
       <article class="card">
-        <div class="panel phone"><img src="assets/shot-ai.png" alt="The AI settings page: bring your own model, with one-tap Qwen and Gemma suggestions" width="280" height="623" loading="lazy"></div>
+        <div class="panel"><div class="rf rf-ai" role="img" aria-label="The ai settings, rebuilt: on-device ai switched on, the qwen 2.5 model ready, and buttons to test or change the model">
+          <p class="ai-title">ai assistant</p>
+          <div class="acard">
+            <span><b>on-device ai</b><span class="sub">voice and typed commands, fully local</span></span>
+            <span class="toggle"></span>
+          </div>
+          <p class="rf-label">model</p>
+          <div class="acard">
+            <span><b>qwen 2.5 · 0.5b · light</b><span class="sub">ready</span></span>
+          </div>
+          <div class="actions"><span class="btn">test model</span><span class="link">change model</span></div>
+          <p class="rf-label">learn</p>
+          <div class="acard">
+            <span><b>how the ai works</b><span class="sub">the offline guide</span></span>
+            <span class="chev">›</span>
+          </div>
+        </div></div>
         <div class="card-text">
           <h3>bring your own brain</h3>
           <p>Foyer ships no model. Paste a MediaPipe .task link or tap a suggestion, or choose a .task file already on your phone. Qwen 2.5 downloads with no account at all, and runs locally, forever.</p>
