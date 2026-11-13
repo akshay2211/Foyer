@@ -7,17 +7,20 @@
   --surface: #151515;
   --ink: #ededed;
   --muted: #9a9a9a;
-  --accent: #e5484d;
+  --accent: #ce3339;
   --accent-ink: #ffffff;
   --field: #efefef;
   --field-ink: #0a0a0a;
   --field-muted: #5c5c5c;
   --radius: 4px;
   --margin: clamp(16px, 2.5vw, 32px);
-  --step-small: clamp(0.8125rem, 0.79rem + 0.1vw, 0.875rem);
-  --step-body: clamp(1.0625rem, 1rem + 0.25vw, 1.1875rem);
-  --step-lead: clamp(1.25rem, 1.1rem + 0.7vw, 1.625rem);
-  --step-head: clamp(2rem, 1.3rem + 3.2vw, 4rem);
+  --size-small: 14px;
+  --size-body: 17px;
+  --size-lead: clamp(1.125rem, 1rem + 0.35vw, 1.375rem);
+  --size-card: 22px;
+  --size-section: 28px;
+  --size-tile: 40px;
+  --size-display: clamp(44px, 4.6vw, 76px);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -27,7 +30,7 @@ body {
   background: var(--bg);
   color: var(--ink);
   font-family: "Bricolage Grotesque", system-ui, sans-serif;
-  font-size: var(--step-body);
+  font-size: var(--size-body);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
@@ -35,6 +38,9 @@ body {
 img { display: block; max-width: 100%; }
 a { color: var(--ink); }
 ::selection { background: var(--accent); color: var(--accent-ink); }
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+.show-out :focus-visible { outline-color: var(--field-ink); }
 
 h1, h2, h3 {
   font-weight: 600;
@@ -45,18 +51,23 @@ h1, h2, h3 {
 /* ---- nav ------------------------------------------------------------- */
 
 .nav {
-  position: absolute;
+  position: fixed;
   inset: 0 0 auto 0;
   z-index: 10;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 20px var(--margin);
+  background: transparent;
+  transition: transform 320ms cubic-bezier(0.2, 0, 0, 1), background 320ms ease, padding 320ms ease;
 }
+.nav.scrolled { background: var(--bg); padding-top: 12px; padding-bottom: 12px; }
+.nav.hid { transform: translateY(-100%); }
 .nav .wordmark img { height: 22px; width: auto; }
-.nav-right { display: flex; align-items: center; gap: 28px; font-size: 15px; }
+.nav-right { display: flex; align-items: center; gap: 28px; font-size: var(--size-small); }
 .nav-right a { text-decoration: none; color: var(--ink); }
 .nav-right a:hover { color: var(--muted); }
+.nav-right a.button { color: var(--accent-ink); }
 .button {
   display: inline-block;
   background: var(--accent);
@@ -65,7 +76,7 @@ h1, h2, h3 {
   border-radius: var(--radius);
   padding: 10px 18px;
   font: inherit;
-  font-size: 15px;
+  font-size: var(--size-small);
   font-weight: 500;
   text-decoration: none;
   cursor: pointer;
@@ -86,33 +97,118 @@ h1, h2, h3 {
   max-width: 1180px;
   margin: 0 auto;
 }
-.hero-copy h1 { font-size: clamp(44px, 4.6vw, 76px); max-width: 11ch; }
-.hero-sub { margin-top: 22px; font-size: var(--step-lead); line-height: 1.45; max-width: 44ch; }
+.hero-copy h1 { font-size: var(--size-display); max-width: 11ch; }
+.hero-sub { margin-top: 22px; font-size: var(--size-lead); line-height: 1.45; max-width: 44ch; }
 .hero-actions { display: flex; align-items: center; gap: 22px; margin-top: 30px; }
-.hero-actions .button { font-size: 16px; padding: 13px 22px; }
-.ghost { font-size: 16px; color: var(--ink); }
+.hero-actions .button { font-size: var(--size-body); padding: 13px 22px; }
+.ghost { font-size: var(--size-body); color: var(--ink); }
 .ghost:hover { color: var(--muted); }
-.hero-fine { margin-top: 18px; font-size: 14px; color: var(--muted); }
+.hero-fine { margin-top: 18px; font-size: var(--size-small); color: var(--muted); }
 .hero-phone { justify-self: center; text-align: center; }
-.hero-caption { margin-top: 14px; font-size: 14px; color: var(--muted); }
+.hero-caption { margin-top: 14px; font-size: var(--size-small); color: var(--muted); max-width: 34ch; margin-inline: auto; }
 
-/* the one allowed frame: owners call — screenshots must read as phones */
+.ui-home[data-ui] {
+  font-family: Roboto, "Helvetica Neue", system-ui, sans-serif; /* taste-skill-ignore: the app's own UI font, inside a data-ui fragment */
+  background: #101013; /* the app's matte dark theme, as in shot-home-dark.png */
+  color: #ececec;
+  width: min(320px, 72vw);
+  aspect-ratio: 1344 / 2992;
+  height: auto;
+  border-radius: 13px;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 18px 10px;
+  text-align: left;
+}
+.ui-home[data-ui] .ui-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #f0f0f0;
+  letter-spacing: 0.01em;
+}
+.ui-home[data-ui] .ui-top { margin-top: 11%; text-align: center; }
+.ui-home[data-ui] .ui-clock {
+  font-size: 50px;
+  font-weight: 100;
+  letter-spacing: 0.05em;
+  color: #c9c9c9;
+  line-height: 1;
+}
+.ui-home[data-ui] .ui-date { color: #9a9a9a; font-size: 12px; letter-spacing: 0.02em; margin-top: 12px; }
+.ui-home[data-ui] .ui-apps {
+  margin-top: auto;
+  margin-bottom: auto;
+  display: grid;
+  gap: 15px;
+  font-size: 16px;
+}
+.ui-home[data-ui] .ui-apps span { color: #ececec; }
+.ui-home[data-ui] .ui-dock {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 4px;
+}
+.ui-home[data-ui] .ui-gesture {
+  align-self: center;
+  width: 64px;
+  height: 3px;
+  border-radius: 2px;
+  background: #cfcfcf;
+  margin-top: 10px;
+}
+
+/* the one allowed frame: owners call — screenshots must read as phones.
+   drawn after the galaxy s25 ultra's real chrome, in flat layers: a matte
+   titanium rail (the border), the thin black bezel around the screen (the
+   padding), near-square corners, a centred punch-hole camera, and the
+   volume rocker + power key on the right rail (spans added by app.js). */
 .phone {
   display: inline-block;
-  background: #1b1b1d;
-  border-radius: 34px;
-  padding: 9px;
+  position: relative;
+  background: #0b0b0c;
+  border: 3px solid #46464c; /* taste-skill-ignore: the titanium rail of a drawn device, not a ruled box */
+  border-radius: 22px;
+  padding: 6px;
 }
-.phone img { border-radius: 26px; width: 100%; height: auto; }
+.phone::after {
+  content: "";
+  position: absolute;
+  top: 13px;
+  left: 50%;
+  width: 9px;
+  height: 9px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: #050505;
+}
+.phone img { border-radius: 13px; width: 100%; height: auto; }
+.phone .key {
+  position: absolute;
+  right: -6px;
+  width: 3px;
+  border-radius: 1.5px;
+  background: #56565c;
+}
+.phone .key-vol { top: 20%; height: 12%; }
+.phone .key-pwr { top: 35%; height: 6%; }
 
 /* two small phones side by side — same theme, light vs dark */
 .panel.pair { display: flex; gap: 10px; }
-.panel.pair .phone { flex: 1 1 0; padding: 6px; border-radius: 22px; }
-.panel.pair .phone img { border-radius: 16px; }
+.panel.pair .phone { flex: 1 1 0; padding: 4px; border-width: 2px; border-radius: 14px; }
+.panel.pair .phone::after { width: 5px; height: 5px; top: 8px; }
+.panel.pair .phone img { border-radius: 9px; }
+.panel.pair .phone .key { right: -4px; width: 2px; }
 
-/* four clock styles as one 2x2 grid, in place of a single panel */
+/* four clock styles as one 2x2 grid, each in its own small frame */
 .panel.grid4 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.panel.grid4 img { border-radius: 14px; width: 100%; height: auto; display: block; }
+.panel.grid4 .phone { padding: 3px; border-width: 2px; border-radius: 13px; }
+.panel.grid4 .phone::after { width: 5px; height: 5px; top: 7px; }
+.panel.grid4 .phone .key { right: -4px; width: 2px; }
+.panel.grid4 .phone img { border-radius: 9px; width: 100%; height: auto; display: block; }
 
 .visually-hidden {
   position: absolute; width: 1px; height: 1px; overflow: hidden;
@@ -167,7 +263,7 @@ h1, h2, h3 {
   border-bottom: 2px solid var(--ink);
   color: var(--ink);
   font: inherit;
-  font-size: clamp(20px, 1.7vw, 24px);
+  font-size: var(--size-card);
   padding: 6px 0 10px;
   outline: none;
   caret-color: var(--accent);
@@ -211,13 +307,12 @@ h1, h2, h3 {
   font-size: 13px;
   padding: 6px 13px;
 }
-.plan-note { margin-top: 14px; color: var(--field-muted); font-size: 13px; letter-spacing: 0.04em; }
-.plan-note code { font-family: ui-monospace, monospace; font-size: 12px; }
+.plan-note { margin-top: 14px; color: var(--field-muted); font-size: var(--size-small); letter-spacing: 0.04em; }
 
 .show-head {
   position: absolute;
   bottom: 32px;
-  font-size: clamp(40px, 5vw, 80px);
+  font-size: var(--size-display);
   font-weight: 600;
   letter-spacing: -0.04em;
   line-height: 1;
@@ -232,7 +327,7 @@ h1, h2, h3 {
 
 .reel { padding: 120px 0 60px; }
 .reel-pin { padding: 0 var(--margin); }
-.reel-pin h2 { font-size: 28px; letter-spacing: -0.02em; margin: 0 0 44px 0; }
+.reel-pin h2 { font-size: var(--size-section); letter-spacing: -0.02em; margin: 0 0 44px 0; }
 .reel-track {
   display: flex;
   gap: 18px;
@@ -254,8 +349,8 @@ h1, h2, h3 {
   padding: 32px 36px;
 }
 .card .panel { width: 236px; }
-.card h3 { font-size: clamp(19px, 1.5vw, 23px); font-weight: 500; letter-spacing: -0.01em; line-height: 1.25; margin-bottom: 12px; }
-.card p { font-size: 15px; color: var(--muted); line-height: 1.5; max-width: 34ch; }
+.card h3 { font-size: var(--size-card); font-weight: 500; letter-spacing: -0.01em; line-height: 1.25; margin-bottom: 12px; }
+.card p { font-size: var(--size-body); color: var(--ink); line-height: 1.5; max-width: 34ch; }
 .card p + p { margin-top: 8px; }
 
 .reel-progress {
@@ -286,7 +381,7 @@ h1, h2, h3 {
 }
 .reel-on .reel-track { overflow: visible; scroll-snap-type: none; will-change: transform; }
 .reel-on .card {
-  opacity: 0.4;
+  opacity: 0.55;
   transform: scale(0.97);
   transition: opacity 450ms ease, transform 450ms cubic-bezier(0.2, 0, 0, 1);
 }
@@ -313,13 +408,13 @@ h1, h2, h3 {
   gap: 24px;
   flex-wrap: wrap;
 }
-.proof .lead-in { font-size: 18px; color: var(--muted); }
-.proof b { font-size: 22px; font-weight: 500; letter-spacing: -0.01em; white-space: nowrap; }
+.proof .lead-in { font-size: var(--size-body); color: var(--muted); }
+.proof b { font-size: var(--size-card); font-weight: 500; letter-spacing: -0.01em; white-space: nowrap; }
 
 /* ---- faq: fair questions -------------------------------------------------- */
 
 .faq { padding: 40px 0 160px; }
-.faq h2 { font-size: 28px; letter-spacing: -0.02em; margin: 0 0 48px 22%; }
+.faq h2 { font-size: var(--size-section); letter-spacing: -0.02em; margin: 0 0 48px 22%; }
 .faq details {
   max-width: 640px;
   margin: 0 0 10px 22%;
@@ -329,19 +424,31 @@ h1, h2, h3 {
 .faq summary {
   cursor: pointer;
   list-style: none;
-  font-size: 17px;
+  font-size: var(--size-body);
   font-weight: 500;
-  padding: 18px 20px;
+  padding: 18px 48px 18px 20px;
+  position: relative;
   transition: color 140ms ease;
 }
 .faq summary::-webkit-details-marker { display: none; }
+.faq summary::after {
+  content: "+";
+  position: absolute;
+  right: 20px;
+  top: 14px;
+  font-size: var(--size-card);
+  font-weight: 400;
+  color: var(--muted);
+  transition: transform 200ms cubic-bezier(0.2, 0, 0, 1);
+}
+.faq details[open] summary::after { transform: rotate(45deg); }
 .faq summary:hover { color: var(--muted); }
 .faq details[open] summary { color: var(--ink); }
 .faq details p {
   padding: 0 20px 18px;
-  font-size: 16px;
+  font-size: var(--size-body);
   line-height: 1.55;
-  color: var(--muted);
+  color: var(--ink);
   max-width: 56ch;
 }
 
@@ -362,10 +469,25 @@ h1, h2, h3 {
   justify-content: center;
   padding: 40px;
 }
-.tile-main h2 { font-size: 40px; letter-spacing: -0.03em; }
-.tile-main p { font-size: 17px; max-width: 46ch; margin: 14px 0 26px; }
-.tile-main .button { background: var(--field); color: var(--field-ink); width: fit-content; }
-.tile-fine { font-size: 13px; margin-top: 14px; opacity: 0.85; }
+.tile-main h2 { font-size: var(--size-tile); letter-spacing: -0.03em; }
+.tile-main p { font-size: var(--size-body); max-width: 46ch; margin: 14px 0 26px; }
+.tile-main .button { background: var(--field); color: var(--field-ink); font-size: var(--size-body); width: fit-content; }
+.tile-fine { font-size: var(--size-small); margin-top: 14px; opacity: 0.9; }
+
+/* the drawer moment: type two letters, your aliases rank first */
+.tile-drawer[data-ui] {
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 16px;
+  padding: 22px 12% 22px 20%;
+}
+.tile-drawer .ui-search { align-self: flex-start; display: inline-flex; gap: 0; }
+.tile-drawer .ui-apps { margin-top: 0; }
+.tile-drawer .ui-apps b { font-weight: 600; color: var(--accent-ink); }
+.tile-drawer .ui-apps span { color: var(--muted); }
+.tile-drawer .ui-apps span:first-child { color: var(--ink); }
 
 /* ---- footer --------------------------------------------------------------- */
 
@@ -375,7 +497,7 @@ h1, h2, h3 {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: baseline;
-  font-size: 15px;
+  font-size: var(--size-small);
   color: var(--muted);
 }
 .footer nav { display: flex; gap: 24px; }
@@ -413,7 +535,9 @@ h1, h2, h3 {
   .hero-grid { grid-template-columns: 1fr; gap: 36px; }
   .hero-copy h1 { font-size: 11vw; }
   .hero-sub { font-size: 17px; }
-  .hero-phone .phone { width: min(260px, 72vw); }
+  .hero-phone .phone { width: min(280px, 76vw); }
+  .ui-home[data-ui] { width: 100%; }
+  .ui-home[data-ui] .ui-clock { font-size: 44px; }
 
   .show-fields { grid-template-columns: 1fr; }
   .show-in, .show-out { min-height: 62svh; padding-bottom: 72px; }
@@ -423,14 +547,16 @@ h1, h2, h3 {
   .show-head.in { bottom: 16px; }
   .show-head.out { bottom: auto; top: 16px; }
 
-  /* the reel stays a thumb-swiped row on phones; no pinning */
+  /* on phones the features read as a plain stacked column: nothing is
+     cut at the screen edge, nothing needs to be discovered by swiping */
   .reel { padding-top: 96px; }
   .reel-pin { padding: 0 16px; }
   .reel-pin h2 { margin-bottom: 28px; }
-  .card { flex: 0 0 82vw; grid-template-columns: 1fr; gap: 20px; padding: 24px 20px; }
+  .reel-track { flex-direction: column; gap: 14px; overflow: visible; }
+  .card { flex: none; width: 100%; grid-template-columns: 1fr; gap: 20px; padding: 24px 20px; }
   .card .panel { width: min(220px, 60vw); margin: 0 auto; }
-  .card h3 { font-size: 17px; }
-  .reel-progress { width: 56vw; }
+  .card h3 { font-size: 19px; }
+  .reel-progress { display: none; }
 
   .letter { padding: 96px 24px; }
   .letter img { width: 40px; height: 40px; }

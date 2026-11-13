@@ -151,25 +151,40 @@
     });
   }
 
-  /* ---- cta tile: the visitor's own clock, same format as the app's digital
-     clock ("h:mm", no leading zero, no am/pm) and home-screen date line
-     ("EEEE, MMM d" lowercase + screen time, one line, middle-dotted). ------- */
-  var tileClock = document.getElementById("tile-clock");
-  var tileDate = document.getElementById("tile-date");
-  if (tileClock && tileDate) {
-    var DAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
-    var MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
-    var tickTile = function () {
-      var now = new Date();
-      var h = now.getHours() % 12 || 12;
-      var m = now.getMinutes();
-      tileClock.textContent = h + ":" + (m < 10 ? "0" : "") + m;
-      tileDate.textContent =
-        DAYS[now.getDay()] + ", " + MONTHS[now.getMonth()] + " " + now.getDate() + " · 1h 25m today";
-    };
-    tickTile();
-    setInterval(tickTile, 10000);
+  /* ---- live clocks (hero phone + cta tile): the visitor's own time, in the
+     app's own format — digital clock "h:mm" (no leading zero, no am/pm) and
+     the home-screen date line ("EEEE, MMM d" lowercase + screen time). ------ */
+  var clockEls = [
+    { time: document.getElementById("hero-clock"), date: document.getElementById("hero-date") },
+    { time: document.getElementById("hero-status-time") },
+    { time: document.getElementById("tile-clock"), date: document.getElementById("tile-date") },
+  ];
+  var DAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+  var MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+  function tickClocks() {
+    var now = new Date();
+    var h = now.getHours() % 12 || 12;
+    var m = now.getMinutes();
+    var time = h + ":" + (m < 10 ? "0" : "") + m;
+    var date = DAYS[now.getDay()] + ", " + MONTHS[now.getMonth()] + " " + now.getDate() + " · 1h 25m today";
+    clockEls.forEach(function (c) {
+      if (c.time) c.time.textContent = time;
+      if (c.date) c.date.textContent = date;
+    });
   }
+  tickClocks();
+  setInterval(tickClocks, 10000);
+
+  /* ---- device chrome: the s25 ultra's volume rocker and power key on the
+     right rail of every drawn phone (decorative, so added here not in HTML) */
+  document.querySelectorAll(".phone").forEach(function (p) {
+    ["key key-vol", "key key-pwr"].forEach(function (cls) {
+      var k = document.createElement("span");
+      k.className = cls;
+      k.setAttribute("aria-hidden", "true");
+      p.appendChild(k);
+    });
+  });
 
   /* ---- motion layer ---------------------------------------------------------
      the transition architecture borrows from niagaralauncher.com:
@@ -277,11 +292,23 @@
     }
   }
 
+  /* the bar: solid once past the top, away while reading down, back on the
+     first upward scroll (the pattern the strong navbar.gallery bars share) */
+  var nav = document.querySelector(".nav");
+  var lastY = window.scrollY;
+  function navFrame() {
+    if (!nav) return;
+    var y = window.scrollY;
+    nav.classList.toggle("scrolled", y > 24);
+    nav.classList.toggle("hid", y > lastY && y > 240);
+    lastY = y;
+  }
+
   var ticking = false;
   function onScroll() {
     if (ticking) return;
     ticking = true;
-    requestAnimationFrame(function () { ticking = false; scrollFrame(); });
+    requestAnimationFrame(function () { ticking = false; navFrame(); scrollFrame(); });
   }
 
   window.addEventListener("scroll", onScroll, { passive: true });
