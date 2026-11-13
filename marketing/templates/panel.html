@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #050506;
+    --ink: #ededed;
+    --muted: #9b9b97;
+    --accent: #e05257;
+    --sans: "Bricolage Grotesque", system-ui, sans-serif;
+  }
+  body.light {
+    --bg: #f7f5f2;
+    --ink: #1a1a18;
+    --muted: #6b6a65;
+    --accent: #ce3339;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 540px; height: 960px; overflow: hidden; }
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    position: relative;
+  }
+  .glow {
+    position: absolute; inset: 0;
+    background: radial-gradient(460px 340px at 50% -10%, #ce3339, transparent 70%);
+    opacity: 0.10;
+  }
+  body.light .glow { opacity: 0.07; }
+  .brand {
+    position: relative;
+    margin: 40px auto 0; width: fit-content;
+    display: flex; align-items: center; gap: 8px;
+    font-size: 15px; font-weight: 600; letter-spacing: -0.01em;
+  }
+  .brand img { width: 20px; height: 20px; border-radius: 5px; display: block; }
+  h1 {
+    position: relative;
+    margin: 18px auto 0; padding: 0 34px;
+    text-align: center;
+    font-size: 35px; line-height: 1.08; font-weight: 600; letter-spacing: -0.02em;
+  }
+  h1 em { font-style: normal; color: var(--accent); }
+  .sub {
+    position: relative;
+    margin: 13px auto 0; padding: 0 52px;
+    text-align: center;
+    font-size: 15.5px; line-height: 1.5; letter-spacing: -0.005em;
+    font-weight: 400;
+    color: var(--muted);
+  }
+  /* S25-Ultra-ish frame: flat sides, tight corners, thin bezel */
+  .phone {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    bottom: -72px;
+    width: 348px;
+    background: #0a0a0b;
+    border-radius: 30px; padding: 9px;
+    box-shadow:
+      inset 0 0 0 1.5px rgba(255,255,255,0.14),
+      0 42px 90px -26px rgba(5,5,6,0.6),
+      0 10px 26px -12px rgba(5,5,6,0.4);
+  }
+  body.light .phone {
+    box-shadow:
+      inset 0 0 0 1.5px rgba(255,255,255,0.14),
+      0 42px 90px -26px rgba(26,26,24,0.45),
+      0 10px 26px -12px rgba(26,26,24,0.25);
+  }
+  .screen { border-radius: 22px; overflow: hidden; background: #050506; }
+  .phone img { width: 100%; display: block; }
+</style>
+</head>
+<body>
+<div class="glow"></div>
+<div class="brand"><img src="../../website/assets/icon.png" alt="">foyer</div>
+<h1 id="title"></h1>
+<p class="sub" id="sub"></p>
+<div class="phone"><div class="screen"><img id="shot" src="" alt=""></div></div>
+<script>
+  const q = new URLSearchParams(location.search);
+  if (q.get('theme') === 'light') document.body.classList.add('light');
+  document.getElementById('title').innerHTML = q.get('title') || '';
+  document.getElementById('sub').textContent = q.get('sub') || '';
+  document.getElementById('shot').src = '../../website/assets/' + (q.get('img') || '');
+</script>
+</body>
+</html>

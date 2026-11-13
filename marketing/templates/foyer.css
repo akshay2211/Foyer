@@ -1,0 +1,159 @@
+/* Shared design language for all marketing templates — lifted from website/style.css
+   so panels look like the site: same tokens, same drawn phone, same rebuilt app
+   fragments ("not a screenshot" applies here too). */
+
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700&display=swap');
+
+:root {
+  --bg: #050506;
+  --surface: #151515;
+  --ink: #ededed;
+  --muted: #9a9a9a;
+  --accent: #ce3339;
+  --accent-bright: #e05257;   /* for display-size text on near-black */
+  --field: #efefef;
+  --field-ink: #0a0a0a;
+  --field-muted: #5c5c5c;
+  --radius: 4px;
+  /* the app's own UI, inside data-ui fragments */
+  --app-bg: #101013;
+  --app-ink: #ececec;
+  --app-clock: #c9c9c9;
+  --app-font: Roboto, "Helvetica Neue", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: "Bricolage Grotesque", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  position: relative;
+}
+
+/* ---------- panel scaffold (540×960 canvas) ---------- */
+
+.glow {
+  position: absolute; inset: 0;
+  background: radial-gradient(460px 340px at 50% -10%, var(--accent), transparent 70%);
+  opacity: 0.10;
+}
+
+.brand {
+  position: relative;
+  margin: 40px auto 0; width: fit-content;
+  display: flex; align-items: center; gap: 8px;
+  font-size: 15px; font-weight: 600; letter-spacing: -0.01em;
+}
+.brand img { width: 20px; height: 20px; border-radius: 5px; display: block; }
+
+h1.caption {
+  position: relative;
+  margin: 18px auto 0; padding: 0 34px;
+  text-align: center;
+  font-size: 35px; line-height: 1.08; font-weight: 600; letter-spacing: -0.02em;
+}
+h1.caption em { font-style: normal; color: var(--accent-bright); }
+
+.sub {
+  position: relative;
+  margin: 13px auto 0; padding: 0 52px;
+  text-align: center;
+  font-size: 15.5px; line-height: 1.5; letter-spacing: -0.005em;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+/* the component area below the caption */
+.stage {
+  position: absolute; left: 0; right: 0; top: 240px; bottom: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* ---------- the drawn phone (website hero) ---------- */
+
+.phone {
+  display: inline-block;
+  position: relative;
+  background: #0b0b0c;
+  border: 3px solid #46464c;  /* the titanium rail */
+  border-radius: 24px;
+  padding: 7px;
+}
+.phone::after {
+  content: "";
+  position: absolute;
+  top: 15px; left: 50%;
+  width: 9px; height: 9px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: #050505;
+}
+.phone .key {
+  position: absolute; right: -6px; width: 3px; border-radius: 2px;
+  background: #46464c;
+}
+.phone .key-vol { top: 20%; height: 12%; }
+.phone .key-pwr { top: 35%; height: 6%; }
+
+/* ---------- rebuilt app fragments ---------- */
+
+[data-ui] {
+  font-family: var(--app-font);
+  background: var(--app-bg);
+  color: var(--app-ink);
+}
+
+/* full home screen, as on the website hero */
+.ui-home[data-ui] {
+  width: 320px;
+  aspect-ratio: 1344 / 2992;
+  border-radius: 17px;
+  display: flex; flex-direction: column;
+  padding: 14px 20px 12px;
+  text-align: left;
+}
+.ui-home .ui-status {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 12px; font-weight: 700; color: #f0f0f0; letter-spacing: 0.01em;
+}
+.ui-home .ui-top { margin-top: 13%; text-align: center; }
+.ui-home .ui-clock {
+  font-size: 52px; font-weight: 100; letter-spacing: 0.05em;
+  color: var(--app-clock); line-height: 1;
+}
+.ui-home .ui-date { color: #9a9a9a; font-size: 12.5px; letter-spacing: 0.02em; margin-top: 13px; }
+.ui-home .ui-apps {
+  margin-top: auto; margin-bottom: auto;
+  display: grid; gap: 16px; font-size: 17px;
+}
+.ui-home .ui-apps span { color: var(--app-ink); }
+.ui-home .ui-dock { display: flex; justify-content: space-between; align-items: center; padding: 0 4px; }
+.ui-home .ui-gesture {
+  display: block; margin: 12px auto 0;
+  width: 86px; height: 4px; border-radius: 2px; background: #3c3c40;
+}
+
+/* the app's light theme */
+.ui-home.light[data-ui] { background: #f7f7f5; color: #1d1d1f; }
+.ui-home.light .ui-status { color: #1d1d1f; }
+.ui-home.light .ui-status svg { fill: #1d1d1f; }
+.ui-home.light .ui-status svg text { fill: #f7f7f5; }
+.ui-home.light .ui-clock { color: #3a3a3c; }
+.ui-home.light .ui-date { color: #8a8a86; }
+.ui-home.light .ui-apps span { color: #1d1d1f; }
+.ui-home.light .ui-dock svg { stroke: #3a3a3c; }
+.ui-home.light .ui-gesture { background: #c9c9c5; }
+
+/* free-standing component card (a piece of the app, not the whole screen) */
+.ui-frag[data-ui] {
+  border-radius: 18px;
+  padding: 22px 24px;
+}
+
+.ui-tag {
+  font-family: "Bricolage Grotesque", system-ui, sans-serif;
+  color: var(--muted); font-size: 12px; letter-spacing: 0.12em;
+}

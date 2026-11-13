@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="foyer.css">
+<style>
+  html, body { width: 540px; height: 960px; }
+  .stage { top: 248px; bottom: 56px; }
+  .grid {
+    display: grid; grid-template-columns: 220px 220px; grid-auto-rows: 290px;
+    gap: 18px;
+  }
+  .face {
+    background: var(--app-bg);
+    border-radius: 18px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 0; position: relative;
+    font-family: var(--app-font);
+  }
+  .face .ui-tag { position: absolute; bottom: 18px; }
+  .clock-digital { font-size: 40px; font-weight: 100; letter-spacing: 0.05em; color: var(--app-clock); }
+  .clock-bold { font-size: 58px; font-weight: 400; letter-spacing: 0.01em; color: #e8e8e8; }
+  .face .ui-date { color: #9a9a9a; font-size: 11px; letter-spacing: 0.02em; margin-top: 12px; font-family: var(--app-font); }
+  svg text { font-family: var(--app-font); }
+</style>
+</head>
+<body>
+<div class="glow"></div>
+<div class="brand"><img src="../../website/assets/icon.png" alt="">foyer</div>
+<h1 class="caption" id="title"></h1>
+<p class="sub" id="sub"></p>
+<div class="stage">
+  <div class="grid">
+    <div class="face">
+      <div class="clock-digital">11:11</div>
+      <div class="ui-date">saturday, nov 7</div>
+      <span class="ui-tag">digital</span>
+    </div>
+    <div class="face">
+      <div class="clock-bold">11:11</div>
+      <div class="ui-date">saturday, nov 7</div>
+      <span class="ui-tag">bold</span>
+    </div>
+    <div class="face">
+      <svg id="dial" width="180" height="190" viewBox="0 0 180 190"></svg>
+      <span class="ui-tag">dial</span>
+    </div>
+    <div class="face">
+      <svg width="180" height="190" viewBox="0 0 180 190">
+        <circle cx="90" cy="88" r="62" fill="none" stroke="#3b3b3f" stroke-width="1.2"/>
+        <!-- 11:11 — hour at 335.5°, minute at 66° from 12 o'clock -->
+        <line x1="90" y1="88" x2="74.4" y2="53.6" stroke="#e0e0e0" stroke-width="4" stroke-linecap="round"/>
+        <line x1="90" y1="88" x2="137.4" y2="66.9" stroke="#e0e0e0" stroke-width="2.6" stroke-linecap="round"/>
+        <circle cx="90" cy="88" r="3.4" fill="#d93036"/>
+      </svg>
+      <span class="ui-tag">hands</span>
+    </div>
+  </div>
+</div>
+<script>
+  const q = new URLSearchParams(location.search);
+  document.getElementById('title').innerHTML = q.get('title') || '';
+  document.getElementById('sub').textContent = q.get('sub') || '';
+
+  // The rotating dial at 11:11 — current minute sits at 3 o'clock, like the app.
+  const svg = document.getElementById('dial');
+  const NS = 'http://www.w3.org/2000/svg';
+  const cx = 90, cy = 92, R = 64, minute = 11;
+  for (let m = 0; m < 60; m++) {
+    if (m % 5 === 0) continue;
+    const a = (m - minute) * Math.PI / 30;           // minute m, rotated so `minute` is east
+    const d = document.createElementNS(NS, 'circle');
+    d.setAttribute('cx', cx + R * Math.cos(a));
+    d.setAttribute('cy', cy + R * Math.sin(a));
+    d.setAttribute('r', 1);
+    d.setAttribute('fill', '#5c5c60');
+    svg.appendChild(d);
+  }
+  for (let m = 0; m < 60; m += 5) {
+    const a = (m - minute) * Math.PI / 30;
+    const t = document.createElementNS(NS, 'text');
+    t.setAttribute('x', cx + R * Math.cos(a));
+    t.setAttribute('y', cy + R * Math.sin(a) + 3);
+    t.setAttribute('text-anchor', 'middle');
+    t.setAttribute('font-size', '9');
+    t.setAttribute('fill', '#737377');
+    t.textContent = String(m).padStart(2, '0');
+    svg.appendChild(t);
+  }
+  // hour digits just left of the minute badge; badge sits on the ring at the current minute (east)
+  const hour = document.createElementNS(NS, 'text');
+  hour.setAttribute('x', cx + 20); hour.setAttribute('y', cy + 12);
+  hour.setAttribute('text-anchor', 'middle');
+  hour.setAttribute('font-size', '36'); hour.setAttribute('font-weight', '500');
+  hour.setAttribute('fill', '#e4e4e4');
+  hour.textContent = '11';
+  svg.appendChild(hour);
+  const ring = document.createElementNS(NS, 'circle');
+  ring.setAttribute('cx', cx + R); ring.setAttribute('cy', cy);
+  ring.setAttribute('r', 12);
+  ring.setAttribute('fill', '#101013'); ring.setAttribute('stroke', '#d93036'); ring.setAttribute('stroke-width', '1.3');
+  svg.appendChild(ring);
+  const min = document.createElementNS(NS, 'text');
+  min.setAttribute('x', cx + R); min.setAttribute('y', cy + 4);
+  min.setAttribute('text-anchor', 'middle');
+  min.setAttribute('font-size', '11'); min.setAttribute('fill', '#e4e4e4');
+  min.textContent = '11';
+  svg.appendChild(min);
+</script>
+</body>
+</html>

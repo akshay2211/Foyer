@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="foyer.css">
+<style>
+  html, body { width: 1024px; height: 500px; }
+  .fg-glow {
+    position: absolute; inset: 0;
+    background: radial-gradient(640px 420px at 80% 20%, var(--accent), transparent 70%);
+    opacity: 0.10;
+  }
+  .text { position: absolute; left: 64px; top: 50%; transform: translateY(-50%); width: 560px; }
+  .brand { margin: 0; font-size: 19px; }
+  .brand img { width: 26px; height: 26px; border-radius: 6px; }
+  h1 { margin-top: 22px; font-size: 54px; line-height: 1.06; font-weight: 600; letter-spacing: -0.02em; }
+  h1 em { font-style: normal; color: var(--accent-bright); }
+  .lede { margin-top: 18px; font-size: 19px; line-height: 1.5; letter-spacing: -0.005em; color: var(--muted); }
+  .chips { margin-top: 24px; display: flex; gap: 8px; }
+  .chips span {
+    font-size: 14px; font-weight: 500;
+    border: 1px solid #333332; border-radius: 999px;
+    padding: 7px 16px; color: var(--ink);
+  }
+  .stage-right { position: absolute; right: 74px; top: 48px; }
+  .ui-home[data-ui] { width: 268px; }
+</style>
+</head>
+<body>
+<div class="fg-glow"></div>
+<div class="text">
+  <div class="brand"><img src="../../website/assets/icon.png" alt="">foyer</div>
+  <h1>a <em>quiet</em> home for your phone</h1>
+  <p class="lede">A text-first launcher with a fully on-device AI assistant. No server, no account, no analytics.</p>
+  <div class="chips"><span>on-device ai</span><span>text first</span><span>open source</span></div>
+</div>
+<div class="stage-right"><div data-slot="home"></div></div>
+<script src="ui-home.js"></script>
+</body>
+</html>
