@@ -118,6 +118,7 @@ import com.foyerlauncher.foyer.ai.router.CommandKind
 import com.foyerlauncher.foyer.ai.router.toCommand
 import com.foyerlauncher.foyer.data.AppEntry
 import com.foyerlauncher.foyer.data.DISTRACTION_THRESHOLD_MS
+import com.foyerlauncher.foyer.data.LabelMatch
 import com.foyerlauncher.foyer.data.LauncherStore
 import com.foyerlauncher.foyer.data.MAX_FAVORITES
 import com.foyerlauncher.foyer.data.ShortcutSide
@@ -127,6 +128,7 @@ import com.foyerlauncher.foyer.data.formatDuration
 import com.foyerlauncher.foyer.data.key
 import com.foyerlauncher.foyer.data.launchApp
 import com.foyerlauncher.foyer.data.loadLaunchableApps
+import com.foyerlauncher.foyer.data.matchLabel
 import com.foyerlauncher.foyer.data.openAppInfo
 import com.foyerlauncher.foyer.data.openClockApp
 import com.foyerlauncher.foyer.data.playSearch
@@ -904,13 +906,25 @@ private fun DrawerPage(
     val browse = apps.filterNot { store.isHidden(it) }
     val searchResults =
         if (searching) {
-            // User-taught aliases rank first, then label prefixes.
+            // User-taught aliases rank first, then fuzzy label matches in
+            // tightening order: prefix, word start, substring, letters in
+            // order (matchLabel) — so "in" finds linkedin and pinterest too.
             val aliased =
                 store.aliases
                     .filterKeys { it.startsWith(q, ignoreCase = true) }
                     .values
                     .mapNotNull { key -> apps.firstOrNull { it.key == key } }
-            (aliased + apps.filter { it.label.startsWith(q, ignoreCase = true) }).distinct()
+            val fuzzy =
+                apps
+                    .mapNotNull { app -> matchLabel(app.label, q)?.let { app to it } }
+                    .sortedWith(
+                        compareBy<Pair<AppEntry, LabelMatch>>(
+                            { (_, m) -> m.rank },
+                            { (_, m) -> m.ranges.first().first },
+                            { (app, _) -> app.label.lowercase() },
+                        ),
+                    ).map { it.first }
+            (aliased + fuzzy).distinct()
         } else {
             emptyList()
         }
@@ -1136,7 +1150,7 @@ private fun DrawerPage(
                             }
                         }
                         items(searchResults, key = { "s/" + it.key }) { app ->
-                            AppRow(app, onLaunch, onLongPress)
+                            AppRow(app, onLaunch, onLongPress, highlightQuery = q)
                         }
                         item(key = "web") {
                             FallbackRow("search web for “$q”") {
@@ -1246,13 +1260,25 @@ private fun AppRow(
     onLaunch: (AppEntry) -> Unit,
     onLongPress: (AppEntry) -> Unit,
     ghosted: Boolean = false,
+    highlightQuery: String = "",
 ) {
     val palette = LocalPalette.current
     val ff = LocalFontFamily.current
+    val label = app.label.lowercase()
+    // The letters the search query hit light up like on the website: the rest
+    // of the label dims, the matches keep the accent (ink, when accent is
+    // mono — it still reads against the dimmed rest). Ranges index `label`.
+    val match = if (highlightQuery.isNotEmpty()) matchLabel(label, highlightQuery) else null
     BasicText(
         text =
             buildAnnotatedString {
-                append(app.label.lowercase())
+                append(label)
+                if (match != null) {
+                    addStyle(SpanStyle(color = palette.muted), 0, label.length)
+                    match.ranges.forEach { r ->
+                        addStyle(SpanStyle(color = palette.accent), r.first, r.last + 1)
+                    }
+                }
                 // Same app can exist in two profiles; mark the work/private copy.
                 if (app.userSerial != 0L) {
                     withStyle(SpanStyle(color = palette.muted, fontSize = 13.sp)) { append("  · work") }
