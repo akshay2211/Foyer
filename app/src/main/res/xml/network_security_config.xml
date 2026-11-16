@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+   No feature uses cleartext HTTP — model downloads are HTTPS. Enforce that for
+   every connection, including a custom "bring your own model" URL a user might
+   paste, on all supported API levels (cleartext was still default-allowed below
+   API 28, which this app's minSdk 24 still reaches).
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>

@@ -19,3 +19,13 @@
 -dontwarn com.google.protobuf.Internal$ProtoMethodMayReturnNull
 -dontwarn com.google.protobuf.Internal$ProtoNonnullApi
 -dontwarn com.google.protobuf.ProtoPresenceBits
+
+# Strip verbose/debug/info logging from release builds. The AI pipeline logs
+# the user's commands and the model's replies at these levels; a privacy-first
+# launcher must not leave that in logcat on a shipped build. Warnings and errors
+# (genuine failures, no user content) are kept.
+-assumenosideeffects class android.util.Log {
+    public static *** v(...);
+    public static *** d(...);
+    public static *** i(...);
+}

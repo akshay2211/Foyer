@@ -43,6 +43,11 @@ const val MAX_FAVORITES = 10
 const val BACKUP_VERSION = 1
 
 private const val PREFS = "launcher_prefs"
+
+// The HF token lives in its own prefs file so it can be excluded from Android
+// auto-backup (see res/xml/*backup* rules). Everything in launcher_prefs still
+// backs up; the credential never leaves the device.
+private const val SECRETS_PREFS = "foyer_secrets"
 private const val KEY_FAVS = "favorites"
 private const val KEY_LEFT = "shortcut_left"
 private const val KEY_RIGHT = "shortcut_right"
@@ -99,6 +104,18 @@ const val SUGGESTED_QWEN_SMALL_URL =
     "https://huggingface.co/litert-community/Qwen2.5-0.5B-Instruct/resolve/main/Qwen2.5-0.5B-Instruct_multi-prefill-seq_q8_ekv1280.task"
 const val SUGGESTED_QWEN_BALANCED_URL =
     "https://huggingface.co/litert-community/Qwen2.5-1.5B-Instruct/resolve/main/Qwen2.5-1.5B-Instruct_multi-prefill-seq_q8_ekv4096.task"
+
+// Pinned SHA-256 of the ungated suggested models, read from their Hugging Face
+// LFS pointers. A download of one of these URLs is verified against its hash
+// (see ModelDownloader.download); a mismatch means a corrupted or tampered file
+// and the install is refused. Gated models (Gemma, behind the user's own token
+// + license click) and custom user URLs aren't pinned — we can't vet a file we
+// neither host nor can fetch unauthenticated.
+private val KNOWN_MODEL_SHA256: Map<String, String> =
+    mapOf(
+        SUGGESTED_QWEN_SMALL_URL to "e608953f169aeb1bd7b9155fec2559825e08453fc209b84eda3a781ed0452fd2",
+        SUGGESTED_QWEN_BALANCED_URL to "82968d0a6c3872cf016fdbcfc591571605f4c7fd2b0f64d2533df502cc6596b3",
+    )
 
 /** A friendly name for a downloaded model: matches a known suggestion, else its filename. */
 private fun suggestionLabel(url: String): String =
@@ -167,6 +184,22 @@ class LauncherStore(
     private val context: Context,
 ) {
     private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    // Backup-excluded store for the HF token (see [SECRETS_PREFS]).
+    private val secrets = context.getSharedPreferences(SECRETS_PREFS, Context.MODE_PRIVATE)
+
+    init {
+        // Migrate a token written by older versions (which lived in the backed-up
+        // prefs file) into the excluded store, then drop the backed-up copy so it
+        // stops riding auto-backup off the device.
+        if (prefs.contains(KEY_HF_TOKEN)) {
+            val legacy = prefs.getString(KEY_HF_TOKEN, "").orEmpty()
+            if (legacy.isNotBlank() && secrets.getString(KEY_HF_TOKEN, "").isNullOrBlank()) {
+                secrets.edit { putString(KEY_HF_TOKEN, legacy) }
+            }
+            prefs.edit { remove(KEY_HF_TOKEN) }
+        }
+    }
 
     val favorites: SnapshotStateList<AppEntry> =
         mutableStateListOf<AppEntry>().apply {
@@ -267,7 +300,8 @@ class LauncherStore(
         private set
 
     // Optional — only needed for gated URLs. Empty for a public/self-hosted model.
-    var hfToken by mutableStateOf(prefs.getString(KEY_HF_TOKEN, "") ?: "")
+    // Read from [secrets] (excluded from backup), never the backed-up prefs file.
+    var hfToken by mutableStateOf(secrets.getString(KEY_HF_TOKEN, "") ?: "")
         private set
 
     var isDownloading by mutableStateOf(false)
@@ -313,7 +347,7 @@ class LauncherStore(
 
     fun updateHfToken(token: String) {
         hfToken = token.trim()
-        prefs.edit { putString(KEY_HF_TOKEN, hfToken) }
+        secrets.edit { putString(KEY_HF_TOKEN, hfToken) }
     }
 
     suspend fun downloadModel() {
@@ -336,7 +370,12 @@ class LauncherStore(
         downloadedBytes = 0L
         totalBytes = 0L
         val result =
-            ModelDownloader.download(modelUrl, modelFile(context), token = hfToken.ifBlank { null }) { d, t ->
+            ModelDownloader.download(
+                modelUrl,
+                modelFile(context),
+                token = hfToken.ifBlank { null },
+                expectedSha256 = KNOWN_MODEL_SHA256[modelUrl],
+            ) { d, t ->
                 downloadedBytes = d
                 totalBytes = t
             }
@@ -410,6 +449,7 @@ class LauncherStore(
 
     fun resetAll() {
         prefs.edit { clear() }
+        secrets.edit { clear() }
         favorites.clear()
         hidden.clear()
         usage.clear()

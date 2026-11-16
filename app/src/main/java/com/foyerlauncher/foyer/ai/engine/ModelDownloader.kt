@@ -9,6 +9,7 @@ import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
 
 /** Where the active model lives — downloaded or copied in from local storage. */
 fun modelFile(context: Context): File = File(context.filesDir, "llm/model.task")
@@ -23,13 +24,15 @@ object ModelDownloader {
         urlString: String,
         dest: File,
         token: String?,
+        expectedSha256: String? = null,
         onProgress: (downloaded: Long, total: Long) -> Unit,
     ): Result<Unit> =
         withContext(Dispatchers.IO) {
             runCatching {
+                // Never log the token (or any part of it) — it's a credential.
                 Log.d(
                     AI_TAG,
-                    "download start url=$urlString token=${token?.take(6)}…(len=${token?.length ?: 0})",
+                    "download start host=${runCatching { URL(urlString).host }.getOrNull()} auth=${!token.isNullOrBlank()}",
                 )
                 dest.parentFile?.mkdirs()
                 val part = File(dest.path + ".part")
@@ -82,6 +85,7 @@ object ModelDownloader {
                         )
                     }
                 }
+                val digest = expectedSha256?.let { MessageDigest.getInstance("SHA-256") }
                 connection.inputStream.use { input ->
                     part.outputStream().use { output ->
                         val buffer = ByteArray(1 shl 16)
@@ -90,12 +94,24 @@ object ModelDownloader {
                             val n = input.read(buffer)
                             if (n < 0) break
                             output.write(buffer, 0, n)
+                            digest?.update(buffer, 0, n)
                             downloaded += n
                             onProgress(downloaded, total)
                         }
                     }
                 }
                 connection.disconnect()
+
+                // Integrity gate: a pinned model must match its known checksum, or
+                // the file is corrupt/tampered and we refuse to install it.
+                if (digest != null) {
+                    val actual = digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
+                    if (!actual.equals(expectedSha256, ignoreCase = true)) {
+                        part.delete()
+                        Log.w(AI_TAG, "integrity check failed: expected=$expectedSha256 actual=$actual")
+                        throw IOException("integrity check failed — the downloaded file doesn't match its expected checksum")
+                    }
+                }
 
                 if (dest.exists()) dest.delete()
                 if (!part.renameTo(dest)) throw IOException("could not finalize model file")
