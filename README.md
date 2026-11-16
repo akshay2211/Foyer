@@ -7,6 +7,7 @@
   <a href="https://foyerlauncher.com">foyerlauncher.com</a>
 </p>
 <p align="center">
+  <a href="https://play.google.com/store/apps/details?id=com.foyerlauncher.foyer"><img src="https://img.shields.io/badge/Google%20Play-get%20it%20now-414141?logo=google-play&logoColor=white" alt="Get it on Google Play"/></a>
   <a href="https://github.com/akshay2211/Foyer/actions/workflows/ci.yml"><img src="https://github.com/akshay2211/Foyer/actions/workflows/ci.yml/badge.svg" alt="CI status"/></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue.svg" alt="License: GPL-3.0"/></a>
   <a href="#building"><img src="https://img.shields.io/badge/min%20sdk-24-success.svg" alt="Min SDK 24"/></a>
@@ -49,6 +50,14 @@ nothing.
   <img src="marketing/out/play/06-light.png" width="16%" alt="The same home screen in the full light theme"/>
 </p>
 <p align="center"><sub>The app UI above is rebuilt in HTML from the same design tokens, not screenshotted — the <a href="https://foyerlauncher.com">live demo</a> runs it for real.</sub></p>
+
+## Install
+
+Foyer is live on Google Play:
+**[Get it on Google Play](https://play.google.com/store/apps/details?id=com.foyerlauncher.foyer)**.
+Prefer to sideload? Every [GitHub release](https://github.com/akshay2211/Foyer/releases)
+carries the same signed APK. Building from source is covered under
+[Building](#building) below.
 
 ---
 
