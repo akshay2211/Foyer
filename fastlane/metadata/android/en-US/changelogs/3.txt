@@ -1,0 +1,5 @@
+Smarter app search: type letters in order and an app still shows up even when they aren't next to each other ("wsp" finds WhatsApp), with the letters you typed highlighted.
+
+Distracting apps now appear dimmed in the list, so they pull less attention.
+
+Privacy & security: your model-host access token now stays on the device — kept out of cloud backup and device transfer, and out of logs. Downloaded models are checksum-verified over HTTPS, so a tampered file is rejected before it's loaded.

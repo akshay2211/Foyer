@@ -1174,7 +1174,7 @@ private fun DrawerPage(
                         if (frequent.isNotEmpty()) {
                             item(key = "freq-header") { SectionHeader("frequently used") }
                             items(frequent, key = { "f/" + it.key }) { app ->
-                                AppRow(app, onLaunch, onLongPress)
+                                AppRow(app, onLaunch, onLongPress, distracting = store.isDistracting(app))
                             }
                             item(key = "freq-divider") {
                                 HorizontalDivider(
@@ -1184,7 +1184,7 @@ private fun DrawerPage(
                             }
                         }
                         items(browse, key = { "a/" + it.key }) { app ->
-                            AppRow(app, onLaunch, onLongPress)
+                            AppRow(app, onLaunch, onLongPress, distracting = store.isDistracting(app))
                         }
 
                         // Hidden apps live at the end of the list, behind one
@@ -1260,11 +1260,21 @@ private fun AppRow(
     onLaunch: (AppEntry) -> Unit,
     onLongPress: (AppEntry) -> Unit,
     ghosted: Boolean = false,
+    distracting: Boolean = false,
     highlightQuery: String = "",
 ) {
     val palette = LocalPalette.current
     val ff = LocalFontFamily.current
     val label = app.label.lowercase()
+    // Row ink: hidden apps go fully muted; apps marked distracting are dimmed
+    // partway toward muted so the eye isn't pulled to them, but they stay
+    // legible and distinct from the hidden look.
+    val rowColor =
+        when {
+            ghosted -> palette.muted
+            distracting -> lerp(palette.text, palette.muted, 0.55f)
+            else -> palette.text
+        }
     // The letters the search query hit light up like on the website: the rest
     // of the label dims, the matches keep the accent (ink, when accent is
     // mono — it still reads against the dimmed rest). Ranges index `label`.
@@ -1295,8 +1305,8 @@ private fun AppRow(
                     onLongClick = { onLongPress(app) },
                     onLongClickLabel = "app options",
                 ).padding(vertical = 11.dp),
-        // Hidden apps show ghosted: present, but visibly set aside.
-        style = TextStyle(color = if (ghosted) palette.muted else palette.text, fontSize = 19.sp, fontFamily = ff),
+        // Hidden apps show ghosted; distracting apps show dimmed (see rowColor).
+        style = TextStyle(color = rowColor, fontSize = 19.sp, fontFamily = ff),
     )
 }
 

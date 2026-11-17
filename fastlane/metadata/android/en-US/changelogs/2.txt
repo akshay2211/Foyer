@@ -1,0 +1,3 @@
+Fewer permissions: Foyer no longer uses an accessibility service. The lock-screen gesture that relied on it has been removed, so the app now requests nothing covered by Play's accessibility policy. A gesture set to "lock screen" quietly falls back to its default.
+
+Also fixed: the dial clock's minute lens no longer clips at the widget's right edge.

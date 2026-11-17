@@ -3,6 +3,25 @@
 All notable changes to Foyer, newest first. Versions follow
 `versionName (versionCode)` as uploaded to Google Play.
 
+## 1.0.2 (3) — 2026-11-17
+
+### the app list
+- Drawer search now matches fuzzily. Type letters in order and an app still
+  surfaces even when they aren't next to each other ("wsp" finds WhatsApp),
+  with prefix and word-start matches ranked first. The exact letters you
+  typed are highlighted in every result.
+
+### mindful usage
+- Apps marked as distracting now appear dimmed in the app list, so they pull
+  less attention while you browse. (They already vanish while focus is active.)
+
+### privacy & security
+- Your model-host access token stays on the device: it's kept out of
+  Android's cloud auto-backup and device-to-device transfer, and redacted
+  from logs.
+- Downloaded models are verified by SHA-256 checksum and fetched over HTTPS
+  only, so a corrupted or tampered file is rejected before it's ever loaded.
+
 ## 1.0.1 (2) — 2026-11-12
 
 - Removed the lock-screen gesture and with it the accessibility service and

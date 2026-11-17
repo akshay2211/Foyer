@@ -1,0 +1,7 @@
+First release. Less phone, on purpose.
+
+A text-first home screen: up to 10 favorites as a plain list, corner shortcuts, and a choice of four clock styles. The full app list is one swipe away with A–Z fast scroll.
+
+"Ask me" turns typed or spoken requests ("turn on wifi and open spotify") into actions — running entirely on your phone, no server, no account. Bring your own MediaPipe model.
+
+Plus mindful extras: screen time, unlock count, and per-app daily limits.
