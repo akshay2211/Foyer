@@ -10,6 +10,7 @@
 .cxx
 local.properties
 /.taste-skill
+/.todo/
 *.jks
 *.keystore
 /app/release/
