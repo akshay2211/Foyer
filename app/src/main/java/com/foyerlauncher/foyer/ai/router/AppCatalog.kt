@@ -58,6 +58,27 @@ object AppCatalog {
         return apps.filter { it.label.lowercase().contains(q) }.sortedBy { it.label.lowercase() }
     }
 
+    /**
+     * Parses the semantic finder's reply — a JSON array of 1-based app numbers
+     * like "[2, 5]" — into valid, de-duplicated, capped indices into a pool of
+     * [poolSize] apps. A missing/empty array, or any number outside 1..poolSize,
+     * is dropped, so a pick can only ever point at an app that was offered.
+     */
+    fun pickIndices(
+        reply: String,
+        poolSize: Int,
+        max: Int,
+    ): List<Int> {
+        val bracket = Regex("\\[([^\\]]*)]").find(reply)?.groupValues?.get(1) ?: return emptyList()
+        return Regex("\\d+")
+            .findAll(bracket)
+            .mapNotNull { it.value.toIntOrNull() }
+            .filter { it in 1..poolSize }
+            .distinct()
+            .take(max)
+            .toList()
+    }
+
     /** A short, minimal-UX answer for an inventory question. */
     fun describe(
         apps: List<AppEntry>,

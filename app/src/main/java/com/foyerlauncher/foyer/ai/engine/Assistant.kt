@@ -112,6 +112,31 @@ private val CONVERSE_PREFIX: String by lazy {
 }
 
 /**
+ * Semantic app-finder preamble (KV prefix-cached). The model is given a numbered
+ * list of installed apps and a description, and returns a JSON array of the
+ * matching numbers — judging by what each app is commonly known to do.
+ */
+private val SEMANTIC_PREFIX: String by lazy {
+    buildString {
+        appendLine("Match a short description to the user's installed apps.")
+        appendLine("You get a numbered list of installed apps and a description.")
+        appendLine("Reply with ONLY a JSON array of the numbers whose app fits the description, most relevant first.")
+        appendLine("Judge by what each app is commonly known to do. If nothing fits, reply [].")
+        appendLine()
+        appendLine("Example:")
+        appendLine("Apps:")
+        appendLine("1. Spotify")
+        appendLine("2. Adobe Scan")
+        appendLine("3. WhatsApp")
+        appendLine("""Description: "app for scanning documents" -> [2]""")
+    }
+}
+
+/** How many installed apps to offer the model, and how many matches to show back. */
+private const val SEMANTIC_MAX_APPS = 100
+private const val SEMANTIC_MAX_RESULTS = 5
+
+/**
  * The judge's verdict on raw input — the explicit first step of every model
  * turn. Every verdict is logged at INFO on [AI_TAG], so a demo
  * (`adb logcat -s FoyerAI`) shows the decision the moment the text arrives.
@@ -558,11 +583,53 @@ class Assistant(
         }
     }
 
-    /** Answers "how many/list X apps" locally from the app list, so the model never guesses inventory. */
-    private fun resolveInventory(
+    /** Resolves every [AiIntent.FindApps] in a plan against the real app list. */
+    private suspend fun resolveInventory(
         plan: Plan,
         apps: List<AppEntry>,
-    ): Plan = plan.map { if (it is AiIntent.FindApps) AiIntent.Answer(AppCatalog.describe(apps, it.query)) else it }
+    ): Plan = plan.map { if (it is AiIntent.FindApps) resolveFindApps(it.query, apps) else it }
+
+    /**
+     * Turns a find-apps query into a concrete result. A category or keyword
+     * ("music", "games") is answered deterministically from the local catalog, as
+     * before. A description the catalog can't match ("app for scanning documents")
+     * is handed to the model, which picks the fitting apps from the installed list
+     * by what they're known to do; the result is a tappable [AiIntent.ShowApps].
+     */
+    private suspend fun resolveFindApps(
+        query: String,
+        apps: List<AppEntry>,
+    ): AiIntent {
+        val byKeyword = AppCatalog.query(apps, query)
+        if (byKeyword.isNotEmpty()) return AiIntent.Answer(AppCatalog.describe(apps, query))
+        if (ready) {
+            val matches = semanticFindApps(query, apps)
+            Log.i(AI_TAG, "semantic find \"$query\" -> ${matches.joinToString(", ") { it.label }.ifEmpty { "none" }}")
+            if (matches.isNotEmpty()) return AiIntent.ShowApps("for “$query”", matches)
+        }
+        return AiIntent.Answer(AppCatalog.describe(apps, query))
+    }
+
+    /**
+     * Asks the model which installed apps fit a free-text description. The apps are
+     * sent as a numbered list and the reply is a JSON array of those numbers, so a
+     * pick can only ever be an app we offered — never a hallucinated name.
+     */
+    private suspend fun semanticFindApps(
+        query: String,
+        apps: List<AppEntry>,
+    ): List<AppEntry> {
+        if (apps.isEmpty()) return emptyList()
+        val pool = apps.take(SEMANTIC_MAX_APPS)
+        val suffix =
+            buildString {
+                appendLine("Apps:")
+                pool.forEachIndexed { i, a -> appendLine("${i + 1}. ${a.label}") }
+                append("Description: \"$query\" -> ")
+            }
+        val reply = timedGenerate(generateFn, SEMANTIC_PREFIX, suffix) ?: return emptyList()
+        return AppCatalog.pickIndices(reply, pool.size, SEMANTIC_MAX_RESULTS).map { pool[it - 1] }
+    }
 
     /** Records one exchange in the neutral `"input" -> reply` form used by the prompt. */
     private fun remember(

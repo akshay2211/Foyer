@@ -160,6 +160,18 @@ sealed interface AiIntent {
         override val leaving get() = false
     }
 
+    /**
+     * The result of a semantic app search ("app for scanning documents"): a short
+     * heading plus the apps the model matched, each tappable to open. Produced by
+     * the Assistant after it resolves a descriptive [FindApps] against the app list.
+     */
+    data class ShowApps(
+        val heading: String,
+        val apps: List<AppEntry>,
+    ) : AiIntent {
+        override val leaving get() = false
+    }
+
     data object Unknown : AiIntent {
         override val leaving get() = false
     }
@@ -436,8 +448,28 @@ private fun AiIntent.build(context: Context): Step? =
 
         is AiIntent.AppNotFound -> Step("can't find $name on your phone", null, CommandKind.ANSWER, leaving = false, confirm = false) {}
 
-        // Normally rewritten to an Answer by the Assistant (which holds the app list); null is a safe no-op.
+        // Normally rewritten to an Answer or ShowApps by the Assistant (which holds the app list); null is a safe no-op.
         is AiIntent.FindApps -> null
+
+        // A semantic match list — a "pick one of these apps" choice, built like the
+        // open-app disambiguation (ACTION + confirm) so both the drawer and the voice
+        // UI render the heading plus one tappable "open" option per matched app.
+        is AiIntent.ShowApps ->
+            if (apps.isEmpty()) {
+                null
+            } else {
+                Step(
+                    title = heading,
+                    subtitle = null,
+                    kind = CommandKind.ACTION,
+                    leaving = true,
+                    confirm = true,
+                    options =
+                        apps.map { a ->
+                            Command("open ${a.label.lowercase()}", "app", CommandKind.ACTION) { launchApp(context, a) }
+                        },
+                ) { /* disambiguation only — the options are the actions */ }
+            }
 
         AiIntent.Unknown -> null
     }

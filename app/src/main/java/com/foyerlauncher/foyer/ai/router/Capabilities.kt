@@ -72,10 +72,11 @@ val CAPABILITIES: List<Capability> =
         ),
         Capability(
             "find_apps",
-            """{"action":"find_apps","query":"<category or keyword, e.g. music|games|video>"}""",
+            """{"action":"find_apps","query":"<category, keyword, or what the app is for>"}""",
             listOf(
                 "how many music apps do i have" to """{"action":"find_apps","query":"music"}""",
                 "list all my games" to """{"action":"find_apps","query":"games"}""",
+                "which app do i use to scan documents" to """{"action":"find_apps","query":"scan documents"}""",
             ),
         ),
     )
