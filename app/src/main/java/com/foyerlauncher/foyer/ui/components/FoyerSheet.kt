@@ -3,6 +3,8 @@ package com.foyerlauncher.foyer.ui.components
 import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.Spring
@@ -37,6 +39,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -62,15 +65,48 @@ import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 /**
+ * The screen's [SharedTransitionScope], when one wraps it — lets a pressed
+ * row's label morph into its sheet header. Null (previews, tests, screens
+ * without one) makes every [sharedLabel] a no-op.
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+val LocalSharedTransitionScope = staticCompositionLocalOf<SharedTransitionScope?> { null }
+
+/**
+ * One end of the label morph between a long-pressed row and its sheet header.
+ * Caller-managed visibility: the row passes visible=false while its sheet is
+ * open, the header stays visible=true for its whole lifetime — opening flies
+ * the label into the sheet, and removing the sheet flies it back to the row.
+ * No-op when [key] is null or no [LocalSharedTransitionScope] is provided.
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+fun Modifier.sharedLabel(
+    key: String?,
+    visible: Boolean,
+): Modifier {
+    val scope = LocalSharedTransitionScope.current
+    if (scope == null || key == null) return this
+    return with(scope) {
+        this@sharedLabel.sharedElementWithCallerManagedVisibility(
+            rememberSharedContentState("label/$key"),
+            visible,
+        )
+    }
+}
+
+/**
  * Foyer's reusable bottom sheet — the one pop-up surface for long-press menus
  * and pickers. Foundation-only (no Material): spring slide-up, drag-to-dismiss,
  * scrim tap / back to close with the reverse animation, long-press haptic on
- * open. [title] is the muted header tag (usually the app label).
+ * open. [title] is the muted header tag (usually the app label). [sharedKey]
+ * (a [sharedLabel] key) morphs the pressed row's label into the title.
  */
 @Composable
 fun FoyerSheet(
     title: String,
     onDismiss: () -> Unit,
+    sharedKey: String? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val palette = LocalPalette.current
@@ -152,7 +188,10 @@ fun FoyerSheet(
                 )
                 BasicText(
                     text = title,
-                    modifier = Modifier.padding(bottom = 4.dp),
+                    modifier =
+                        Modifier
+                            .sharedLabel(sharedKey, visible = true)
+                            .padding(bottom = 4.dp),
                     style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = tracked(1.sp), fontFamily = ff),
                 )
                 content()

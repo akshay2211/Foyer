@@ -8,6 +8,8 @@ import android.os.UserManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -59,6 +61,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -145,11 +148,13 @@ import com.foyerlauncher.foyer.ui.components.FoyerSheet
 import com.foyerlauncher.foyer.ui.components.GestureUi
 import com.foyerlauncher.foyer.ui.components.GlyphState
 import com.foyerlauncher.foyer.ui.components.IconAction
+import com.foyerlauncher.foyer.ui.components.LocalSharedTransitionScope
 import com.foyerlauncher.foyer.ui.components.LockClockWidget
 import com.foyerlauncher.foyer.ui.components.MinimalClockWidget
 import com.foyerlauncher.foyer.ui.components.SheetNote
 import com.foyerlauncher.foyer.ui.components.SheetRow
 import com.foyerlauncher.foyer.ui.components.runGestureAction
+import com.foyerlauncher.foyer.ui.components.sharedLabel
 import com.foyerlauncher.foyer.ui.theme.BackgroundTone
 import com.foyerlauncher.foyer.ui.theme.FoyerMaterialTheme
 import com.foyerlauncher.foyer.ui.theme.LocalFontFamily
@@ -166,6 +171,7 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun LauncherScreen(store: LauncherStore) {
     val context = LocalContext.current
@@ -233,6 +239,10 @@ fun LauncherScreen(store: LauncherStore) {
     val onDrawer = pagerState.currentPage == 0
 
     var menuApp by remember { mutableStateOf<AppEntry?>(null) }
+    // Shared-label key of the row whose long-press opened the menu — the morph
+    // must know *which* row, since the same app can sit in both "frequently
+    // used" and the A–Z list. Only meaningful while menuApp != null.
+    var menuAnchor by remember { mutableStateOf<String?>(null) }
     var pickerTarget by remember { mutableStateOf<ShortcutSide?>(null) }
     var showHomeMenu by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
@@ -310,231 +320,244 @@ fun LauncherScreen(store: LauncherStore) {
         }
     }
 
-    Box(
+    // Spans the pager and the sheet overlays (it stacks children like a Box)
+    // so a pressed row's label can morph into its sheet header and back.
+    SharedTransitionLayout(
         Modifier
             .fillMaxSize()
             .background(LocalPalette.current.background)
             .matteGrain(store.backgroundTone == BackgroundTone.MATTE),
     ) {
-        HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
-            when (page) {
-                0 ->
-                    DrawerPage(
-                        apps = store.focusFiltered(apps),
-                        store = store,
-                        onLaunchApp = requestLaunch,
-                        onLongPressApp = { menuApp = it },
-                        onOpenSettings = { showSettings = true },
-                        active = onDrawer,
-                        backEnabled = onDrawer && !overlayOpen,
-                        onNavigateHome = { scope.launch { pagerState.animateScrollToPage(1) } },
-                    )
+        CompositionLocalProvider(LocalSharedTransitionScope provides this) {
+            HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+                when (page) {
+                    0 ->
+                        DrawerPage(
+                            apps = store.focusFiltered(apps),
+                            store = store,
+                            onLaunchApp = requestLaunch,
+                            onLongPressApp = { app, anchor ->
+                                menuApp = app
+                                menuAnchor = anchor
+                            },
+                            menuAnchor = if (menuApp != null) menuAnchor else null,
+                            onOpenSettings = { showSettings = true },
+                            active = onDrawer,
+                            backEnabled = onDrawer && !overlayOpen,
+                            onNavigateHome = { scope.launch { pagerState.animateScrollToPage(1) } },
+                        )
 
-                else -> {
-                    val gestureUi =
-                        remember {
-                            GestureUi(
-                                openDrawer = { scope.launch { pagerState.animateScrollToPage(0) } },
-                                openVoice = { showVoice = true },
-                            )
-                        }
-                    HomePage(
-                        store = store,
-                        onLaunchFavorite = requestLaunch,
-                        onLongPressFavorite = { menuApp = it },
-                        onLongPressShortcut = { pickerTarget = it },
-                        onLongPressBackground = { showHomeMenu = true },
-                        onOpenVoice = { showVoice = true },
-                        onSwipeUp = { runGestureAction(context, store.swipeUpAction, gestureUi) },
-                        onSwipeDown = { runGestureAction(context, store.swipeDownAction, gestureUi) },
-                        onDoubleTap = { runGestureAction(context, store.doubleTapAction, gestureUi) },
-                        onOpenUsage = { showUsage = true },
-                    )
-                }
-            }
-        }
-
-        menuApp?.let { app ->
-            AppActionMenu(
-                app = app,
-                isFavorite = store.isFavorite(app),
-                canAdd = store.favorites.size < MAX_FAVORITES,
-                isHidden = store.isHidden(app),
-                isDistracting = store.isDistracting(app),
-                canUninstall = remember(app) { canUninstall(context, app) },
-                onAdd = {
-                    store.addFavorite(app)
-                    menuApp = null
-                },
-                onRemove = {
-                    store.removeFavorite(app)
-                    menuApp = null
-                },
-                onToggleHide = {
-                    store.toggleHidden(app)
-                    menuApp = null
-                },
-                onToggleDistracting = {
-                    store.toggleDistracting(app)
-                    menuApp = null
-                },
-                onAppInfo = {
-                    openAppInfo(context, app.packageName)
-                    menuApp = null
-                },
-                onUninstall = {
-                    requestUninstall(context, app)
-                    menuApp = null
-                },
-                aliases =
-                    store.aliases
-                        .filterValues { it == app.key }
-                        .keys
-                        .sorted(),
-                onAddAlias = {
-                    menuApp = null
-                    aliasApp = app
-                },
-                onRemoveAlias = { store.removeAlias(it) },
-                limitMs = store.appLimits[app.packageName],
-                onCycleLimit = {
-                    store.cycleLimit(app.packageName)
-                    // Point-of-use: the nudge needs notifications on 13+.
-                    if (store.limitFor(app.packageName) != null &&
-                        android.os.Build.VERSION.SDK_INT >= 33 &&
-                        context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
-                        android.content.pm.PackageManager.PERMISSION_GRANTED
-                    ) {
-                        notifPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                    else -> {
+                        val gestureUi =
+                            remember {
+                                GestureUi(
+                                    openDrawer = { scope.launch { pagerState.animateScrollToPage(0) } },
+                                    openVoice = { showVoice = true },
+                                )
+                            }
+                        HomePage(
+                            store = store,
+                            onLaunchFavorite = requestLaunch,
+                            onLongPressFavorite = {
+                                menuApp = it
+                                menuAnchor = "fav/" + it.key
+                            },
+                            menuAnchor = if (menuApp != null) menuAnchor else null,
+                            onLongPressShortcut = { pickerTarget = it },
+                            onLongPressBackground = { showHomeMenu = true },
+                            onOpenVoice = { showVoice = true },
+                            onSwipeUp = { runGestureAction(context, store.swipeUpAction, gestureUi) },
+                            onSwipeDown = { runGestureAction(context, store.swipeDownAction, gestureUi) },
+                            onDoubleTap = { runGestureAction(context, store.doubleTapAction, gestureUi) },
+                            onOpenUsage = { showUsage = true },
+                        )
                     }
-                },
-                onDismiss = { menuApp = null },
-            )
-        }
-
-        aliasApp?.let { app ->
-            AliasPrompt(
-                app = app,
-                onSave = { alias ->
-                    store.addAlias(alias, app)
-                    aliasApp = null
-                },
-                onDismiss = { aliasApp = null },
-            )
-        }
-
-        pickerTarget?.let { side ->
-            AppPicker(
-                apps = apps,
-                side = side,
-                onPick = {
-                    store.setShortcut(side, it)
-                    pickerTarget = null
-                },
-                onDismiss = { pickerTarget = null },
-            )
-        }
-
-        if (showHomeMenu) {
-            HomeMenu(
-                clockStyle = store.clockStyle,
-                focusActive = store.isFocusActive(),
-                onCycleClock = { store.chooseClockStyle(store.clockStyle.next()) },
-                onFocus = {
-                    showHomeMenu = false
-                    if (store.isFocusActive()) store.endFocus() else showFocusPicker = true
-                },
-                onOpenSettings = {
-                    showHomeMenu = false
-                    showSettings = true
-                },
-                onDismiss = { showHomeMenu = false },
-            )
-        }
-
-        if (showFocusPicker) {
-            FoyerSheet(title = "focus — hide distracting apps", onDismiss = { showFocusPicker = false }) {
-                SheetRow("30 minutes") {
-                    store.startFocus(30 * 60_000L)
-                    showFocusPicker = false
-                }
-                SheetRow("1 hour") {
-                    store.startFocus(60 * 60_000L)
-                    showFocusPicker = false
-                }
-                SheetRow("2 hours") {
-                    store.startFocus(120 * 60_000L)
-                    showFocusPicker = false
-                }
-                SheetRow("until i turn it off") {
-                    store.startFocus(null)
-                    showFocusPicker = false
                 }
             }
-        }
 
-        focusBlockedApp?.let { app ->
-            FoyerSheet(title = app.label.lowercase(), onDismiss = { focusBlockedApp = null }) {
-                BasicText(
-                    text = "${app.label.lowercase()} is paused — ${focusLabel(store.focusUntil)}",
-                    modifier = Modifier.padding(top = 6.dp, bottom = 10.dp),
-                    style = TextStyle(color = LocalPalette.current.text, fontSize = 20.sp),
+            menuApp?.let { app ->
+                AppActionMenu(
+                    app = app,
+                    sharedKey = menuAnchor,
+                    isFavorite = store.isFavorite(app),
+                    canAdd = store.favorites.size < MAX_FAVORITES,
+                    isHidden = store.isHidden(app),
+                    isDistracting = store.isDistracting(app),
+                    canUninstall = remember(app) { canUninstall(context, app) },
+                    onAdd = {
+                        store.addFavorite(app)
+                        menuApp = null
+                    },
+                    onRemove = {
+                        store.removeFavorite(app)
+                        menuApp = null
+                    },
+                    onToggleHide = {
+                        store.toggleHidden(app)
+                        menuApp = null
+                    },
+                    onToggleDistracting = {
+                        store.toggleDistracting(app)
+                        menuApp = null
+                    },
+                    onAppInfo = {
+                        openAppInfo(context, app.packageName)
+                        menuApp = null
+                    },
+                    onUninstall = {
+                        requestUninstall(context, app)
+                        menuApp = null
+                    },
+                    aliases =
+                        store.aliases
+                            .filterValues { it == app.key }
+                            .keys
+                            .sorted(),
+                    onAddAlias = {
+                        menuApp = null
+                        aliasApp = app
+                    },
+                    onRemoveAlias = { store.removeAlias(it) },
+                    limitMs = store.appLimits[app.packageName],
+                    onCycleLimit = {
+                        store.cycleLimit(app.packageName)
+                        // Point-of-use: the nudge needs notifications on 13+.
+                        if (store.limitFor(app.packageName) != null &&
+                            android.os.Build.VERSION.SDK_INT >= 33 &&
+                            context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
+                            android.content.pm.PackageManager.PERMISSION_GRANTED
+                        ) {
+                            notifPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    },
+                    onDismiss = { menuApp = null },
                 )
-                SheetRow("keep focusing") { focusBlockedApp = null }
-                SheetRow("end focus") {
-                    store.endFocus()
-                    store.recordLaunch(app)
-                    launchApp(context, app)
-                    focusBlockedApp = null
+            }
+
+            aliasApp?.let { app ->
+                AliasPrompt(
+                    app = app,
+                    onSave = { alias ->
+                        store.addAlias(alias, app)
+                        aliasApp = null
+                    },
+                    onDismiss = { aliasApp = null },
+                )
+            }
+
+            pickerTarget?.let { side ->
+                AppPicker(
+                    apps = apps,
+                    side = side,
+                    onPick = {
+                        store.setShortcut(side, it)
+                        pickerTarget = null
+                    },
+                    onDismiss = { pickerTarget = null },
+                )
+            }
+
+            if (showHomeMenu) {
+                HomeMenu(
+                    clockStyle = store.clockStyle,
+                    focusActive = store.isFocusActive(),
+                    onCycleClock = { store.chooseClockStyle(store.clockStyle.next()) },
+                    onFocus = {
+                        showHomeMenu = false
+                        if (store.isFocusActive()) store.endFocus() else showFocusPicker = true
+                    },
+                    onOpenSettings = {
+                        showHomeMenu = false
+                        showSettings = true
+                    },
+                    onDismiss = { showHomeMenu = false },
+                )
+            }
+
+            if (showFocusPicker) {
+                FoyerSheet(title = "focus — hide distracting apps", onDismiss = { showFocusPicker = false }) {
+                    SheetRow("30 minutes") {
+                        store.startFocus(30 * 60_000L)
+                        showFocusPicker = false
+                    }
+                    SheetRow("1 hour") {
+                        store.startFocus(60 * 60_000L)
+                        showFocusPicker = false
+                    }
+                    SheetRow("2 hours") {
+                        store.startFocus(120 * 60_000L)
+                        showFocusPicker = false
+                    }
+                    SheetRow("until i turn it off") {
+                        store.startFocus(null)
+                        showFocusPicker = false
+                    }
                 }
             }
-        }
 
-        if (showSettings) {
-            SettingsScreen(
-                store = store,
-                startAtAssistant = settingsStartAtAi,
-                onClose = {
-                    showSettings = false
-                    settingsStartAtAi = false
-                },
-            )
-        }
+            focusBlockedApp?.let { app ->
+                FoyerSheet(title = app.label.lowercase(), onDismiss = { focusBlockedApp = null }) {
+                    BasicText(
+                        text = "${app.label.lowercase()} is paused — ${focusLabel(store.focusUntil)}",
+                        modifier = Modifier.padding(top = 6.dp, bottom = 10.dp),
+                        style = TextStyle(color = LocalPalette.current.text, fontSize = 20.sp),
+                    )
+                    SheetRow("keep focusing") { focusBlockedApp = null }
+                    SheetRow("end focus") {
+                        store.endFocus()
+                        store.recordLaunch(app)
+                        launchApp(context, app)
+                        focusBlockedApp = null
+                    }
+                }
+            }
 
-        if (showVoice) {
-            VoiceScreen(
-                store = store,
-                onClose = { showVoice = false },
-                onOpenAiSettings = {
-                    showVoice = false
-                    settingsStartAtAi = true
-                    showSettings = true
-                },
-            )
-        }
+            if (showSettings) {
+                SettingsScreen(
+                    store = store,
+                    startAtAssistant = settingsStartAtAi,
+                    onClose = {
+                        showSettings = false
+                        settingsStartAtAi = false
+                    },
+                )
+            }
 
-        guardApp?.let { app ->
-            DistractionNudge(
-                app = app,
-                usedMs = UsageTracker.usageTodayMs(context, app.packageName),
-                limitMs = store.limitFor(app.packageName) ?: DISTRACTION_THRESHOLD_MS,
-                onOpen = {
-                    store.recordBypass(app.packageName)
-                    store.recordLaunch(app)
-                    launchApp(context, app)
-                    guardApp = null
-                },
-                onDismiss = { guardApp = null },
-            )
-        }
+            if (showVoice) {
+                VoiceScreen(
+                    store = store,
+                    onClose = { showVoice = false },
+                    onOpenAiSettings = {
+                        showVoice = false
+                        settingsStartAtAi = true
+                        showSettings = true
+                    },
+                )
+            }
 
-        if (showUsage) {
-            UsageSummaryScreen(apps = apps, store = store, onClose = { showUsage = false })
-        }
+            guardApp?.let { app ->
+                DistractionNudge(
+                    app = app,
+                    usedMs = UsageTracker.usageTodayMs(context, app.packageName),
+                    limitMs = store.limitFor(app.packageName) ?: DISTRACTION_THRESHOLD_MS,
+                    onOpen = {
+                        store.recordBypass(app.packageName)
+                        store.recordLaunch(app)
+                        launchApp(context, app)
+                        guardApp = null
+                    },
+                    onDismiss = { guardApp = null },
+                )
+            }
 
-        // First launch only: pitch + default-launcher prompt, above everything.
-        if (!store.onboarded) {
-            OnboardingScreen(onDone = { store.markOnboarded() })
+            if (showUsage) {
+                UsageSummaryScreen(apps = apps, store = store, onClose = { showUsage = false })
+            }
+
+            // First launch only: pitch + default-launcher prompt, above everything.
+            if (!store.onboarded) {
+                OnboardingScreen(onDone = { store.markOnboarded() })
+            }
         }
     }
 }
@@ -568,6 +591,7 @@ private fun HomePage(
     store: LauncherStore,
     onLaunchFavorite: (AppEntry) -> Unit,
     onLongPressFavorite: (AppEntry) -> Unit,
+    menuAnchor: String?,
     onLongPressShortcut: (ShortcutSide) -> Unit,
     onLongPressBackground: () -> Unit,
     onOpenVoice: () -> Unit,
@@ -727,20 +751,26 @@ private fun HomePage(
                         )
                     } else {
                         store.focusFiltered(store.favorites).forEach { app ->
-                            BasicText(
-                                text = app.label.lowercase(),
-                                modifier =
-                                    Modifier
-                                        .defaultMinSize(minHeight = 48.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .combinedClickable(
-                                            onClick = { onLaunchFavorite(app) },
-                                            onClickLabel = "open",
-                                            onLongClick = { onLongPressFavorite(app) },
-                                            onLongClickLabel = "app options",
-                                        ).padding(vertical = 9.dp),
-                                style = TextStyle(color = palette.text, fontSize = 22.sp, fontFamily = ff),
-                            )
+                            // Same split as AppRow: the Box is the click
+                            // target, the label alone is the shared element.
+                            val anchor = "fav/" + app.key
+                            Box(
+                                Modifier
+                                    .defaultMinSize(minHeight = 48.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .combinedClickable(
+                                        onClick = { onLaunchFavorite(app) },
+                                        onClickLabel = "open",
+                                        onLongClick = { onLongPressFavorite(app) },
+                                        onLongClickLabel = "app options",
+                                    ).padding(vertical = 9.dp),
+                            ) {
+                                BasicText(
+                                    text = app.label.lowercase(),
+                                    modifier = Modifier.sharedLabel(anchor, visible = menuAnchor != anchor),
+                                    style = TextStyle(color = palette.text, fontSize = 22.sp, fontFamily = ff),
+                                )
+                            }
                         }
                     }
                 }
@@ -857,7 +887,8 @@ private fun DrawerPage(
     apps: List<AppEntry>,
     store: LauncherStore,
     onLaunchApp: (AppEntry) -> Unit,
-    onLongPressApp: (AppEntry) -> Unit,
+    onLongPressApp: (AppEntry, String) -> Unit,
+    menuAnchor: String?,
     onOpenSettings: () -> Unit,
     active: Boolean,
     backEnabled: Boolean,
@@ -897,9 +928,9 @@ private fun DrawerPage(
     val onLaunch: (AppEntry) -> Unit = onLaunchApp
 
     // Long-press opens the app sheet; the keyboard must not stay over it.
-    val onLongPress: (AppEntry) -> Unit = {
+    val onLongPress: (AppEntry, String) -> Unit = { app, anchor ->
         focusManager.clearFocus()
-        onLongPressApp(it)
+        onLongPressApp(app, anchor)
     }
 
     // Browse list excludes hidden apps; search reveals everything (incl. hidden).
@@ -1150,7 +1181,7 @@ private fun DrawerPage(
                             }
                         }
                         items(searchResults, key = { "s/" + it.key }) { app ->
-                            AppRow(app, onLaunch, onLongPress, highlightQuery = q)
+                            AppRow(app, onLaunch, onLongPress, "s/", menuAnchor, highlightQuery = q)
                         }
                         item(key = "web") {
                             FallbackRow("search web for “$q”") {
@@ -1174,7 +1205,7 @@ private fun DrawerPage(
                         if (frequent.isNotEmpty()) {
                             item(key = "freq-header") { SectionHeader("frequently used") }
                             items(frequent, key = { "f/" + it.key }) { app ->
-                                AppRow(app, onLaunch, onLongPress, distracting = store.isDistracting(app))
+                                AppRow(app, onLaunch, onLongPress, "f/", menuAnchor, distracting = store.isDistracting(app))
                             }
                             item(key = "freq-divider") {
                                 HorizontalDivider(
@@ -1184,7 +1215,7 @@ private fun DrawerPage(
                             }
                         }
                         items(browse, key = { "a/" + it.key }) { app ->
-                            AppRow(app, onLaunch, onLongPress, distracting = store.isDistracting(app))
+                            AppRow(app, onLaunch, onLongPress, "a/", menuAnchor, distracting = store.isDistracting(app))
                         }
 
                         // Hidden apps live at the end of the list, behind one
@@ -1218,7 +1249,7 @@ private fun DrawerPage(
                             }
                             if (showHidden) {
                                 items(hiddenApps, key = { "h/" + it.key }) { app ->
-                                    AppRow(app, onLaunch, onLongPress, ghosted = true)
+                                    AppRow(app, onLaunch, onLongPress, "h/", menuAnchor, ghosted = true)
                                 }
                             }
                         }
@@ -1258,7 +1289,9 @@ private fun SectionHeader(text: String) {
 private fun AppRow(
     app: AppEntry,
     onLaunch: (AppEntry) -> Unit,
-    onLongPress: (AppEntry) -> Unit,
+    onLongPress: (AppEntry, String) -> Unit,
+    anchorPrefix: String,
+    menuAnchor: String?,
     ghosted: Boolean = false,
     distracting: Boolean = false,
     highlightQuery: String = "",
@@ -1266,6 +1299,9 @@ private fun AppRow(
     val palette = LocalPalette.current
     val ff = LocalFontFamily.current
     val label = app.label.lowercase()
+    // This row's end of the shared label morph; prefixed per list section so
+    // an app shown twice (frequent + A–Z) never has two visible shared keys.
+    val anchor = anchorPrefix + app.key
     // Row ink: hidden apps go fully muted; apps marked distracting are dimmed
     // partway toward muted so the eye isn't pulled to them, but they stay
     // legible and distinct from the hidden look.
@@ -1279,35 +1315,40 @@ private fun AppRow(
     // of the label dims, the matches keep the accent (ink, when accent is
     // mono — it still reads against the dimmed rest). Ranges index `label`.
     val match = if (highlightQuery.isNotEmpty()) matchLabel(label, highlightQuery) else null
-    BasicText(
-        text =
-            buildAnnotatedString {
-                append(label)
-                if (match != null) {
-                    addStyle(SpanStyle(color = palette.muted), 0, label.length)
-                    match.ranges.forEach { r ->
-                        addStyle(SpanStyle(color = palette.accent), r.first, r.last + 1)
+    // Click target spans the full row; only the label text itself is the
+    // shared element, so the morph tracks the word, not the whole-width strip.
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = 48.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .combinedClickable(
+                onClick = { onLaunch(app) },
+                onClickLabel = "open",
+                onLongClick = { onLongPress(app, anchor) },
+                onLongClickLabel = "app options",
+            ).padding(vertical = 11.dp),
+    ) {
+        BasicText(
+            text =
+                buildAnnotatedString {
+                    append(label)
+                    if (match != null) {
+                        addStyle(SpanStyle(color = palette.muted), 0, label.length)
+                        match.ranges.forEach { r ->
+                            addStyle(SpanStyle(color = palette.accent), r.first, r.last + 1)
+                        }
                     }
-                }
-                // Same app can exist in two profiles; mark the work/private copy.
-                if (app.userSerial != 0L) {
-                    withStyle(SpanStyle(color = palette.muted, fontSize = 13.sp)) { append("  · work") }
-                }
-            },
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .defaultMinSize(minHeight = 48.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .combinedClickable(
-                    onClick = { onLaunch(app) },
-                    onClickLabel = "open",
-                    onLongClick = { onLongPress(app) },
-                    onLongClickLabel = "app options",
-                ).padding(vertical = 11.dp),
-        // Hidden apps show ghosted; distracting apps show dimmed (see rowColor).
-        style = TextStyle(color = rowColor, fontSize = 19.sp, fontFamily = ff),
-    )
+                    // Same app can exist in two profiles; mark the work/private copy.
+                    if (app.userSerial != 0L) {
+                        withStyle(SpanStyle(color = palette.muted, fontSize = 13.sp)) { append("  · work") }
+                    }
+                },
+            modifier = Modifier.sharedLabel(anchor, visible = menuAnchor != anchor),
+            // Hidden apps show ghosted; distracting apps show dimmed (see rowColor).
+            style = TextStyle(color = rowColor, fontSize = 19.sp, fontFamily = ff),
+        )
+    }
 }
 
 /** Outlined, tappable action chip used for AI-proposed actions. */
@@ -1665,6 +1706,7 @@ private fun Scrim(
 @Composable
 private fun AppActionMenu(
     app: AppEntry,
+    sharedKey: String?,
     isFavorite: Boolean,
     canAdd: Boolean,
     isHidden: Boolean,
@@ -1683,7 +1725,7 @@ private fun AppActionMenu(
     onCycleLimit: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    FoyerSheet(title = app.label.lowercase(), onDismiss = onDismiss) {
+    FoyerSheet(title = app.label.lowercase(), onDismiss = onDismiss, sharedKey = sharedKey) {
         when {
             isFavorite -> SheetRow("remove from home", active = true, icon = R.drawable.ic_tabler_home_minus, onClick = onRemove)
             canAdd -> SheetRow("add to home", icon = R.drawable.ic_tabler_home_plus, onClick = onAdd)
