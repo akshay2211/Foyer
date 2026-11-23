@@ -23,6 +23,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.foyerlauncher.foyer.ui.theme.LocalFontFamily
@@ -71,7 +72,10 @@ private fun clockNowMillis(): Long = marketingClockOverrideMillis ?: System.curr
  *    minute, always clockwise; nothing animates while time stands still
  */
 @Composable
-fun AnalogueClockWidget(modifier: Modifier = Modifier) {
+fun AnalogueClockWidget(
+    modifier: Modifier = Modifier,
+    diameter: Dp = 196.dp,
+) {
     val palette = LocalPalette.current
     val ff = LocalFontFamily.current
     var now by remember { mutableLongStateOf(clockNowMillis()) }
@@ -112,7 +116,7 @@ fun AnalogueClockWidget(modifier: Modifier = Modifier) {
     val timeText = timeFmt.format(Date(now))
     Box(
         modifier
-            .size(196.dp)
+            .size(diameter)
             .semantics { contentDescription = "clock, $timeText" },
     ) {
         Canvas(Modifier.matchParentSize()) {
@@ -187,7 +191,10 @@ fun AnalogueClockWidget(modifier: Modifier = Modifier) {
  * no numerals. The hour hand drifts with the minutes so it never lies.
  */
 @Composable
-fun MinimalClockWidget(modifier: Modifier = Modifier) {
+fun MinimalClockWidget(
+    modifier: Modifier = Modifier,
+    diameter: Dp = 172.dp,
+) {
     val palette = LocalPalette.current
     var now by remember { mutableLongStateOf(clockNowMillis()) }
     LaunchedEffect(Unit) {
@@ -204,7 +211,7 @@ fun MinimalClockWidget(modifier: Modifier = Modifier) {
 
     Box(
         modifier
-            .size(172.dp)
+            .size(diameter)
             .semantics { contentDescription = "clock, $timeText" },
     ) {
         Canvas(Modifier.matchParentSize()) {
@@ -242,9 +249,12 @@ fun MinimalClockWidget(modifier: Modifier = Modifier) {
     }
 }
 
-/** The quiet digital clock: thin h:mm, nothing else. */
+/** The quiet digital clock: thin h:mm, nothing else. [scale] sizes it to its widget box. */
 @Composable
-fun DigitalClockWidget(modifier: Modifier = Modifier) {
+fun DigitalClockWidget(
+    modifier: Modifier = Modifier,
+    scale: Float = 1f,
+) {
     val palette = LocalPalette.current
     val ff = LocalFontFamily.current
     var now by remember { mutableLongStateOf(clockNowMillis()) }
@@ -258,13 +268,16 @@ fun DigitalClockWidget(modifier: Modifier = Modifier) {
     BasicText(
         text = timeFmt.format(Date(now)),
         modifier = modifier,
-        style = TextStyle(color = palette.text, fontSize = 60.sp, fontWeight = FontWeight.Thin, fontFamily = ff),
+        style = TextStyle(color = palette.text, fontSize = 60.sp * scale, fontWeight = FontWeight.Thin, fontFamily = ff),
     )
 }
 
-/** The lock-screen digital clock: just the time, large and heavy. */
+/** The lock-screen digital clock: just the time, large and heavy. [scale] sizes it to its widget box. */
 @Composable
-fun LockClockWidget(modifier: Modifier = Modifier) {
+fun LockClockWidget(
+    modifier: Modifier = Modifier,
+    scale: Float = 1f,
+) {
     val palette = LocalPalette.current
     val ff = LocalFontFamily.current
     var now by remember { mutableLongStateOf(clockNowMillis()) }
@@ -281,9 +294,9 @@ fun LockClockWidget(modifier: Modifier = Modifier) {
         style =
             TextStyle(
                 color = palette.text,
-                fontSize = 88.sp,
+                fontSize = 88.sp * scale,
                 fontWeight = FontWeight.SemiBold,
-                letterSpacing = (-2).sp,
+                letterSpacing = (-2).sp * scale,
                 fontFamily = ff,
             ),
     )

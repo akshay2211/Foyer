@@ -11,7 +11,8 @@ tasksGenai = "0.10.35"
 orgJson = "20260814"
 ktlint = "14.2.0"
 dokka = "2.2.0"
-material3 = "1.5.0-beta02" # beta: M3 Expressive APIs (MaterialExpressiveTheme, MotionScheme) are internal in 1.4 stable
+material3 = "1.5.0-beta02"
+exifinterface = "1.4.2" # beta: M3 Expressive APIs (MaterialExpressiveTheme, MotionScheme) are internal in 1.4 stable
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -29,6 +30,7 @@ junit = { group = "junit", name = "junit", version.ref = "junit" }
 json = { group = "org.json", name = "json", version.ref = "orgJson" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
+androidx-exifinterface = { group = "androidx.exifinterface", name = "exifinterface", version.ref = "exifinterface" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

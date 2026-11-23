@@ -83,6 +83,9 @@ private const val KEY_SWIPE_UP = "gesture_swipe_up"
 private const val KEY_SWIPE_DOWN = "gesture_swipe_down"
 private const val KEY_DOUBLE_TAP = "gesture_double_tap"
 private const val KEY_THEME = "theme_mode"
+private const val KEY_WALLPAPER = "wallpaper_version"
+private const val KEY_HOME_LAYOUT = "home_layout"
+private const val KEY_GRID_SIZE = "home_grid_size"
 private const val KEY_ACCENT = "accent"
 private const val KEY_FONT = "font"
 private const val KEY_AI = "ai_enabled"
@@ -146,8 +149,8 @@ private fun keyMatches(
 }
 
 // Field/record separators that will never appear in a package or label.
-private const val UNIT_SEP = '\u001F'
-private const val REC_SEP = "\u001E"
+internal const val UNIT_SEP = '\u001F'
+internal const val REC_SEP = "\u001E"
 
 internal fun AppEntry.encode(): String =
     "$label$UNIT_SEP$packageName$UNIT_SEP$activityName" +
@@ -447,9 +450,70 @@ class LauncherStore(
         prefs.edit { putString(KEY_FONT, choice.name) }
     }
 
+    /**
+     * Install marker for the wallpaper file (0 = none). The value is the
+     * install time, so it doubles as the home screen's bitmap-cache key:
+     * re-picking a photo bumps it and invalidates the cached decode.
+     *
+     * The image itself is deliberately not part of the JSON settings backup;
+     * the file in filesDir rides Android auto-backup/device transfer instead.
+     */
+    var wallpaperVersion by mutableLongStateOf(prefs.getLong(KEY_WALLPAPER, 0L))
+        private set
+
+    fun setWallpaperInstalled() {
+        wallpaperVersion = System.currentTimeMillis()
+        prefs.edit { putLong(KEY_WALLPAPER, wallpaperVersion) }
+    }
+
+    fun clearWallpaper() {
+        WallpaperStore.remove(context)
+        wallpaperVersion = 0L
+        prefs.edit { putLong(KEY_WALLPAPER, 0L) }
+    }
+
+    /** Home grid density; chosen inside edit mode (declared before [homeLayout] — its decode needs it). */
+    var gridSize by mutableStateOf(enumFromPrefs(KEY_GRID_SIZE, GridSize.COZY))
+        private set
+
+    /** Grid placement of the home widgets; defaults reproduce the classic home. */
+    var homeLayout by mutableStateOf(decodeLayout(prefs.getString(KEY_HOME_LAYOUT, null), gridSize.cols, gridSize.rows))
+        private set
+
+    /** Switches grid density and re-fits the current layout into the new grid. */
+    fun chooseGridSize(size: GridSize) {
+        gridSize = size
+        homeLayout = fitLayout(homeLayout, size.cols, size.rows)
+        prefs.edit {
+            putString(KEY_GRID_SIZE, size.name)
+            putString(KEY_HOME_LAYOUT, encodeLayout(homeLayout))
+        }
+    }
+
+    /**
+     * Places [widget] at [spec] (clamped to its limits and the grid). Returns
+     * false — and changes nothing — when the clamped box would overlap the
+     * other widget, so callers can spring the drag back.
+     */
+    fun moveWidget(
+        widget: HomeWidget,
+        spec: WidgetSpec,
+    ): Boolean {
+        val clamped = clampSpec(widget, spec, gridSize.cols, gridSize.rows)
+        val others = homeLayout.filterKeys { it != widget }.values
+        if (others.any { clamped.overlaps(it) }) return false
+        homeLayout = homeLayout + (widget to clamped)
+        prefs.edit { putString(KEY_HOME_LAYOUT, encodeLayout(homeLayout)) }
+        return true
+    }
+
     fun resetAll() {
         prefs.edit { clear() }
         secrets.edit { clear() }
+        WallpaperStore.remove(context)
+        wallpaperVersion = 0L
+        gridSize = GridSize.COZY
+        homeLayout = defaultLayout(gridSize.cols, gridSize.rows)
         favorites.clear()
         hidden.clear()
         usage.clear()
@@ -700,6 +764,8 @@ class LauncherStore(
                 put("doubleTap", doubleTapAction.name)
                 leftShortcut?.let { put("leftShortcut", it.encode()) }
                 rightShortcut?.let { put("rightShortcut", it.encode()) }
+                put("homeLayout", encodeLayout(homeLayout))
+                put("gridSize", gridSize.name)
             }.toString(2)
 
     /** What an import would restore — shown for confirmation before [applyBackup]. */
@@ -778,6 +844,13 @@ class LauncherStore(
         o.optString("modelUrl").ifBlank { null }?.let { modelUrl = it }
         decodeApp(o.optString("leftShortcut").ifBlank { null })?.let { leftShortcut = it }
         decodeApp(o.optString("rightShortcut").ifBlank { null })?.let { rightShortcut = it }
+        // Grid size first — the layout decode is interpreted in its cells.
+        gridSize = enumOrCurrent(o.optString("gridSize"), gridSize)
+        prefs.edit { putString(KEY_GRID_SIZE, gridSize.name) }
+        o.optString("homeLayout").ifBlank { null }?.let {
+            homeLayout = decodeLayout(it, gridSize.cols, gridSize.rows)
+            prefs.edit { putString(KEY_HOME_LAYOUT, encodeLayout(homeLayout)) }
+        }
         prefs.edit {
             putString(KEY_THEME, themeMode.name)
             putString(KEY_ACCENT, accent.name)

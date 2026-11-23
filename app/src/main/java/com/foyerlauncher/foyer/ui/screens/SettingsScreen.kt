@@ -5,6 +5,7 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.CubicBezierEasing
@@ -75,6 +76,7 @@ import com.foyerlauncher.foyer.data.LauncherStore
 import com.foyerlauncher.foyer.data.SUGGESTED_GEMMA_URL
 import com.foyerlauncher.foyer.data.SUGGESTED_QWEN_BALANCED_URL
 import com.foyerlauncher.foyer.data.SUGGESTED_QWEN_SMALL_URL
+import com.foyerlauncher.foyer.data.WallpaperStore
 import com.foyerlauncher.foyer.data.openAppInfo
 import com.foyerlauncher.foyer.data.openSettings
 import com.foyerlauncher.foyer.data.openUrl
@@ -380,6 +382,43 @@ private fun AppearancePage(
                 )
             }
         }
+
+        GroupLabel("wallpaper")
+        val context = LocalContext.current
+        val scope = rememberCoroutineScope()
+        var wallpaperNote by remember { mutableStateOf<String?>(null) }
+        val wallpaperPicker =
+            rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+                if (uri != null) {
+                    scope.launch {
+                        WallpaperStore
+                            .install(context, uri)
+                            .onSuccess {
+                                store.setWallpaperInstalled()
+                                wallpaperNote = null
+                            }.onFailure { wallpaperNote = it.message ?: "couldn't use that photo" }
+                    }
+                }
+            }
+        if (store.wallpaperVersion == 0L) {
+            SettingsGroup({ shape ->
+                NavRow(shape = shape, title = "choose from photos", chevron = false) {
+                    wallpaperPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                }
+            })
+        } else {
+            SettingsGroup(
+                { shape ->
+                    NavRow(shape = shape, title = "choose from photos", subtitle = "custom image set", chevron = false) {
+                        wallpaperPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    }
+                },
+                { shape ->
+                    NavRow(shape = shape, title = "remove wallpaper", chevron = false) { store.clearWallpaper() }
+                },
+            )
+        }
+        wallpaperNote?.let { Caption(it) }
 
         GroupLabel("clock")
         Segmented(ClockStyle.entries, store.clockStyle, { it.label }) { store.chooseClockStyle(it) }

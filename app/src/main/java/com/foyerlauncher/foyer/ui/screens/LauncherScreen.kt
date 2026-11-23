@@ -2,23 +2,29 @@ package com.foyerlauncher.foyer.ui.screens
 
 import android.content.Context
 import android.content.pm.LauncherApps
+import android.graphics.BitmapFactory
 import android.os.Process
 import android.os.UserHandle
 import android.os.UserManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.DragInteraction
@@ -26,6 +32,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -71,21 +78,25 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
@@ -109,7 +120,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.foyerlauncher.foyer.LimitNudgeReceiver
@@ -121,12 +134,18 @@ import com.foyerlauncher.foyer.ai.router.CommandKind
 import com.foyerlauncher.foyer.ai.router.toCommand
 import com.foyerlauncher.foyer.data.AppEntry
 import com.foyerlauncher.foyer.data.DISTRACTION_THRESHOLD_MS
+import com.foyerlauncher.foyer.data.GridSize
+import com.foyerlauncher.foyer.data.HomeWidget
 import com.foyerlauncher.foyer.data.LabelMatch
 import com.foyerlauncher.foyer.data.LauncherStore
 import com.foyerlauncher.foyer.data.MAX_FAVORITES
+import com.foyerlauncher.foyer.data.ResizeEdge
 import com.foyerlauncher.foyer.data.ShortcutSide
 import com.foyerlauncher.foyer.data.UsageTracker
+import com.foyerlauncher.foyer.data.WallpaperStore
+import com.foyerlauncher.foyer.data.WidgetSpec
 import com.foyerlauncher.foyer.data.canUninstall
+import com.foyerlauncher.foyer.data.defaultSpec
 import com.foyerlauncher.foyer.data.formatDuration
 import com.foyerlauncher.foyer.data.key
 import com.foyerlauncher.foyer.data.launchApp
@@ -137,6 +156,9 @@ import com.foyerlauncher.foyer.data.openClockApp
 import com.foyerlauncher.foyer.data.playSearch
 import com.foyerlauncher.foyer.data.requestUninstall
 import com.foyerlauncher.foyer.data.sectionOf
+import com.foyerlauncher.foyer.data.snapMove
+import com.foyerlauncher.foyer.data.snapResize
+import com.foyerlauncher.foyer.data.wallpaperFile
 import com.foyerlauncher.foyer.data.webSearch
 import com.foyerlauncher.foyer.ui.components.AnalogueClockWidget
 import com.foyerlauncher.foyer.ui.components.AppIconCache
@@ -147,12 +169,15 @@ import com.foyerlauncher.foyer.ui.components.FoyerGlyph
 import com.foyerlauncher.foyer.ui.components.FoyerSheet
 import com.foyerlauncher.foyer.ui.components.GestureUi
 import com.foyerlauncher.foyer.ui.components.GlyphState
+import com.foyerlauncher.foyer.ui.components.GridDots
+import com.foyerlauncher.foyer.ui.components.GridLines
 import com.foyerlauncher.foyer.ui.components.IconAction
 import com.foyerlauncher.foyer.ui.components.LocalSharedTransitionScope
 import com.foyerlauncher.foyer.ui.components.LockClockWidget
 import com.foyerlauncher.foyer.ui.components.MinimalClockWidget
 import com.foyerlauncher.foyer.ui.components.SheetNote
 import com.foyerlauncher.foyer.ui.components.SheetRow
+import com.foyerlauncher.foyer.ui.components.WidgetEditFrame
 import com.foyerlauncher.foyer.ui.components.runGestureAction
 import com.foyerlauncher.foyer.ui.components.sharedLabel
 import com.foyerlauncher.foyer.ui.theme.BackgroundTone
@@ -245,6 +270,11 @@ fun LauncherScreen(store: LauncherStore) {
     var menuAnchor by remember { mutableStateOf<String?>(null) }
     var pickerTarget by remember { mutableStateOf<ShortcutSide?>(null) }
     var showHomeMenu by remember { mutableStateOf(false) }
+    // Pixel-style home edit mode: drag/resize the clock and favorites widgets.
+    var editingHome by remember { mutableStateOf(false) }
+    var showWallpaperMenu by remember { mutableStateOf(false) }
+    // Quiet failure line inside the wallpaper sheet ("couldn't read that photo").
+    var wallpaperNote by remember { mutableStateOf<String?>(null) }
     var showSettings by remember { mutableStateOf(false) }
     // Voice's "set up model" prompt opens settings directly on the ai page.
     var settingsStartAtAi by remember { mutableStateOf(false) }
@@ -259,6 +289,7 @@ fun LauncherScreen(store: LauncherStore) {
         menuApp != null ||
             pickerTarget != null ||
             showHomeMenu ||
+            showWallpaperMenu ||
             showSettings ||
             showVoice ||
             guardApp != null ||
@@ -276,10 +307,14 @@ fun LauncherScreen(store: LauncherStore) {
         if (overlayOpen) overlayFocusManager.clearFocus()
     }
 
+    // Declared before the overlay handler so an open sheet closes first.
+    BackHandler(enabled = editingHome) { editingHome = false }
+
     BackHandler(enabled = overlayOpen) {
         menuApp = null
         pickerTarget = null
         showHomeMenu = false
+        showWallpaperMenu = false
         showSettings = false
         settingsStartAtAi = false
         showVoice = false
@@ -329,7 +364,9 @@ fun LauncherScreen(store: LauncherStore) {
             .matteGrain(store.backgroundTone == BackgroundTone.MATTE),
     ) {
         CompositionLocalProvider(LocalSharedTransitionScope provides this) {
-            HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+            // Paging must yield to widget drags while editing, or every
+            // horizontal move would swipe to the drawer instead.
+            HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize(), userScrollEnabled = !editingHome) { page ->
                 when (page) {
                     0 ->
                         DrawerPage(
@@ -370,6 +407,9 @@ fun LauncherScreen(store: LauncherStore) {
                             onSwipeDown = { runGestureAction(context, store.swipeDownAction, gestureUi) },
                             onDoubleTap = { runGestureAction(context, store.doubleTapAction, gestureUi) },
                             onOpenUsage = { showUsage = true },
+                            editing = editingHome,
+                            onEnterEdit = { editingHome = true },
+                            onExitEdit = { editingHome = false },
                         )
                     }
                 }
@@ -466,12 +506,50 @@ fun LauncherScreen(store: LauncherStore) {
                         showHomeMenu = false
                         if (store.isFocusActive()) store.endFocus() else showFocusPicker = true
                     },
+                    onEditHome = {
+                        showHomeMenu = false
+                        editingHome = true
+                    },
+                    onWallpaper = {
+                        showHomeMenu = false
+                        wallpaperNote = null
+                        showWallpaperMenu = true
+                    },
                     onOpenSettings = {
                         showHomeMenu = false
                         showSettings = true
                     },
                     onDismiss = { showHomeMenu = false },
                 )
+            }
+
+            if (showWallpaperMenu) {
+                val wallpaperPicker =
+                    rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+                        if (uri != null) {
+                            scope.launch {
+                                WallpaperStore
+                                    .install(context, uri)
+                                    .onSuccess {
+                                        store.setWallpaperInstalled()
+                                        showWallpaperMenu = false
+                                    }.onFailure { wallpaperNote = it.message ?: "couldn't use that photo" }
+                            }
+                        }
+                    }
+                FoyerSheet(title = "wallpaper", onDismiss = { showWallpaperMenu = false }) {
+                    SheetRow("choose from photos", icon = R.drawable.ic_tabler_photo) {
+                        wallpaperNote = null
+                        wallpaperPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    }
+                    if (store.wallpaperVersion != 0L) {
+                        SheetRow("remove wallpaper", icon = R.drawable.ic_tabler_x) {
+                            store.clearWallpaper()
+                            showWallpaperMenu = false
+                        }
+                    }
+                    wallpaperNote?.let { SheetNote(it) }
+                }
             }
 
             if (showFocusPicker) {
@@ -599,17 +677,55 @@ private fun HomePage(
     onSwipeDown: () -> Unit,
     onDoubleTap: () -> Unit,
     onOpenUsage: () -> Unit,
+    editing: Boolean,
+    onEnterEdit: () -> Unit,
+    onExitEdit: () -> Unit,
 ) {
     val context = LocalContext.current
     val palette = LocalPalette.current
     val ff = LocalFontFamily.current
     val density = LocalDensity.current
     val swipeThresholdPx = with(density) { 110.dp.toPx() }
+    // The widget a tap selected while editing — only it shows resize handles.
+    var selectedWidget by remember(editing) { mutableStateOf<HomeWidget?>(null) }
+
+    // Decode off-main, keyed on the install marker so re-picking invalidates.
+    val wallpaper by produceState<ImageBitmap?>(initialValue = null, store.wallpaperVersion) {
+        value =
+            if (store.wallpaperVersion == 0L) {
+                null
+            } else {
+                withContext(Dispatchers.IO) {
+                    BitmapFactory.decodeFile(wallpaperFile(context).path)?.asImageBitmap()
+                }
+            }
+    }
 
     Box(
         Modifier
             .fillMaxSize()
-            .pointerInput(Unit) {
+            .drawBehind {
+                val img = wallpaper ?: return@drawBehind
+                // Centre-crop: take the largest source window matching the
+                // canvas aspect ratio, so the image fills without distortion.
+                val dstAspect = size.width / size.height
+                val srcAspect = img.width / img.height.toFloat()
+                val srcW = if (srcAspect > dstAspect) (img.height * dstAspect).roundToInt() else img.width
+                val srcH = if (srcAspect > dstAspect) img.height else (img.width / dstAspect).roundToInt()
+                drawImage(
+                    image = img,
+                    srcOffset = IntOffset((img.width - srcW) / 2, (img.height - srcH) / 2),
+                    srcSize = IntSize(srcW, srcH),
+                    dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
+                )
+                // Readability scrim: text sits straight on the photo, so pull
+                // it toward the theme background in both light and dark.
+                drawRect(palette.background.copy(alpha = 0.30f))
+            }.drawBehind {
+                // Extra dim while editing so the chrome reads over any wallpaper.
+                if (editing) drawRect(palette.background.copy(alpha = 0.35f))
+            }.pointerInput(editing) {
+                if (editing) return@pointerInput
                 var dy = 0f
                 detectVerticalDragGestures(
                     onDragStart = { dy = 0f },
@@ -626,170 +742,143 @@ private fun HomePage(
                     },
                     onDragCancel = { dy = 0f },
                 )
-            }.pointerInput(Unit) {
+            }.pointerInput(editing) {
                 detectTapGestures(
-                    onLongPress = { onLongPressBackground() },
-                    onDoubleTap = { onDoubleTap() },
+                    onTap = { if (editing) selectedWidget = null },
+                    onLongPress = { if (!editing) onLongPressBackground() },
+                    onDoubleTap = { if (!editing) onDoubleTap() },
                 )
             }.windowInsetsPadding(WindowInsets.systemBars),
     ) {
-        // One flowing column: a centred watch-face lockup (clock + date line +
-        // focus) over the left-spine favorites — spacing adapts to whichever
-        // clock is shown, so nothing can overlap or hide.
-        Column(Modifier.fillMaxSize().padding(start = 28.dp)) {
-            Column(
-                Modifier.fillMaxWidth().padding(end = 28.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                when (store.clockStyle) {
-                    ClockStyle.DIGITAL ->
-                        DigitalClockWidget(
-                            modifier =
-                                Modifier
-                                    .padding(top = 56.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .clickable(onClickLabel = "open clock app") { openClockApp(context) },
-                        )
-                    ClockStyle.LOCK ->
-                        LockClockWidget(
-                            modifier =
-                                Modifier
-                                    .padding(top = 56.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .clickable(onClickLabel = "open clock app") { openClockApp(context) },
-                        )
-                    ClockStyle.ANALOGUE ->
-                        AnalogueClockWidget(
-                            modifier =
-                                Modifier
-                                    .padding(top = 56.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .clickable(onClickLabel = "open clock app") { openClockApp(context) },
-                        )
-                    ClockStyle.MINIMAL ->
-                        MinimalClockWidget(
-                            modifier =
-                                Modifier
-                                    .padding(top = 56.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .clickable(onClickLabel = "open clock app") { openClockApp(context) },
-                        )
-                    ClockStyle.OFF -> Spacer(Modifier.height(56.dp))
-                }
+        // The home widgets, absolutely positioned on the cell grid. The bottom
+        // band stays reserved for "ask me" and the corner shortcuts.
+        BoxWithConstraints(Modifier.fillMaxSize().padding(start = 8.dp, end = 8.dp, bottom = 72.dp)) {
+            val grid = store.gridSize
+            val cellW = maxWidth / grid.cols
+            val cellH = maxHeight / grid.rows
+            val cellWPx = with(density) { cellW.toPx() }
+            val cellHPx = with(density) { cellH.toPx() }
+            val clockSpec = store.homeLayout.getValue(HomeWidget.CLOCK)
+            val favSpec = store.homeLayout.getValue(HomeWidget.FAVORITES)
+            val clockDefault = defaultSpec(HomeWidget.CLOCK, grid.cols, grid.rows)
 
-                // Today's screen time (the minimalist nudge). Taps to grant access.
-                val hasUsage = UsageTracker.hasAccess(context)
-                var screenMs by remember { mutableLongStateOf(0L) }
-                LaunchedEffect(hasUsage) {
-                    while (hasUsage) {
-                        screenMs = UsageTracker.screenTimeTodayMs(context)
-                        delay(60_000)
-                    }
-                }
-                val dateFmt = remember { SimpleDateFormat("EEEE, MMM d", Locale.getDefault()) }
-                val dateText = dateFmt.format(Date()).lowercase()
-                BasicText(
-                    text =
-                        if (hasUsage) {
-                            "$dateText · ${formatDuration(screenMs)} today"
-                        } else {
-                            "$dateText · track screen time"
-                        },
-                    modifier =
-                        Modifier
-                            .padding(top = 14.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable(onClickLabel = if (hasUsage) "open screen time summary" else "grant usage access") {
-                                if (hasUsage) onOpenUsage() else UsageTracker.openAccessSettings(context)
-                            },
-                    style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = tracked(1.sp), fontFamily = ff),
-                )
-
-                // Focus countdown — the minute tick also re-evaluates the focus filters
-                // so distracting favorites reappear on their own when focus expires.
-                var focusTick by remember { mutableIntStateOf(0) }
-                LaunchedEffect(store.focusUntil) {
-                    while (store.isFocusActive()) {
-                        delay(30_000)
-                        focusTick++
-                    }
-                }
-                if (store.isFocusActive() && focusTick >= 0) {
-                    BasicText(
-                        text = focusLabel(store.focusUntil),
-                        modifier = Modifier.padding(top = 8.dp),
-                        style = TextStyle(color = palette.accent, fontSize = 13.sp, letterSpacing = tracked(1.sp), fontFamily = ff),
-                    )
-                }
+            // While a finger is moving a widget, the full grid fades in so the
+            // snap targets are visible; it recedes to the dots on release.
+            var dragActive by remember(editing) { mutableStateOf(false) }
+            val gridLineAlpha by animateFloatAsState(if (dragActive) 1f else 0f, label = "grid lines")
+            if (editing) {
+                GridDots(grid.cols, grid.rows, Modifier.matchParentSize())
+                GridLines(grid.cols, grid.rows, gridLineAlpha, Modifier.matchParentSize())
             }
-            // Favorites, sitting high in whatever space the header leaves —
-            // a Box + BiasAlignment, not a weighted Spacer either side: a
-            // weight(_, fill = false) child only ever gets pushed to the
-            // *start* of its allotted share (Column's default top-alignment
-            // within that slot), so unused room inside its own share sits
-            // below it rather than being split between the spacers. The
-            // vertical bias of -0.6 splits the free space 20% above / 80%
-            // below (bias maps -1..1 onto 0..100% of the slack).
-            // The bottom padding keeps it clear of "ask me" and the
-            // shortcuts; the scroll is a safety net for many favorites on
-            // small screens — invisible when everything fits.
-            Box(
-                Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .padding(end = 24.dp, bottom = 72.dp),
-                contentAlignment = BiasAlignment(horizontalBias = -1f, verticalBias = -0.6f),
-            ) {
-                Column(
-                    modifier = Modifier.verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
-                    if (store.favorites.isEmpty()) {
-                        BasicText(
-                            text = "long-press an app to pin it",
-                            style = TextStyle(color = palette.muted, fontSize = 15.sp, fontFamily = ff),
-                        )
-                    } else {
-                        store.focusFiltered(store.favorites).forEach { app ->
-                            // Same split as AppRow: the Box is the click
-                            // target, the label alone is the shared element.
-                            val anchor = "fav/" + app.key
-                            Box(
-                                Modifier
-                                    .defaultMinSize(minHeight = 48.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .combinedClickable(
-                                        onClick = { onLaunchFavorite(app) },
-                                        onClickLabel = "open",
-                                        onLongClick = { onLongPressFavorite(app) },
-                                        onLongClickLabel = "app options",
-                                    ).padding(vertical = 9.dp),
-                            ) {
-                                BasicText(
-                                    text = app.label.lowercase(),
-                                    modifier = Modifier.sharedLabel(anchor, visible = menuAnchor != anchor),
-                                    style = TextStyle(color = palette.text, fontSize = 22.sp, fontFamily = ff),
-                                )
-                            }
-                        }
-                    }
-                }
+
+            EditableWidget(
+                widget = HomeWidget.CLOCK,
+                spec = clockSpec,
+                grid = grid,
+                cellWPx = cellWPx,
+                cellHPx = cellHPx,
+                editing = editing,
+                selected = selectedWidget == HomeWidget.CLOCK,
+                onSelect = { selectedWidget = HomeWidget.CLOCK },
+                onCommit = { store.moveWidget(HomeWidget.CLOCK, it) },
+                onInteracting = { dragActive = it },
+            ) { liveSize ->
+                ClockLockupWidget(
+                    store = store,
+                    onOpenUsage = onOpenUsage,
+                    boxSize = liveSize,
+                    baseSize = DpSize(cellW * clockDefault.spanW, cellH * clockDefault.spanH),
+                    interactive = !editing,
+                    onLongPressWidget = onEnterEdit,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+
+            EditableWidget(
+                widget = HomeWidget.FAVORITES,
+                spec = favSpec,
+                grid = grid,
+                cellWPx = cellWPx,
+                cellHPx = cellHPx,
+                editing = editing,
+                selected = selectedWidget == HomeWidget.FAVORITES,
+                onSelect = { selectedWidget = HomeWidget.FAVORITES },
+                onCommit = { store.moveWidget(HomeWidget.FAVORITES, it) },
+                onInteracting = { dragActive = it },
+            ) { _ ->
+                FavoritesWidget(
+                    store = store,
+                    menuAnchor = menuAnchor,
+                    onLaunchFavorite = onLaunchFavorite,
+                    onLongPressFavorite = onLongPressFavorite,
+                    interactive = !editing,
+                    modifier = Modifier.fillMaxSize(),
+                )
             }
         }
 
-        // Voice / command entry, bottom-center. The glyph flips to robot-off
-        // while no local model is set up, so the state is visible before tapping.
-        val assistantReady = store.aiEnabled && store.modelDownloaded()
-        IconAction(
-            icon = if (assistantReady) R.drawable.ic_tabler_voice else R.drawable.ic_tabler_robot_off,
-            label = if (assistantReady) "ask me" else "ask me — no model set up",
-            tint = palette.text,
-            size = 28.dp,
-            modifier =
+        if (editing) {
+            // Edit mode swaps "ask me" for the grid chooser + done pill.
+            Column(
                 Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 18.dp),
-        ) { onOpenVoice() }
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    GridSize.entries.forEach { size ->
+                        val active = store.gridSize == size
+                        Box(
+                            Modifier
+                                .clip(RoundedCornerShape(50))
+                                .border(
+                                    width = 1.dp,
+                                    color = if (active) palette.accent else palette.muted.copy(alpha = 0.5f),
+                                    shape = RoundedCornerShape(50),
+                                ).semantics {
+                                    role = Role.Button
+                                    if (active) stateDescription = "on"
+                                }.clickable(onClickLabel = "grid ${size.label}") { store.chooseGridSize(size) }
+                                .padding(horizontal = 14.dp, vertical = 6.dp),
+                        ) {
+                            BasicText(
+                                size.label,
+                                style =
+                                    TextStyle(
+                                        color = if (active) palette.accent else palette.muted,
+                                        fontSize = 13.sp,
+                                        fontFamily = ff,
+                                    ),
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(palette.accent)
+                        .clickable(onClickLabel = "finish editing") { onExitEdit() }
+                        .padding(horizontal = 26.dp, vertical = 10.dp),
+                ) {
+                    BasicText("done", style = TextStyle(color = palette.background, fontSize = 15.sp, fontFamily = ff))
+                }
+            }
+        } else {
+            // Voice / command entry, bottom-center. The glyph flips to robot-off
+            // while no local model is set up, so the state is visible before tapping.
+            val assistantReady = store.aiEnabled && store.modelDownloaded()
+            IconAction(
+                icon = if (assistantReady) R.drawable.ic_tabler_voice else R.drawable.ic_tabler_robot_off,
+                label = if (assistantReady) "ask me" else "ask me — no model set up",
+                tint = palette.text,
+                size = 28.dp,
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 18.dp),
+            ) { onOpenVoice() }
+        }
 
         // Bottom-corner shortcuts, rotated as vertical edge labels.
         EdgeShortcut(
@@ -804,6 +893,305 @@ private fun HomePage(
             onLongPress = { onLongPressShortcut(ShortcutSide.RIGHT) },
             modifier = Modifier.align(Alignment.BottomEnd),
         )
+    }
+}
+
+/**
+ * One grid-positioned home widget and its edit mechanics. Normally it just
+ * places [content] at its spec's cells. While editing it adds the frame and
+ * handles, and owns the gestures: body drags move with a live raw-pixel
+ * offset, handle drags resize with a live box preview; release snaps to the
+ * nearest cells via the store (which refuses overlaps — the box then springs
+ * back instead).
+ */
+@Composable
+private fun EditableWidget(
+    widget: HomeWidget,
+    spec: WidgetSpec,
+    grid: GridSize,
+    cellWPx: Float,
+    cellHPx: Float,
+    editing: Boolean,
+    selected: Boolean,
+    onSelect: () -> Unit,
+    onCommit: (WidgetSpec) -> Boolean,
+    onInteracting: (Boolean) -> Unit,
+    content: @Composable (DpSize) -> Unit,
+) {
+    val density = LocalDensity.current
+    val scope = rememberCoroutineScope()
+    val dragDelta = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
+    var resizeEdge by remember(editing) { mutableStateOf<ResizeEdge?>(null) }
+    var resizeDelta by remember(editing) { mutableStateOf(Offset.Zero) }
+
+    val baseX = cellWPx * spec.col
+    val baseY = cellHPx * spec.row
+    val baseW = cellWPx * spec.spanW
+    val baseH = cellHPx * spec.spanH
+
+    // Live geometry: a resize-in-progress moves the dragged edge freely; the
+    // snap happens on release. Half a cell is the visual floor so the box can
+    // never invert under the finger.
+    val liveX = baseX + if (resizeEdge == ResizeEdge.LEFT) resizeDelta.x else 0f
+    val liveY = baseY + if (resizeEdge == ResizeEdge.TOP) resizeDelta.y else 0f
+    val liveW =
+        (
+            baseW +
+                when (resizeEdge) {
+                    ResizeEdge.LEFT -> -resizeDelta.x
+                    ResizeEdge.RIGHT -> resizeDelta.x
+                    else -> 0f
+                }
+        ).coerceAtLeast(cellWPx / 2f)
+    val liveH =
+        (
+            baseH +
+                when (resizeEdge) {
+                    ResizeEdge.TOP -> -resizeDelta.y
+                    ResizeEdge.BOTTOM -> resizeDelta.y
+                    else -> 0f
+                }
+        ).coerceAtLeast(cellHPx / 2f)
+    val liveSize = with(density) { DpSize(liveW.toDp(), liveH.toDp()) }
+
+    val settle = spring<Offset>(dampingRatio = 0.85f)
+    Box(
+        Modifier
+            .offset { IntOffset((liveX + dragDelta.value.x).roundToInt(), (liveY + dragDelta.value.y).roundToInt()) }
+            .size(liveSize)
+            .then(
+                if (editing) {
+                    Modifier
+                        .pointerInput(widget) {
+                            detectTapGestures(onTap = { onSelect() })
+                        }.pointerInput(widget, spec, grid, cellWPx, cellHPx) {
+                            detectDragGestures(
+                                onDragStart = {
+                                    onSelect()
+                                    onInteracting(true)
+                                },
+                                onDrag = { change, amount ->
+                                    change.consume()
+                                    scope.launch { dragDelta.snapTo(dragDelta.value + amount) }
+                                },
+                                onDragEnd = {
+                                    onInteracting(false)
+                                    val target = snapMove(widget, spec, dragDelta.value.x / cellWPx, dragDelta.value.y / cellHPx, grid.cols, grid.rows)
+                                    val moved = target != spec && onCommit(target)
+                                    scope.launch {
+                                        if (moved) {
+                                            // Hand the visual position over to the new
+                                            // spec, then spring out the remainder.
+                                            dragDelta.snapTo(
+                                                Offset(
+                                                    baseX + dragDelta.value.x - cellWPx * target.col,
+                                                    baseY + dragDelta.value.y - cellHPx * target.row,
+                                                ),
+                                            )
+                                        }
+                                        dragDelta.animateTo(Offset.Zero, settle)
+                                    }
+                                },
+                                onDragCancel = {
+                                    onInteracting(false)
+                                    scope.launch { dragDelta.animateTo(Offset.Zero, settle) }
+                                },
+                            )
+                        }
+                } else {
+                    Modifier
+                },
+            ),
+    ) {
+        content(liveSize)
+        if (editing) {
+            WidgetEditFrame(
+                selected = selected,
+                onResizeDrag = { edge, amount ->
+                    if (resizeEdge != edge) {
+                        resizeEdge = edge
+                        resizeDelta = Offset.Zero
+                        onInteracting(true)
+                    }
+                    resizeDelta += amount
+                },
+                onResizeEnd = {
+                    onInteracting(false)
+                    resizeEdge?.let { edge ->
+                        // snapResize takes the raw axis delta; its LEFT/TOP cases
+                        // already account for the inverted grow direction.
+                        val dCells =
+                            when (edge) {
+                                ResizeEdge.LEFT, ResizeEdge.RIGHT -> resizeDelta.x / cellWPx
+                                ResizeEdge.TOP, ResizeEdge.BOTTOM -> resizeDelta.y / cellHPx
+                            }
+                        val target = snapResize(widget, spec, edge, dCells, grid.cols, grid.rows)
+                        if (target != spec) onCommit(target)
+                    }
+                    resizeEdge = null
+                    resizeDelta = Offset.Zero
+                },
+                onResizeCancel = {
+                    onInteracting(false)
+                    resizeEdge = null
+                    resizeDelta = Offset.Zero
+                },
+            )
+        }
+    }
+}
+
+/**
+ * The clock lockup widget: clock + date/screen-time line + focus countdown,
+ * centered in its grid box. Content scales with the box: text clocks by font
+ * scale against the default-span box, dial clocks by diameter; the info lines
+ * stay 13.sp for legibility.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ClockLockupWidget(
+    store: LauncherStore,
+    onOpenUsage: () -> Unit,
+    boxSize: DpSize,
+    baseSize: DpSize,
+    interactive: Boolean,
+    onLongPressWidget: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val palette = LocalPalette.current
+    val ff = LocalFontFamily.current
+
+    val scale = minOf(boxSize.width / baseSize.width, boxSize.height / baseSize.height).coerceIn(0.55f, 1.6f)
+    val dial = minOf(boxSize.width - 16.dp, boxSize.height - 44.dp).coerceIn(80.dp, 320.dp)
+
+    Column(
+        modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        val clockModifier =
+            Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .combinedClickable(
+                    enabled = interactive,
+                    onClick = { openClockApp(context) },
+                    onClickLabel = "open clock app",
+                    onLongClick = onLongPressWidget,
+                    onLongClickLabel = "edit home",
+                )
+        when (store.clockStyle) {
+            ClockStyle.DIGITAL -> DigitalClockWidget(modifier = clockModifier, scale = scale)
+            ClockStyle.LOCK -> LockClockWidget(modifier = clockModifier, scale = scale)
+            ClockStyle.ANALOGUE -> AnalogueClockWidget(modifier = clockModifier, diameter = dial)
+            ClockStyle.MINIMAL -> MinimalClockWidget(modifier = clockModifier, diameter = dial)
+            ClockStyle.OFF -> Unit
+        }
+
+        // Today's screen time (the minimalist nudge). Taps to grant access.
+        val hasUsage = UsageTracker.hasAccess(context)
+        var screenMs by remember { mutableLongStateOf(0L) }
+        LaunchedEffect(hasUsage) {
+            while (hasUsage) {
+                screenMs = UsageTracker.screenTimeTodayMs(context)
+                delay(60_000)
+            }
+        }
+        val dateFmt = remember { SimpleDateFormat("EEEE, MMM d", Locale.getDefault()) }
+        val dateText = dateFmt.format(Date()).lowercase()
+        BasicText(
+            text =
+                if (hasUsage) {
+                    "$dateText · ${formatDuration(screenMs)} today"
+                } else {
+                    "$dateText · track screen time"
+                },
+            modifier =
+                Modifier
+                    .padding(top = 14.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable(
+                        enabled = interactive,
+                        onClickLabel = if (hasUsage) "open screen time summary" else "grant usage access",
+                    ) {
+                        if (hasUsage) onOpenUsage() else UsageTracker.openAccessSettings(context)
+                    },
+            style = TextStyle(color = palette.muted, fontSize = 13.sp, letterSpacing = tracked(1.sp), fontFamily = ff),
+        )
+
+        // Focus countdown — the minute tick also re-evaluates the focus filters
+        // so distracting favorites reappear on their own when focus expires.
+        var focusTick by remember { mutableIntStateOf(0) }
+        LaunchedEffect(store.focusUntil) {
+            while (store.isFocusActive()) {
+                delay(30_000)
+                focusTick++
+            }
+        }
+        if (store.isFocusActive() && focusTick >= 0) {
+            BasicText(
+                text = focusLabel(store.focusUntil),
+                modifier = Modifier.padding(top = 8.dp),
+                style = TextStyle(color = palette.accent, fontSize = 13.sp, letterSpacing = tracked(1.sp), fontFamily = ff),
+            )
+        }
+    }
+}
+
+/**
+ * The favorites widget: the pinned-apps spine, top-aligned in its grid box.
+ * The box height decides how many rows show before the internal scroll takes
+ * over (invisible when everything fits).
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun FavoritesWidget(
+    store: LauncherStore,
+    menuAnchor: String?,
+    onLaunchFavorite: (AppEntry) -> Unit,
+    onLongPressFavorite: (AppEntry) -> Unit,
+    interactive: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val palette = LocalPalette.current
+    val ff = LocalFontFamily.current
+    Column(
+        modifier =
+            modifier
+                .padding(start = 20.dp)
+                .verticalScroll(rememberScrollState(), enabled = interactive),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        if (store.favorites.isEmpty()) {
+            BasicText(
+                text = "long-press an app to pin it",
+                style = TextStyle(color = palette.muted, fontSize = 15.sp, fontFamily = ff),
+            )
+        } else {
+            store.focusFiltered(store.favorites).forEach { app ->
+                // Same split as AppRow: the Box is the click target, the label
+                // alone is the shared element.
+                val anchor = "fav/" + app.key
+                Box(
+                    Modifier
+                        .defaultMinSize(minHeight = 48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .combinedClickable(
+                            enabled = interactive,
+                            onClick = { onLaunchFavorite(app) },
+                            onClickLabel = "open",
+                            onLongClick = { onLongPressFavorite(app) },
+                            onLongClickLabel = "app options",
+                        ).padding(vertical = 9.dp),
+                ) {
+                    BasicText(
+                        text = app.label.lowercase(),
+                        modifier = Modifier.sharedLabel(anchor, visible = menuAnchor != anchor),
+                        style = TextStyle(color = palette.text, fontSize = 22.sp, fontFamily = ff),
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -1842,12 +2230,16 @@ private fun HomeMenu(
     focusActive: Boolean,
     onCycleClock: () -> Unit,
     onFocus: () -> Unit,
+    onEditHome: () -> Unit,
+    onWallpaper: () -> Unit,
     onOpenSettings: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     FoyerSheet(title = "home", onDismiss = onDismiss) {
         SheetRow("clock", active = clockStyle != ClockStyle.OFF, value = clockStyle.label, icon = R.drawable.ic_tabler_clock, onClick = onCycleClock)
         SheetRow(if (focusActive) "end focus" else "focus", active = focusActive, icon = R.drawable.ic_tabler_focus_2, onClick = onFocus)
+        SheetRow("edit home", icon = R.drawable.ic_tabler_layout_grid, onClick = onEditHome)
+        SheetRow("wallpaper", icon = R.drawable.ic_tabler_photo, onClick = onWallpaper)
         SheetRow("settings", icon = R.drawable.ic_tabler_settings_2, onClick = onOpenSettings)
     }
 }
