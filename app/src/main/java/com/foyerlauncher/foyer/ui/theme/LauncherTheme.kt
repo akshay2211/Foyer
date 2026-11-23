@@ -7,11 +7,15 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
+import com.foyerlauncher.foyer.data.WallpaperColors
+import kotlin.math.abs
 
 /** The three theme choices the launcher cycles through. */
 enum class ThemeMode(
@@ -144,6 +148,26 @@ internal fun accentColor(
         AccentChoice.GREEN -> Color(0xFF30A46C)
     }
 
+/**
+ * Palette derived from a wallpaper's two extracted colors. The surface is
+ * sampled; everything that must read on it is constructed: ink follows the
+ * surface's luminance, muted blends toward it, and a low-contrast accent is
+ * pulled toward the ink until it reads. Accent == background means extraction
+ * found nothing vivid — fall back to the monochrome ink.
+ */
+internal fun wallpaperPalette(colors: WallpaperColors): Pair<Palette, Boolean> {
+    val bg = Color(colors.background)
+    val dark = bg.luminance() < 0.4f
+    val text = if (dark) Color(0xFFEDEDED) else Color(0xFF191613)
+    val muted = lerp(text, bg, 0.45f)
+    var accent = if (colors.accent == colors.background) text else Color(colors.accent)
+    var guard = 0
+    while (abs(accent.luminance() - bg.luminance()) < 0.18f && guard++ < 4) {
+        accent = lerp(accent, text, 0.4f)
+    }
+    return Palette(background = bg, text = text, muted = muted, accent = accent) to dark
+}
+
 val LocalPalette = staticCompositionLocalOf { LightBase }
 
 /** True when the chosen font is monospace — wide tracking doubles up there. */
@@ -161,6 +185,7 @@ fun LauncherTheme(
     accent: AccentChoice,
     font: FontChoice,
     tone: BackgroundTone = BackgroundTone.DEFAULT,
+    wallpaper: WallpaperColors? = null,
     content: @Composable () -> Unit,
 ) {
     val systemDark =
@@ -169,11 +194,13 @@ fun LauncherTheme(
             ThemeMode.LIGHT -> false
             ThemeMode.DARK -> true
         }
-    // A curated tone supersedes the light/dark base — it *is* the surface.
-    val toned = toneBase(tone)
-    val base = toned?.first ?: if (systemDark) DarkBase else LightBase
-    val dark = toned?.second ?: systemDark
-    val palette = base.copy(accent = accentColor(accent, base.text))
+    // Wallpaper colors (opt-in) supersede everything; otherwise a curated
+    // tone supersedes the light/dark base — it *is* the surface.
+    val fromWallpaper = wallpaper?.let(::wallpaperPalette)
+    val toned = if (fromWallpaper == null) toneBase(tone) else null
+    val base = fromWallpaper?.first ?: toned?.first ?: if (systemDark) DarkBase else LightBase
+    val dark = fromWallpaper?.second ?: toned?.second ?: systemDark
+    val palette = fromWallpaper?.first ?: base.copy(accent = accentColor(accent, base.text))
 
     val view = LocalView.current
     if (!view.isInEditMode) {

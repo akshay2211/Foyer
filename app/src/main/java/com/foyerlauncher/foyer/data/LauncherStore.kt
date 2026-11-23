@@ -84,6 +84,9 @@ private const val KEY_SWIPE_DOWN = "gesture_swipe_down"
 private const val KEY_DOUBLE_TAP = "gesture_double_tap"
 private const val KEY_THEME = "theme_mode"
 private const val KEY_WALLPAPER = "wallpaper_version"
+private const val KEY_WALLPAPER_BG = "wallpaper_color_bg"
+private const val KEY_WALLPAPER_ACCENT = "wallpaper_color_accent"
+private const val KEY_WALLPAPER_THEME = "wallpaper_theme"
 private const val KEY_HOME_LAYOUT = "home_layout"
 private const val KEY_GRID_SIZE = "home_grid_size"
 private const val KEY_ACCENT = "accent"
@@ -461,15 +464,53 @@ class LauncherStore(
     var wallpaperVersion by mutableLongStateOf(prefs.getLong(KEY_WALLPAPER, 0L))
         private set
 
-    fun setWallpaperInstalled() {
+    /** Colors pulled from the installed wallpaper, when extraction succeeded. */
+    var wallpaperColors by mutableStateOf(
+        if (prefs.contains(KEY_WALLPAPER_BG) && prefs.contains(KEY_WALLPAPER_ACCENT)) {
+            WallpaperColors(prefs.getInt(KEY_WALLPAPER_BG, 0), prefs.getInt(KEY_WALLPAPER_ACCENT, 0))
+        } else {
+            null
+        },
+    )
+        private set
+
+    /** Opt-in: theme the whole launcher from the wallpaper's colors. */
+    var wallpaperThemed by mutableStateOf(prefs.getBoolean(KEY_WALLPAPER_THEME, false))
+        private set
+
+    fun chooseWallpaperThemed(on: Boolean) {
+        wallpaperThemed = on
+        prefs.edit { putBoolean(KEY_WALLPAPER_THEME, on) }
+    }
+
+    /** The colors to theme with right now, or null (toggle off / no wallpaper / no extraction). */
+    val themedWallpaperColors: WallpaperColors?
+        get() = if (wallpaperThemed && wallpaperVersion != 0L) wallpaperColors else null
+
+    fun setWallpaperInstalled(colors: WallpaperColors?) {
         wallpaperVersion = System.currentTimeMillis()
-        prefs.edit { putLong(KEY_WALLPAPER, wallpaperVersion) }
+        wallpaperColors = colors
+        prefs.edit {
+            putLong(KEY_WALLPAPER, wallpaperVersion)
+            if (colors != null) {
+                putInt(KEY_WALLPAPER_BG, colors.background)
+                putInt(KEY_WALLPAPER_ACCENT, colors.accent)
+            } else {
+                remove(KEY_WALLPAPER_BG)
+                remove(KEY_WALLPAPER_ACCENT)
+            }
+        }
     }
 
     fun clearWallpaper() {
         WallpaperStore.remove(context)
         wallpaperVersion = 0L
-        prefs.edit { putLong(KEY_WALLPAPER, 0L) }
+        wallpaperColors = null
+        prefs.edit {
+            putLong(KEY_WALLPAPER, 0L)
+            remove(KEY_WALLPAPER_BG)
+            remove(KEY_WALLPAPER_ACCENT)
+        }
     }
 
     /** Home grid density; chosen inside edit mode (declared before [homeLayout] — its decode needs it). */
@@ -512,6 +553,8 @@ class LauncherStore(
         secrets.edit { clear() }
         WallpaperStore.remove(context)
         wallpaperVersion = 0L
+        wallpaperColors = null
+        wallpaperThemed = false
         gridSize = GridSize.COZY
         homeLayout = defaultLayout(gridSize.cols, gridSize.rows)
         favorites.clear()
@@ -766,6 +809,7 @@ class LauncherStore(
                 rightShortcut?.let { put("rightShortcut", it.encode()) }
                 put("homeLayout", encodeLayout(homeLayout))
                 put("gridSize", gridSize.name)
+                put("wallpaperTheme", wallpaperThemed)
             }.toString(2)
 
     /** What an import would restore — shown for confirmation before [applyBackup]. */
@@ -850,6 +894,10 @@ class LauncherStore(
         o.optString("homeLayout").ifBlank { null }?.let {
             homeLayout = decodeLayout(it, gridSize.cols, gridSize.rows)
             prefs.edit { putString(KEY_HOME_LAYOUT, encodeLayout(homeLayout)) }
+        }
+        if (o.has("wallpaperTheme")) {
+            wallpaperThemed = o.optBoolean("wallpaperTheme", wallpaperThemed)
+            prefs.edit { putBoolean(KEY_WALLPAPER_THEME, wallpaperThemed) }
         }
         prefs.edit {
             putString(KEY_THEME, themeMode.name)

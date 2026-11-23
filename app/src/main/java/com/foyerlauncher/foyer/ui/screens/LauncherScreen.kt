@@ -530,8 +530,8 @@ fun LauncherScreen(store: LauncherStore) {
                             scope.launch {
                                 WallpaperStore
                                     .install(context, uri)
-                                    .onSuccess {
-                                        store.setWallpaperInstalled()
+                                    .onSuccess { colors ->
+                                        store.setWallpaperInstalled(colors)
                                         showWallpaperMenu = false
                                     }.onFailure { wallpaperNote = it.message ?: "couldn't use that photo" }
                             }

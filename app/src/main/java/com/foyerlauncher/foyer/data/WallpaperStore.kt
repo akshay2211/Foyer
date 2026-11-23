@@ -5,8 +5,9 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
-import android.media.ExifInterface
 import android.net.Uri
+import androidx.core.graphics.scale
+import androidx.exifinterface.media.ExifInterface
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -23,14 +24,16 @@ fun wallpaperFile(context: Context): File = File(context.filesDir, "wallpaper/bg
  * file (a 50MP camera photo must never reach the render path).
  */
 object WallpaperStore {
+    /** On success, returns the colors pulled from the photo (null when extraction found nothing usable). */
     suspend fun install(
         context: Context,
         uri: Uri,
-    ): Result<Unit> =
+    ): Result<WallpaperColors?> =
         withContext(Dispatchers.IO) {
             runCatching {
                 val metrics = context.resources.displayMetrics
                 val bitmap = decodeScaled(context.contentResolver, uri, metrics.widthPixels, metrics.heightPixels)
+                val colors = samplePalette(bitmap)
                 val dest = wallpaperFile(context)
                 dest.parentFile?.mkdirs()
                 val part = File(dest.path + ".part")
@@ -41,8 +44,18 @@ object WallpaperStore {
                 }
                 if (dest.exists()) dest.delete()
                 if (!part.renameTo(dest)) throw IOException("couldn't save that photo")
+                colors
             }
         }
+
+    /** Color extraction runs on a 64×64 thumb — plenty for buckets, costs nothing. */
+    private fun samplePalette(bitmap: Bitmap): WallpaperColors? =
+        runCatching {
+            val thumb = bitmap.scale(64, 64)
+            val pixels = IntArray(64 * 64)
+            thumb.getPixels(pixels, 0, 64, 0, 0, 64, 64)
+            WallpaperPalette.extract(pixels)
+        }.getOrNull()
 
     fun remove(context: Context) {
         wallpaperFile(context).delete()
@@ -79,12 +92,7 @@ object WallpaperStore {
         val maxShort = (min(targetW, targetH) * 1.5f).roundToInt()
         if (shortSide <= maxShort) return upright
         val scale = maxShort / shortSide.toFloat()
-        return Bitmap.createScaledBitmap(
-            upright,
-            (upright.width * scale).roundToInt().coerceAtLeast(1),
-            (upright.height * scale).roundToInt().coerceAtLeast(1),
-            true,
-        )
+        return upright.scale((upright.width * scale).roundToInt().coerceAtLeast(1), (upright.height * scale).roundToInt().coerceAtLeast(1))
     }
 
     private fun rotateUpright(
