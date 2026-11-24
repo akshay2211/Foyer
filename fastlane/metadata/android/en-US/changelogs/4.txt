@@ -1,0 +1,3 @@
+• Arrange your home: long-press to move and resize the clock and the favourites list on a grid, Pixel-style, with three grid sizes to choose from.
+• Set a wallpaper from your photos — picked privately, no storage permission.
+• New "theme from wallpaper" switch: the launcher recolours itself from your photo's own colours. Turn it off any time.

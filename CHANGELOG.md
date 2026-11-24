@@ -3,6 +3,30 @@
 All notable changes to Foyer, newest first. Versions follow
 `versionName (versionCode)` as uploaded to Google Play.
 
+## 1.1.0 (4) — 2026-11-23
+
+### the home screen
+- The clock and the favorites list can now be moved and resized. Long-press
+  the home background (or home menu → edit home) for a Pixel-style edit mode:
+  drag either block anywhere on the grid, pull its edge handles to resize,
+  and tap done. The clock scales with its box; the favorites list shows as
+  many rows as fit. Everything snaps to the grid and springs back rather
+  than overlapping.
+- Pick the grid density right inside edit mode — 5×8, 6×10 or 7×12 cells.
+  Your layout re-fits when you switch.
+- Set a wallpaper from your photos (home menu → wallpaper, or settings →
+  appearance). The photo is picked through Android's photo picker — Foyer
+  never gets access to your library, only the one image — then sized down
+  and stored privately, drawn under a soft scrim so the text stays readable.
+
+### appearance
+- Opt in to "theme from wallpaper": Foyer pulls the photo's dominant color
+  and one vivid accent, derives a full palette with guaranteed contrast,
+  and recolors the whole launcher — home, drawer, settings, everything.
+  It's a switch in appearance settings; turn it off and your chosen theme
+  comes back untouched. While it's on, the overridden theme, accent and
+  background pickers step out of the way.
+
 ## 1.0.2 (3) — 2026-11-17
 
 ### the app list
