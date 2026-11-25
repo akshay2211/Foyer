@@ -10,7 +10,9 @@ Foyer replaces your home screen with the things you actually use: a clock, your 
 
 <b>Clocks with character.</b> Digital, bold, dial, or hands — pick the face your day starts with, or turn the clock off entirely.
 
-<b>Tune it, quietly.</b> Three fonts (inter, mono, serif), a handful of accents, and matte backgrounds in dark or light. Quiet by default, yours by choice.
+<b>Arranged your way.</b> Long-press the home screen and move the clock and your favourites anywhere on the grid, resize them by their handles, pick the grid density. Still text, still quiet — just where you want it.
+
+<b>Tune it, quietly.</b> Three fonts (inter, mono, serif), a handful of accents, and matte backgrounds in dark or light. Add a wallpaper from your photos — picked privately, one image only — and, if you like, let Foyer recolour itself from that photo's own colours. Quiet by default, yours by choice.
 
 <b>Free and open source.</b> Foyer is GPL-3.0 with no ads, no tracking, and no engagement tricks. The entire app is on GitHub.
 

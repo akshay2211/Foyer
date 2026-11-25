@@ -5,6 +5,7 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.CubicBezierEasing
@@ -75,6 +76,7 @@ import com.foyerlauncher.foyer.data.LauncherStore
 import com.foyerlauncher.foyer.data.SUGGESTED_GEMMA_URL
 import com.foyerlauncher.foyer.data.SUGGESTED_QWEN_BALANCED_URL
 import com.foyerlauncher.foyer.data.SUGGESTED_QWEN_SMALL_URL
+import com.foyerlauncher.foyer.data.WallpaperStore
 import com.foyerlauncher.foyer.data.openAppInfo
 import com.foyerlauncher.foyer.data.openSettings
 import com.foyerlauncher.foyer.data.openUrl
@@ -218,7 +220,12 @@ private fun RootPage(
                 NavRow(
                     shape = shape,
                     title = "appearance",
-                    subtitle = "${store.themeMode.label} · ${store.accent.label} · ${store.font.label}",
+                    subtitle =
+                        if (store.themedWallpaperColors != null) {
+                            "wallpaper · ${store.font.label}"
+                        } else {
+                            "${store.themeMode.label} · ${store.accent.label} · ${store.font.label}"
+                        },
                 ) { onOpen(SettingsPage.APPEARANCE) }
             },
             { shape ->
@@ -315,30 +322,37 @@ private fun AppearancePage(
     onBack: () -> Unit,
 ) {
     PageScaffold(title = "appearance", onBack = onBack) {
-        GroupLabel("theme")
-        Segmented(ThemeMode.entries, store.themeMode, { it.label }) { store.chooseTheme(it) }
+        // While the wallpaper drives the palette, the theme/accent/background
+        // pickers are dead controls — hide them rather than show overridden
+        // choices that do nothing.
+        val wallpaperDrivesTheme = store.themedWallpaperColors != null
 
-        GroupLabel("accent")
-        GroupSurface(RoundedCornerShape(22.dp)) {
-            Row(
-                Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                val palette = LocalPalette.current
-                AccentChoice.entries.forEach { choice ->
-                    Swatch(
-                        color = accentColor(choice, palette.text),
-                        selected = store.accent == choice,
-                        description = "accent ${choice.label}",
-                    ) { store.chooseAccent(choice) }
+        if (!wallpaperDrivesTheme) {
+            GroupLabel("theme")
+            Segmented(ThemeMode.entries, store.themeMode, { it.label }) { store.chooseTheme(it) }
+
+            GroupLabel("accent")
+            GroupSurface(RoundedCornerShape(22.dp)) {
+                Row(
+                    Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    val palette = LocalPalette.current
+                    AccentChoice.entries.forEach { choice ->
+                        Swatch(
+                            color = accentColor(choice, palette.text),
+                            selected = store.accent == choice,
+                            description = "accent ${choice.label}",
+                        ) { store.chooseAccent(choice) }
+                    }
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        store.accent.label,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
-                Spacer(Modifier.weight(1f))
-                Text(
-                    store.accent.label,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
         }
 
@@ -357,29 +371,107 @@ private fun AppearancePage(
                 }.toTypedArray(),
         )
 
-        GroupLabel("background")
-        GroupSurface(RoundedCornerShape(22.dp)) {
-            Row(
-                Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                val palette = LocalPalette.current
-                BackgroundTone.entries.forEach { tone ->
-                    Swatch(
-                        color = toneBase(tone)?.first?.background ?: palette.background,
-                        selected = store.backgroundTone == tone,
-                        description = "background ${tone.label}",
-                    ) { store.chooseTone(tone) }
+        if (!wallpaperDrivesTheme) {
+            GroupLabel("background")
+            GroupSurface(RoundedCornerShape(22.dp)) {
+                Row(
+                    Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    val palette = LocalPalette.current
+                    BackgroundTone.entries.forEach { tone ->
+                        Swatch(
+                            color = toneBase(tone)?.first?.background ?: palette.background,
+                            selected = store.backgroundTone == tone,
+                            description = "background ${tone.label}",
+                        ) { store.chooseTone(tone) }
+                    }
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        store.backgroundTone.label,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
-                Spacer(Modifier.weight(1f))
-                Text(
-                    store.backgroundTone.label,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
         }
+
+        GroupLabel("wallpaper")
+        val context = LocalContext.current
+        val scope = rememberCoroutineScope()
+        var wallpaperNote by remember { mutableStateOf<String?>(null) }
+        val wallpaperPicker =
+            rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+                if (uri != null) {
+                    scope.launch {
+                        WallpaperStore
+                            .install(context, uri)
+                            .onSuccess { colors ->
+                                store.setWallpaperInstalled(colors)
+                                wallpaperNote = null
+                            }.onFailure { wallpaperNote = it.message ?: "couldn't use that photo" }
+                    }
+                }
+            }
+        if (store.wallpaperVersion == 0L) {
+            SettingsGroup({ shape ->
+                NavRow(shape = shape, title = "choose from photos", chevron = false) {
+                    wallpaperPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                }
+            })
+        } else {
+            val rows =
+                buildList<@Composable (Shape) -> Unit> {
+                    add { shape ->
+                        NavRow(shape = shape, title = "choose from photos", subtitle = "custom image set", chevron = false) {
+                            wallpaperPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        }
+                    }
+                    if (store.wallpaperColors != null) {
+                        add { shape ->
+                            SwitchRow(
+                                shape = shape,
+                                title = "theme from wallpaper",
+                                subtitle = "background & accent from your photo",
+                                checked = store.wallpaperThemed,
+                            ) { store.chooseWallpaperThemed(!store.wallpaperThemed) }
+                        }
+                    }
+                    add { shape ->
+                        NavRow(shape = shape, title = "remove wallpaper", chevron = false) { store.clearWallpaper() }
+                    }
+                }
+            SettingsGroup(*rows.toTypedArray())
+            val colors = store.wallpaperColors
+            if (store.wallpaperThemed && colors != null) {
+                Row(
+                    Modifier.padding(top = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    listOf(colors.background to "background", colors.accent to "accent").forEach { (c, what) ->
+                        Box(
+                            Modifier
+                                .size(22.dp)
+                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
+                                .padding(3.dp)
+                                .background(
+                                    androidx.compose.ui.graphics
+                                        .Color(c),
+                                    CircleShape,
+                                ).semantics { contentDescription = "wallpaper $what colour" },
+                        )
+                    }
+                    Text(
+                        "background & accent, pulled from your wallpaper",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+        wallpaperNote?.let { Caption(it) }
 
         GroupLabel("clock")
         Segmented(ClockStyle.entries, store.clockStyle, { it.label }) { store.chooseClockStyle(it) }

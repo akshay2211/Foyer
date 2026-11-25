@@ -80,7 +80,11 @@ val uploadStoreFile = providers.gradleProperty("FOYER_UPLOAD_STORE_FILE").orNull
 android {
     namespace = "com.foyerlauncher.foyer"
     compileSdk {
-        version = release(37)
+        // compose-ui 1.13 (via material3 1.5.0 stable) compiles against 37.1.
+        version =
+            release(37) {
+                minorApiLevel = 1
+            }
     }
 
     defaultConfig {
@@ -172,6 +176,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.exifinterface)
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.foundation)

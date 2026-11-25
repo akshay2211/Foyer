@@ -62,11 +62,15 @@ const PANELS = [
     title: 'you say. <em>it does.</em>',          sub: 'An assistant that runs fully on your phone. No server, no account.' },
   { out: '03-drawer',     tpl: 'panel-drawer.html',
     title: 'every app, one <em>flick</em> away',  sub: 'A text-first drawer with an a–z rail made for your thumb.' },
-  { out: '04-clocks',     tpl: 'panel-clocks.html',
+  { out: '04-edit',       tpl: 'panel-edit.html',
+    title: 'arranged <em>your way</em>',          sub: 'Long-press: move and resize the clock and favourites on a grid.' },
+  { out: '05-wallpaper',  tpl: 'panel-wallpaper.html',
+    title: 'one photo, a <em>whole theme</em>',   sub: 'Opt in, and the launcher recolours itself from your wallpaper’s own colours.' },
+  { out: '06-clocks',     tpl: 'panel-clocks.html',
     title: 'four ways to <em>tell time</em>',     sub: 'Digital, bold, a rotating dial, or plain hands.' },
-  { out: '05-appearance', tpl: 'panel-appearance.html',
+  { out: '07-appearance', tpl: 'panel-appearance.html',
     title: 'curated, not <em>customised</em>',    sub: 'Three fonts, four accents, five background tones. Every pairing keeps its contrast.' },
-  { out: '06-light',      tpl: 'panel-home.html',  theme: 'light',
+  { out: '08-light',      tpl: 'panel-home.html',  theme: 'light',
     title: '<em>lights on</em>, if you like',     sub: 'A full light theme with the same calm.' },
 ];
 

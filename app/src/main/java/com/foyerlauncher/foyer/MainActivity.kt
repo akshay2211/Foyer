@@ -25,7 +25,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val store = rememberLauncherStore()
-            LauncherTheme(store.themeMode, store.accent, store.font, store.backgroundTone) {
+            LauncherTheme(store.themeMode, store.accent, store.font, store.backgroundTone, store.themedWallpaperColors) {
                 LauncherScreen(store)
             }
         }

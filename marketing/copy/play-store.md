@@ -37,8 +37,14 @@ Assets: `marketing/out/play/` — icon-512.png, feature-graphic.png (1024×500),
 > **Clocks with character.** Digital, bold, dial, or hands — pick the face your day
 > starts with, or turn the clock off entirely.
 >
+> **Arranged your way.** Long-press the home screen and move the clock and your
+> favourites anywhere on the grid, resize them by their handles, pick the grid
+> density. Still text, still quiet — just where you want it.
+>
 > **Tune it, quietly.** Three fonts (inter, mono, serif), a handful of accents, and
-> matte backgrounds in dark or light. Quiet by default, yours by choice.
+> matte backgrounds in dark or light. Add a wallpaper from your photos — picked
+> privately, one image only — and, if you like, let Foyer recolour itself from that
+> photo's own colours. Quiet by default, yours by choice.
 >
 > **Free and open source.** Foyer is GPL-3.0 with no ads, no tracking, and no
 > engagement tricks. The entire app is on GitHub.
@@ -52,9 +58,17 @@ Assets: `marketing/out/play/` — icon-512.png, feature-graphic.png (1024×500),
 1. 01-home.png — a quiet home for your phone
 2. 02-say.png — you say. it does.
 3. 03-drawer.png — every app, one flick away
-4. 04-clocks.png — four ways to tell time
-5. 05-appearance.png — curated, not customised
-6. 06-light.png — lights on, if you like
+4. 04-edit.png — arranged your way
+5. 05-wallpaper.png — one photo, a whole theme
+6. 06-clocks.png — four ways to tell time
+7. 07-appearance.png — curated, not customised
+8. 08-light.png — lights on, if you like
+
+## Still pending for the 1.1.0 listing
+
+- The 30-second demo clip for launch week now has a stronger second beat:
+  airplane-mode voice command, then flip "theme from wallpaper" and watch the
+  whole launcher recolour.
 
 ## Notes
 
