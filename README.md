@@ -36,18 +36,24 @@ nothing.
 - **Mindful usage** — screen time and unlock counts under the clock, per-app
   daily limits with a conscious 5-minute bypass, mark-as-distracting,
   focus mode with a countdown, and a usage summary screen.
+- **Arranged your way** — long-press to move and resize the clock and
+  favourites on a grid (Pixel-style edit mode, three densities); add a
+  wallpaper from your photos — picked privately, no storage permission —
+  and optionally let Foyer theme itself from that photo's own colours.
 - **Stays out of your way** — app hiding, user-taught aliases, work/private
   profile support, gestures (swipe, double-tap), curated
   background tones, digital or analogue clock, backup/restore to a JSON
   file you own.
 
 <p align="center">
-  <img src="marketing/out/play/01-home.png" width="16%" alt="Home screen: a thin clock, today's screen time, and a plain-text list of favourite apps"/>
-  <img src="marketing/out/play/02-say.png" width="16%" alt="The assistant: you type 'turn on wifi and open spotify' and Foyer runs both steps"/>
-  <img src="marketing/out/play/03-drawer.png" width="16%" alt="App drawer: text search matching 'in' with an a-to-z fast-scroll rail"/>
-  <img src="marketing/out/play/04-clocks.png" width="16%" alt="The four clock styles: digital, bold, rotating dial, and plain hands"/>
-  <img src="marketing/out/play/05-appearance.png" width="16%" alt="Appearance settings: accent swatches, three fonts, and background tones"/>
-  <img src="marketing/out/play/06-light.png" width="16%" alt="The same home screen in the full light theme"/>
+  <img src="marketing/out/play/01-home.png" width="12%" alt="Home screen: a thin clock, today's screen time, and a plain-text list of favourite apps"/>
+  <img src="marketing/out/play/02-say.png" width="12%" alt="The assistant: you type 'turn on wifi and open spotify' and Foyer runs both steps"/>
+  <img src="marketing/out/play/03-drawer.png" width="12%" alt="App drawer: text search matching 'in' with an a-to-z fast-scroll rail"/>
+  <img src="marketing/out/play/04-edit.png" width="12%" alt="Home edit mode: the clock and favourites blocks on a dotted grid with resize handles and grid-size chips"/>
+  <img src="marketing/out/play/05-wallpaper.png" width="12%" alt="Theme from wallpaper: a photo, the switch turned on, and the two colours pulled from it"/>
+  <img src="marketing/out/play/06-clocks.png" width="12%" alt="The four clock styles: digital, bold, rotating dial, and plain hands"/>
+  <img src="marketing/out/play/07-appearance.png" width="12%" alt="Appearance settings: accent swatches, three fonts, and background tones"/>
+  <img src="marketing/out/play/08-light.png" width="12%" alt="The same home screen in the full light theme"/>
 </p>
 <p align="center"><sub>The app UI above is rebuilt in HTML from the same design tokens, not screenshotted — the <a href="https://foyerlauncher.com">live demo</a> runs it for real.</sub></p>
 
