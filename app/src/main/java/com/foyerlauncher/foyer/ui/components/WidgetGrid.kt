@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -113,6 +115,14 @@ private fun BoxScope.ResizeHandle(
 ) {
     val palette = LocalPalette.current
     val sideways = edge == ResizeEdge.LEFT || edge == ResizeEdge.RIGHT
+    // The gesture coroutine outlives recompositions (pointerInput is keyed on
+    // the stable edge only), so the callbacks must be read through
+    // rememberUpdatedState — a captured onEnd would keep snapping from the
+    // spec as it was when the handle first composed, making every resize
+    // after the first spring back.
+    val currentOnDrag by rememberUpdatedState(onDrag)
+    val currentOnEnd by rememberUpdatedState(onEnd)
+    val currentOnCancel by rememberUpdatedState(onCancel)
     Box(
         Modifier
             .align(alignment)
@@ -121,10 +131,10 @@ private fun BoxScope.ResizeHandle(
                 detectDragGestures(
                     onDrag = { change, amount ->
                         change.consume()
-                        onDrag(edge, amount)
+                        currentOnDrag(edge, amount)
                     },
-                    onDragEnd = { onEnd() },
-                    onDragCancel = { onCancel() },
+                    onDragEnd = { currentOnEnd() },
+                    onDragCancel = { currentOnCancel() },
                 )
             },
         contentAlignment = Alignment.Center,

@@ -506,10 +506,15 @@ class LauncherStore(
         WallpaperStore.remove(context)
         wallpaperVersion = 0L
         wallpaperColors = null
+        // Dropping the wallpaper must also drop the theming opt-in: the switch
+        // UI is hidden without colors, so a flag left armed here would silently
+        // re-theme the whole launcher the next time any photo is picked.
+        wallpaperThemed = false
         prefs.edit {
             putLong(KEY_WALLPAPER, 0L)
             remove(KEY_WALLPAPER_BG)
             remove(KEY_WALLPAPER_ACCENT)
+            remove(KEY_WALLPAPER_THEME)
         }
     }
 

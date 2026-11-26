@@ -1155,40 +1155,43 @@ private fun FavoritesWidget(
 ) {
     val palette = LocalPalette.current
     val ff = LocalFontFamily.current
-    Column(
-        modifier =
-            modifier
-                .padding(start = 20.dp)
-                .verticalScroll(rememberScrollState(), enabled = interactive),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        if (store.favorites.isEmpty()) {
-            BasicText(
-                text = "long-press an app to pin it",
-                style = TextStyle(color = palette.muted, fontSize = 15.sp, fontFamily = ff),
-            )
-        } else {
-            store.focusFiltered(store.favorites).forEach { app ->
-                // Same split as AppRow: the Box is the click target, the label
-                // alone is the shared element.
-                val anchor = "fav/" + app.key
-                Box(
-                    Modifier
-                        .defaultMinSize(minHeight = 48.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .combinedClickable(
-                            enabled = interactive,
-                            onClick = { onLaunchFavorite(app) },
-                            onClickLabel = "open",
-                            onLongClick = { onLongPressFavorite(app) },
-                            onLongClickLabel = "app options",
-                        ).padding(vertical = 9.dp),
-                ) {
-                    BasicText(
-                        text = app.label.lowercase(),
-                        modifier = Modifier.sharedLabel(anchor, visible = menuAnchor != anchor),
-                        style = TextStyle(color = palette.text, fontSize = 22.sp, fontFamily = ff),
-                    )
+    // The scrollable must wrap its content, not fill the widget box: a
+    // full-box scrollable claims vertical drags even when nothing overflows,
+    // which would turn the empty part of the box into a dead zone for the
+    // home swipe-up/swipe-down gestures.
+    Box(modifier.padding(start = 20.dp)) {
+        Column(
+            modifier = Modifier.verticalScroll(rememberScrollState(), enabled = interactive),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            if (store.favorites.isEmpty()) {
+                BasicText(
+                    text = "long-press an app to pin it",
+                    style = TextStyle(color = palette.muted, fontSize = 15.sp, fontFamily = ff),
+                )
+            } else {
+                store.focusFiltered(store.favorites).forEach { app ->
+                    // Same split as AppRow: the Box is the click target, the label
+                    // alone is the shared element.
+                    val anchor = "fav/" + app.key
+                    Box(
+                        Modifier
+                            .defaultMinSize(minHeight = 48.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .combinedClickable(
+                                enabled = interactive,
+                                onClick = { onLaunchFavorite(app) },
+                                onClickLabel = "open",
+                                onLongClick = { onLongPressFavorite(app) },
+                                onLongClickLabel = "app options",
+                            ).padding(vertical = 9.dp),
+                    ) {
+                        BasicText(
+                            text = app.label.lowercase(),
+                            modifier = Modifier.sharedLabel(anchor, visible = menuAnchor != anchor),
+                            style = TextStyle(color = palette.text, fontSize = 22.sp, fontFamily = ff),
+                        )
+                    }
                 }
             }
         }
